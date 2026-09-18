@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id       String     @id @default(cuid())
+  name     String
+  slug     String     @unique
+  icon     String?
+  parentId String?
+  parent   Category?  @relation("CategoryToCategory", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryToCategory")
+  listings Listing[]
+}
+
+model Atoll {
+  id      String   @id @default(cuid())
+  name    String
+  code    String   @unique
+  islands Island[]
+}
+
+model Island {
+  id       String    @id @default(cuid())
+  name     String
+  atollId  String
+  atoll    Atoll     @relation(fields: [atollId], references: [id])
+  listings Listing[]
+
+  @@unique([atollId, name])
+}
+
+model User {
+  id        String     @id @default(cuid())
+  phone     String     @unique
+  name      String
+  createdAt DateTime   @default(now())
+  listings  Listing[]
+}
+
+enum Condition {
+  NEW
+  LIKE_NEW
+  GOOD
+  FAIR
+}
+
+enum ListingStatus {
+  ACTIVE
+  SOLD
+  DRAFT
+}
+
+model Listing {
+  id          String        @id @default(cuid())
+  title       String
+  description String
+  price       Int
+  condition   Condition     @default(GOOD)
+  status      ListingStatus @default(ACTIVE)
+  images      String[]
+  categoryId  String
+  category    Category      @relation(fields: [categoryId], references: [id])
+  islandId    String
+  island      Island        @relation(fields: [islandId], references: [id])
+  sellerId    String
+  seller      User          @relation(fields: [sellerId], references: [id])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}

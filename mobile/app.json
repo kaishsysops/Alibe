@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Alibe",
+    "slug": "alibe",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#0E7C66"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.alibe.app"
+    },
+    "android": {
+      "package": "com.alibe.app"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
