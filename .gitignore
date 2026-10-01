@@ -4,3 +4,4 @@ dist
 .expo
 web-build
 *.log
+uploads

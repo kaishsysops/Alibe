@@ -1,8 +1,12 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text } from "react-native";
 import { Category } from "../api/client";
-import { colors, spacing, radius } from "../theme/theme";
+import { makeStyles, useTheme } from "../theme/ThemeContext";
+import { spacing, radius, cardShadow, fontSize, fontWeight } from "../theme/theme";
 import { categoryIcons, AllCategoriesIcon } from "../theme/categoryIcons";
+import Tap from "./Tap";
+
+export const SIDEBAR_WIDTH = 232;
 
 export default function CategorySidebar({
   categories,
@@ -13,56 +17,50 @@ export default function CategorySidebar({
   active?: string;
   onSelect: (slug?: string) => void;
 }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
+  const total = categories.reduce((n, c) => n + (c.listingCount ?? 0), 0);
+  const rows = [{ slug: undefined as string | undefined, name: "All categories", count: total }, ...categories.map((c) => ({ slug: c.slug, name: c.name, count: c.listingCount ?? 0 }))];
+
   return (
     <View style={styles.sidebar}>
-      <Text style={styles.heading}>All Categories</Text>
-      <TouchableOpacity style={[styles.row, !active && styles.rowActive]} onPress={() => onSelect(undefined)}>
-        <AllCategoriesIcon size={17} color={!active ? colors.primary : colors.textMuted} />
-        <Text style={[styles.rowText, !active && styles.rowTextActive]}>All</Text>
-      </TouchableOpacity>
-      {categories.map((c) => {
-        const cat = categoryIcons[c.slug];
-        const Icon = cat?.Icon ?? AllCategoriesIcon;
-        const isActive = active === c.slug;
+      {rows.map((row) => {
+        const Icon = row.slug ? categoryIcons[row.slug]?.Icon ?? AllCategoriesIcon : AllCategoriesIcon;
+        const isActive = active === row.slug;
         return (
-          <TouchableOpacity key={c.id} style={[styles.row, isActive && styles.rowActive]} onPress={() => onSelect(c.slug)}>
+          <Tap key={row.slug ?? "all"} style={[styles.row, isActive && styles.rowActive]} onPress={() => onSelect(row.slug)} scaleTo={0.98}>
             <Icon size={17} color={isActive ? colors.primary : colors.textMuted} />
-            <Text style={[styles.rowText, isActive && styles.rowTextActive]}>{c.name}</Text>
-          </TouchableOpacity>
+            <Text style={[styles.rowText, isActive && styles.rowTextActive]} numberOfLines={1}>
+              {row.name}
+            </Text>
+            <Text style={[styles.count, isActive && { color: colors.primary }]}>{row.count}</Text>
+          </Tap>
         );
       })}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   sidebar: {
-    width: 220,
+    width: SIDEBAR_WIDTH,
     backgroundColor: colors.card,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    ...cardShadow,
+    padding: spacing.sm,
     marginRight: spacing.lg,
-    height: "fit-content" as any,
-  },
-  heading: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: colors.textMuted,
-    textTransform: "uppercase",
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-    letterSpacing: 0.5,
+    alignSelf: "flex-start",
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.sm + 4,
     gap: spacing.sm,
+    borderRadius: radius.sm,
   },
   rowActive: { backgroundColor: colors.primaryTint },
-  rowText: { fontSize: 14, color: colors.text },
-  rowTextActive: { color: colors.primary, fontWeight: "700" },
-});
+  rowText: { flex: 1, fontSize: fontSize.base, color: colors.text },
+  rowTextActive: { color: colors.primary, fontWeight: fontWeight.bold },
+  count: { fontSize: fontSize.caption, color: colors.textMuted, fontWeight: fontWeight.semibold },
+}));

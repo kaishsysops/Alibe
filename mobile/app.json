@@ -4,9 +4,9 @@
     "slug": "alibe",
     "version": "0.1.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "splash": {
-      "backgroundColor": "#0E7C66"
+      "backgroundColor": "#FF6A00"
     },
     "assetBundlePatterns": ["**/*"],
     "ios": {
@@ -18,6 +18,14 @@
     },
     "web": {
       "bundler": "metro"
-    }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Alibe uses your photos so you can add listing images."
+        }
+      ]
+    ]
   }
 }

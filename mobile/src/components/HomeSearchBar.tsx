@@ -1,66 +1,64 @@
 import React, { useState } from "react";
-import { View, TextInput, TouchableOpacity, StyleSheet } from "react-native";
-import { BlurView } from "expo-blur";
-import { Search } from "lucide-react-native";
-import { colors, spacing, radius } from "../theme/theme";
+import { View, TextInput } from "react-native";
+import { Search, ArrowRight } from "lucide-react-native";
+import { makeStyles, useTheme } from "../theme/ThemeContext";
+import { spacing, radius, fontSize } from "../theme/theme";
+import Tap from "./Tap";
 
-export default function HomeSearchBar({
-  onSubmit,
-  style,
-}: {
-  onSubmit: (query: string) => void;
-  style?: object;
-}) {
+export default function HomeSearchBar({ onSubmit, style }: { onSubmit: (query: string) => void; style?: object }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const [query, setQuery] = useState("");
+  const submit = () => query.trim() && onSubmit(query.trim());
 
   return (
     <View style={[styles.wrap, style]}>
-      <BlurView intensity={80} tint="light" style={StyleSheet.absoluteFillObject} />
-      <Search size={18} color={colors.textMuted} style={styles.icon} />
+      <Search size={18} color={colors.textMuted} />
       <TextInput
         style={styles.input}
-        placeholder="Search for anything..."
+        placeholder="Search phones, sofas, bikes..."
         placeholderTextColor={colors.textMuted}
         value={query}
         onChangeText={setQuery}
-        onSubmitEditing={() => onSubmit(query)}
+        onSubmitEditing={submit}
         returnKeyType="search"
+        accessibilityLabel="Search listings"
       />
-      <TouchableOpacity style={styles.button} onPress={() => onSubmit(query)}>
-        <Search size={18} color="#fff" />
-      </TouchableOpacity>
+      {query.trim().length > 0 && (
+        <Tap style={styles.button} onPress={submit} hitSlop={8} scaleTo={0.88} accessibilityLabel="Search">
+          <ArrowRight size={17} color="#fff" />
+        </Tap>
+      )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   wrap: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: radius.lg,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.6)",
+    backgroundColor: colors.card,
+    borderRadius: radius.pill,
     height: 50,
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 6,
+    paddingLeft: spacing.md,
+    paddingRight: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  icon: { marginLeft: spacing.md },
   input: {
     flex: 1,
+    height: "100%",
     paddingHorizontal: spacing.sm,
-    fontSize: 14,
+    fontSize: fontSize.md,
     color: colors.text,
     outlineStyle: "none" as any,
   },
   button: {
-    width: 46,
-    height: "100%",
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
-});
+}));

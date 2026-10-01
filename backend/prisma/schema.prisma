@@ -31,16 +31,54 @@ model Island {
   atollId  String
   atoll    Atoll     @relation(fields: [atollId], references: [id])
   listings Listing[]
+  users    User[]
 
   @@unique([atollId, name])
 }
 
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+}
+
 model User {
-  id        String     @id @default(cuid())
-  phone     String     @unique
-  name      String
-  createdAt DateTime   @default(now())
-  listings  Listing[]
+  id                     String         @id @default(cuid())
+  phone                  String         @unique
+  name                   String
+  username               String?        @unique
+  email                  String?
+  bio                    String?
+  avatarColor            String?
+  islandId               String?
+  island                 Island?        @relation(fields: [islandId], references: [id])
+  paymentMethod          PaymentMethod?
+  promoOptIn             Boolean        @default(true)
+  showPhone              Boolean        @default(true)
+  whatsappNumber         String?
+  whatsappEnabled        Boolean        @default(false)
+  viberNumber            String?
+  viberEnabled           Boolean        @default(false)
+  themeColor             String?
+  verificationStatus     VerificationStatus @default(NONE)
+  verifiedAt             DateTime?
+  // Expo push tokens, one per signed-in device.
+  pushTokens             String[]       @default([])
+  reviewsWritten         Review[]       @relation("ReviewsWritten")
+  reviewsReceived        Review[]       @relation("ReviewsReceived")
+  reportsFiled           Report[]       @relation("ReportsFiled")
+  reportsAgainst         Report[]       @relation("ReportsAgainst")
+  blocking               Block[]        @relation("Blocking")
+  blockedBy              Block[]        @relation("BlockedBy")
+  savedSearches          SavedSearch[]
+  offersMade             Offer[]        @relation("OffersMade")
+  ordersBought           Order[]        @relation("OrdersBought")
+  ordersSold             Order[]        @relation("OrdersSold")
+  createdAt              DateTime       @default(now())
+  listings               Listing[]
+  favorites              Favorite[]
+  messages               Message[]
+  conversationsAsBuyer   Conversation[] @relation("BuyerConversations")
+  conversationsAsSeller  Conversation[] @relation("SellerConversations")
 }
 
 enum Condition {
@@ -52,24 +90,236 @@ enum Condition {
 
 enum ListingStatus {
   ACTIVE
+  RESERVED
   SOLD
   DRAFT
 }
 
+enum DeliveryOption {
+  PICKUP
+  FERRY
+  COURIER
+}
+
+enum VerificationStatus {
+  NONE
+  VERIFIED
+}
+
 model Listing {
-  id          String        @id @default(cuid())
-  title       String
-  description String
-  price       Int
-  condition   Condition     @default(GOOD)
-  status      ListingStatus @default(ACTIVE)
-  images      String[]
-  categoryId  String
-  category    Category      @relation(fields: [categoryId], references: [id])
-  islandId    String
-  island      Island        @relation(fields: [islandId], references: [id])
-  sellerId    String
-  seller      User          @relation(fields: [sellerId], references: [id])
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id            String         @id @default(cuid())
+  title         String
+  description   String
+  price         Int
+  condition     Condition      @default(GOOD)
+  status        ListingStatus  @default(ACTIVE)
+  images        String[]
+  deliveryOptions DeliveryOption[] @default([PICKUP])
+  deliveryNote  String?
+  categoryId    String
+  category      Category       @relation(fields: [categoryId], references: [id])
+  islandId      String
+  island        Island         @relation(fields: [islandId], references: [id])
+  sellerId      String
+  seller        User           @relation(fields: [sellerId], references: [id])
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  // Client-generated key so a double-tapped "Publish" can't create two listings.
+  clientRequestId String?      @unique
+  favoritedBy   Favorite[]
+  conversations Conversation[]
+  reviews       Review[]
+  reports       Report[]
+  offers        Offer[]
+  orders        Order[]
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([userId, listingId])
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  listingId String
+  listing   Listing   @relation(fields: [listingId], references: [id])
+  buyerId   String
+  buyer     User      @relation("BuyerConversations", fields: [buyerId], references: [id])
+  sellerId  String
+  seller    User      @relation("SellerConversations", fields: [sellerId], references: [id])
+  messages  Message[]
+  offers    Offer[]
+  orders    Order[]
+  buyerLastReadAt  DateTime?
+  sellerLastReadAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([listingId, buyerId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id])
+  text           String       @default("")
+  // Optional attachment: a server path like /uploads/abc.jpg plus its kind.
+  mediaUrl       String?
+  mediaType      MediaType?
+  // Client-generated key so retries/double-taps don't duplicate a message.
+  clientId       String?      @unique
+  offerId        String?      @unique
+  offer          Offer?       @relation(fields: [offerId], references: [id])
+  createdAt      DateTime     @default(now())
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  COUNTERED
+  WITHDRAWN
+}
+
+model Offer {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  listingId      String
+  listing        Listing      @relation(fields: [listingId], references: [id])
+  fromId         String
+  from           User         @relation("OffersMade", fields: [fromId], references: [id])
+  amount         Int
+  status         OfferStatus  @default(PENDING)
+  clientId       String?      @unique
+  message        Message?
+  order          Order?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+// A sale between one buyer and the seller. The seller is responsible for
+// getting the item to the buyer; every delivery has to be verified by the
+// buyer (handover code or "I received it"). Five verified deliveries make
+// the seller a verified seller.
+enum OrderStatus {
+  AWAITING_DISPATCH
+  DISPATCHED
+  DELIVERED
+  DISPUTED
+  CANCELLED
+}
+
+model Order {
+  id             String         @id @default(cuid())
+  listingId      String
+  listing        Listing        @relation(fields: [listingId], references: [id])
+  conversationId String
+  conversation   Conversation   @relation(fields: [conversationId], references: [id])
+  buyerId        String
+  buyer          User           @relation("OrdersBought", fields: [buyerId], references: [id])
+  sellerId       String
+  seller         User           @relation("OrdersSold", fields: [sellerId], references: [id])
+  offerId        String?        @unique
+  offer          Offer?         @relation(fields: [offerId], references: [id])
+  amount         Int
+  status         OrderStatus    @default(AWAITING_DISPATCH)
+  deliveryMethod DeliveryOption?
+  // Ferry shipments must name the boat so the buyer knows what to meet.
+  boatName       String?
+  boatDeparture  DateTime?
+  cargoReference String?
+  courierName    String?
+  pickupNote     String?
+  // Shown only to the buyer. The seller can only complete the delivery by
+  // entering it, so the buyer releases it once the item is in their hands.
+  handoverCode   String
+  codeAttempts   Int            @default(0)
+  dispatchedAt   DateTime?
+  deliveredAt    DateTime?
+  verifiedBy     String?
+  problem        String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  sellerId   String
+  seller     User     @relation("ReviewsReceived", fields: [sellerId], references: [id])
+  reviewerId String
+  reviewer   User     @relation("ReviewsWritten", fields: [reviewerId], references: [id])
+  listingId  String
+  listing    Listing  @relation(fields: [listingId], references: [id])
+  rating     Int
+  text       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // One review per buyer per item: a second submit edits it instead.
+  @@unique([reviewerId, listingId])
+}
+
+enum ReportReason {
+  SCAM
+  PROHIBITED
+  WRONG_CATEGORY
+  OFFENSIVE
+  OTHER
+}
+
+model Report {
+  id             String       @id @default(cuid())
+  reporterId     String
+  reporter       User         @relation("ReportsFiled", fields: [reporterId], references: [id])
+  listingId      String?
+  listing        Listing?     @relation(fields: [listingId], references: [id])
+  reportedUserId String?
+  reportedUser   User?        @relation("ReportsAgainst", fields: [reportedUserId], references: [id])
+  reason         ReportReason
+  details        String?
+  createdAt      DateTime     @default(now())
+
+  // Reporting the same thing twice just updates the first report.
+  @@unique([reporterId, listingId])
+  @@unique([reporterId, reportedUserId])
+}
+
+model Block {
+  id        String   @id @default(cuid())
+  blockerId String
+  blocker   User     @relation("Blocking", fields: [blockerId], references: [id])
+  blockedId String
+  blocked   User     @relation("BlockedBy", fields: [blockedId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+}
+
+model SavedSearch {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  label         String
+  // Normalised filter set (q, categorySlug, atollId, condition, minPrice,
+  // maxPrice, delivery); paramsKey is its stable string form for dedupe.
+  params        Json
+  paramsKey     String
+  lastSeenAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, paramsKey])
 }

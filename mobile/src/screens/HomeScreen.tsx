@@ -1,193 +1,188 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, ActivityIndicator, RefreshControl, ScrollView } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { View, Text, ScrollView, RefreshControl, Image } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
-import { ShoppingBag, X } from "lucide-react-native";
+import { WifiOff, X, PackageOpen } from "lucide-react-native";
 import { api, Category, Listing } from "../api/client";
-import ProductGrid, { StaticProductGrid } from "../components/ProductGrid";
+import { StaticProductGrid } from "../components/ProductGrid";
 import HomeRail from "../components/HomeRail";
+import ContentCard from "../components/ContentCard";
 import WebNavBar from "../components/WebNavBar";
-import CategorySidebar from "../components/CategorySidebar";
+import CategorySidebar, { SIDEBAR_WIDTH } from "../components/CategorySidebar";
 import HomeSearchBar from "../components/HomeSearchBar";
-import { colors, spacing, radius } from "../theme/theme";
+import EmptyState from "../components/EmptyState";
+import Tap from "../components/Tap";
+import { RailSkeleton, Skeleton, SkeletonGroup } from "../components/Skeleton";
+import PullRefreshBadge, { usePullRefresh, invisibleRefreshProps } from "../components/PullToRefresh";
+import { useAuth } from "../api/AuthContext";
+import { useToast } from "../components/Toast";
+import { makeStyles, useTheme } from "../theme/ThemeContext";
+import { spacing, radius, tabBarClearance, fontSize, fontWeight } from "../theme/theme";
 import { categoryIcons, AllCategoriesIcon } from "../theme/categoryIcons";
-import { useResponsive } from "../hooks/useResponsive";
+import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
 
-const SIDEBAR_WIDTH = 220;
-const MAX_CONTENT_WIDTH = 1400;
+const HERO_IMAGE = "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=1200&h=800&fit=crop&auto=format&q=75";
+const SELL_IMAGE = "https://images.unsplash.com/photo-1556745757-8d76bdb6984b?w=1000&h=600&fit=crop&auto=format&q=75";
 
 export default function HomeScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const navigation = useNavigation<any>();
-  const { isDesktopWeb, width } = useResponsive();
+  const insets = useSafeAreaInsets();
+  const toast = useToast();
+  const { user } = useAuth();
+  const { isDesktopWeb, width, gutter, contentWidth } = useResponsive();
   const [categories, setCategories] = useState<Category[]>([]);
   const [allListings, setAllListings] = useState<Listing[]>([]);
-  const [filteredListings, setFilteredListings] = useState<Listing[]>([]);
-  const [activeCategory, setActiveCategory] = useState<Category | undefined>(undefined);
+  const [activeSlug, setActiveSlug] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const { scrollY, onScroll } = usePullRefresh();
 
   const loadAll = useCallback(async () => {
-    setError(null);
     try {
       const [cats, list] = await Promise.all([api.categories(), api.listings({})]);
       setCategories(cats);
       setAllListings(list);
-    } catch (e) {
-      setError("Can't reach the Alibe backend. Is docker compose up?");
+      setFailed(false);
+    } catch {
+      setFailed(true);
+      // Content already on screen stays; only a cold start shows the error page.
+      setAllListings((prev) => {
+        if (prev.length) toast.error("Couldn't refresh. Showing what we had.");
+        return prev;
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     loadAll();
   }, [loadAll]);
 
-  const onSelectCategory = async (category: Category | undefined) => {
-    setActiveCategory(category);
-    if (!category) return;
-    setLoading(true);
-    try {
-      const list = await api.listings({ categorySlug: category.slug });
-      setFilteredListings(list);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const goToProduct = (l: Listing) => navigation.navigate("ProductDetail", { id: l.id });
-  const goToSearch = (q: string) => navigation.navigate("SearchTab", { q });
-  const seeAllInCategory = (category: Category) => navigation.navigate("SearchTab", { categorySlug: category.slug, categoryName: category.name });
+  const goToSearch = (params: Record<string, string | undefined>) => navigation.navigate("SearchTab", params);
+  const seeAllInCategory = (c: Category) => goToSearch({ categorySlug: c.slug, categoryName: c.name });
 
-  const railsByCategory = useMemo(() => {
-    return categories
-      .map((c) => ({ category: c, items: allListings.filter((l) => l.category.slug === c.slug).slice(0, 10) }))
-      .filter((r) => r.items.length > 0);
-  }, [categories, allListings]);
-
-  const hero = (
-    <View style={styles.hero}>
-      <View style={styles.heroTopRow}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.heroTitle}>Buy & sell across every atoll</Text>
-          <Text style={styles.heroSubtitle}>Structured categories · Verified sellers · No more flat feeds</Text>
-        </View>
-        <View style={styles.heroBadge}>
-          <ShoppingBag size={26} color="rgba(255,255,255,0.5)" />
-        </View>
-      </View>
-      <HomeSearchBar onSubmit={(q) => q.trim() && goToSearch(q.trim())} style={styles.heroSearchBar} />
-    </View>
+  const railsByCategory = useMemo(
+    () =>
+      categories
+        .map((c) => ({ category: c, items: allListings.filter((l) => l.category.slug === c.slug).slice(0, 12) }))
+        .filter((r) => r.items.length > 0)
+        .sort((a, b) => b.items.length - a.items.length),
+    [categories, allListings]
   );
 
-  const categoryRail = (
-    <FlatList
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={styles.categoryRail}
-      contentContainerStyle={{ paddingHorizontal: spacing.md }}
-      data={categories}
-      keyExtractor={(c) => c.id}
-      renderItem={({ item }) => {
-        const cat = categoryIcons[item.slug];
-        const Icon = cat?.Icon ?? AllCategoriesIcon;
-        return (
-          <TouchableOpacity style={styles.categoryItem} onPress={() => onSelectCategory(item)}>
-            <View style={[styles.categoryCircle, { backgroundColor: cat ? cat.color : colors.primary }]}>
-              <Icon size={22} color="#fff" />
-            </View>
-            <Text style={styles.categoryLabel} numberOfLines={1}>
-              {item.name}
-            </Text>
-          </TouchableOpacity>
-        );
-      }}
+  const filtered = activeSlug ? allListings.filter((l) => l.category.slug === activeSlug) : [];
+  const activeCategory = categories.find((c) => c.slug === activeSlug);
+  const firstName = user?.name?.split(" ")[0];
+
+  if (!loading && failed && !allListings.length) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        {isDesktopWeb && <WebNavBar active="home" />}
+        <EmptyState
+          icon={WifiOff}
+          tone="error"
+          title="You're offline"
+          message="We couldn't load listings. Check your connection and try again."
+          actionLabel="Try again"
+          onAction={() => {
+            setLoading(true);
+            loadAll();
+          }}
+        />
+      </View>
+    );
+  }
+
+  const noListings = !loading && !allListings.length;
+  const emptyMarket = (
+    <EmptyState
+      icon={PackageOpen}
+      title="No listings yet"
+      message="Be the first to sell something on Alibe."
+      actionLabel="List an item"
+      onAction={() => navigation.navigate("SellTab")}
     />
   );
 
-  if (loading && !allListings.length) {
-    return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
-        <ActivityIndicator style={{ marginTop: spacing.xl }} color={colors.primary} />
-      </SafeAreaView>
-    );
-  }
-
-  if (error) {
-    return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
-        <View style={styles.center}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   // Desktop web
   if (isDesktopWeb) {
-    const contentWidth = Math.min(width, MAX_CONTENT_WIDTH) - spacing.xl * 2;
-    const gridWidth = contentWidth - SIDEBAR_WIDTH;
-
+    const gridWidth = contentWidth - SIDEBAR_WIDTH - spacing.lg;
     return (
-      <View style={styles.desktopContainer}>
-        <WebNavBar active="home" onSearch={goToSearch} />
+      <View style={styles.container}>
+        <WebNavBar active="home" />
         <ScrollView>
-          <View style={{ flexDirection: "row", maxWidth: MAX_CONTENT_WIDTH, width: "100%", alignSelf: "center", paddingHorizontal: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.xl }}>
-            <CategorySidebar categories={categories} active={activeCategory?.slug} onSelect={(slug) => onSelectCategory(categories.find((c) => c.slug === slug))} />
-            <View style={{ flex: 1 }}>
-              <View style={styles.promoBanner}>
-                <View>
-                  <Text style={styles.promoTitle}>Buy & sell across every atoll</Text>
-                  <Text style={styles.promoSubtitle}>Structured categories. Verified sellers. No more scrolling a flat feed.</Text>
+          <View style={[styles.desktopColumn, { paddingHorizontal: gutter }]}>
+            <View style={styles.banner}>
+              <View style={styles.bannerText}>
+                <Text style={styles.bannerTitle}>{firstName ? `Welcome back, ${firstName}.` : "Buy and sell across every atoll."}</Text>
+                <Text style={styles.bannerSubtitle}>Fresh listings from Malé to Addu, with chat, WhatsApp and Viber built in.</Text>
+                <View style={styles.bannerActions}>
+                  <Tap style={styles.bannerPrimary} onPress={() => goToSearch({})}>
+                    <Text style={styles.bannerPrimaryText}>Browse listings</Text>
+                  </Tap>
+                  <Tap style={styles.bannerSecondary} onPress={() => navigation.navigate("SellTab")}>
+                    <Text style={styles.bannerSecondaryText}>Sell an item</Text>
+                  </Tap>
                 </View>
-                <ShoppingBag size={56} color="rgba(255,255,255,0.35)" />
               </View>
+              <Image source={{ uri: HERO_IMAGE }} style={styles.bannerImage} />
+            </View>
 
-              {activeCategory ? (
-                <>
-                  <View style={styles.categoryFilterRow}>
-                    <Text style={styles.sectionTitle}>{activeCategory.name}</Text>
-                    <TouchableOpacity style={styles.clearFilter} onPress={() => onSelectCategory(undefined)}>
-                      <X size={13} color={colors.textMuted} />
-                      <Text style={styles.clearFilterText}>Clear</Text>
-                    </TouchableOpacity>
+            <View style={{ flexDirection: "row" }}>
+              {loading ? (
+                <SkeletonGroup>
+                  <View style={{ width: SIDEBAR_WIDTH, marginRight: spacing.lg, gap: spacing.sm }}>
+                    {Array.from({ length: 9 }).map((_, i) => (
+                      <Skeleton key={i} height={36} rounded={radius.sm} />
+                    ))}
                   </View>
-                  {loading ? (
-                    <ActivityIndicator style={{ marginTop: spacing.xl }} color={colors.primary} />
-                  ) : (
-                    <ProductGrid
-                      data={filteredListings}
-                      onPressItem={goToProduct}
-                      containerWidth={gridWidth}
-                      horizontalPadding={0}
-                      ListEmptyComponent={<Text style={styles.empty}>No listings yet in this category.</Text>}
-                    />
-                  )}
-                </>
+                </SkeletonGroup>
               ) : (
-                <>
-                  {railsByCategory.map(({ category, items }) => (
-                    <HomeRail
-                      key={category.id}
-                      title={category.name}
-                      data={items}
-                      onPressItem={goToProduct}
-                      onSeeAll={() => seeAllInCategory(category)}
-                      horizontalPadding={0}
-                    />
-                  ))}
-                  <Text style={styles.sectionTitle}>More to explore</Text>
-                  <StaticProductGrid
-                    data={allListings}
-                    onPressItem={goToProduct}
-                    containerWidth={gridWidth}
-                    horizontalPadding={0}
-                    emptyText="No listings yet."
-                  />
-                </>
+                <CategorySidebar categories={categories} active={activeSlug} onSelect={setActiveSlug} />
               )}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                {activeCategory ? (
+                  <>
+                    <View style={styles.filterRow}>
+                      <Text style={styles.sectionTitle}>{activeCategory.name}</Text>
+                      <Tap style={styles.clearFilter} onPress={() => setActiveSlug(undefined)}>
+                        <X size={14} color={colors.textMuted} />
+                        <Text style={styles.clearFilterText}>Clear</Text>
+                      </Tap>
+                    </View>
+                    <StaticProductGrid data={filtered} onPressItem={goToProduct} containerWidth={gridWidth} horizontalPadding={0} />
+                  </>
+                ) : loading ? (
+                  <>
+                    <RailSkeleton horizontalPadding={0} cardWidth={180} />
+                    <RailSkeleton horizontalPadding={0} cardWidth={180} />
+                  </>
+                ) : noListings ? (
+                  emptyMarket
+                ) : (
+                  <>
+                    {railsByCategory.slice(0, 3).map(({ category, items }) => (
+                      <HomeRail
+                        key={category.id}
+                        title={category.name}
+                        data={items}
+                        onPressItem={goToProduct}
+                        onSeeAll={() => seeAllInCategory(category)}
+                        horizontalPadding={0}
+                        cardWidth={180}
+                      />
+                    ))}
+                    <Text style={[styles.sectionTitle, { marginTop: spacing.md }]}>Fresh listings</Text>
+                    <StaticProductGrid data={allListings.slice(0, 24)} onPressItem={goToProduct} containerWidth={gridWidth} horizontalPadding={0} />
+                  </>
+                )}
+              </View>
             </View>
           </View>
         </ScrollView>
@@ -196,113 +191,145 @@ export default function HomeScreen() {
   }
 
   // Mobile / native
-  if (activeCategory) {
-    return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
-        <View style={styles.categoryFilterRow}>
-          <Text style={styles.sectionTitle}>{activeCategory.name}</Text>
-          <TouchableOpacity style={styles.clearFilter} onPress={() => onSelectCategory(undefined)}>
-            <X size={13} color={colors.textMuted} />
-            <Text style={styles.clearFilterText}>Clear</Text>
-          </TouchableOpacity>
-        </View>
-        {loading ? (
-          <ActivityIndicator style={{ marginTop: spacing.xl }} color={colors.primary} />
-        ) : (
-          <ProductGrid
-            data={filteredListings}
-            onPressItem={goToProduct}
-            ListEmptyComponent={<Text style={styles.empty}>No listings yet in this category.</Text>}
-          />
-        )}
-      </SafeAreaView>
-    );
-  }
-
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
+    <View style={styles.container}>
+      <PullRefreshBadge scrollY={scrollY} refreshing={refreshing} />
       <ScrollView
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); loadAll(); }} />}
-        contentContainerStyle={{ paddingBottom: spacing.xl }}
-      >
-        {hero}
-        {categoryRail}
-        {railsByCategory.map(({ category, items }) => (
-          <HomeRail
-            key={category.id}
-            title={category.name}
-            data={items}
-            onPressItem={goToProduct}
-            onSeeAll={() => seeAllInCategory(category)}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              loadAll();
+            }}
+            {...invisibleRefreshProps}
           />
-        ))}
-        <Text style={[styles.sectionTitle, { paddingHorizontal: spacing.md }]}>More to explore</Text>
-        <StaticProductGrid data={allListings} onPressItem={goToProduct} containerWidth={width} emptyText="No listings yet." />
+        }
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: tabBarClearance }}
+      >
+        <View style={[styles.hero, { paddingTop: insets.top + spacing.sm, paddingHorizontal: gutter }]}>
+          <View style={styles.heroTopRow}>
+            <Text style={styles.wordmark}>Alibe</Text>
+            <Tap
+              style={[styles.avatar, { backgroundColor: user?.avatarColor ?? colors.primary }]}
+              onPress={() => navigation.navigate("ProfileTab")}
+              accessibilityLabel="Your profile"
+              scaleTo={0.9}
+            >
+              <Text style={styles.avatarText}>{(user?.name ?? "?").charAt(0).toUpperCase()}</Text>
+            </Tap>
+          </View>
+          <Text style={styles.greeting}>{firstName ? `Hi ${firstName}, what are you looking for?` : "What are you looking for?"}</Text>
+          <HomeSearchBar onSubmit={(q) => goToSearch({ q })} />
+        </View>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.categoryRail, { paddingHorizontal: gutter }]}>
+          {loading
+            ? Array.from({ length: 6 }).map((_, i) => (
+                <View key={i} style={styles.categoryItem}>
+                  <Skeleton width={56} height={56} rounded={18} />
+                  <Skeleton width={48} height={10} style={{ marginTop: 8 }} />
+                </View>
+              ))
+            : categories.map((c) => {
+                const meta = categoryIcons[c.slug];
+                const Icon = meta?.Icon ?? AllCategoriesIcon;
+                return (
+                  <Tap key={c.id} style={styles.categoryItem} onPress={() => seeAllInCategory(c)} scaleTo={0.9}>
+                    <View style={[styles.categoryIcon, { backgroundColor: `${meta?.color ?? colors.primary}17` }]}>
+                      <Icon size={24} color={meta?.color ?? colors.primary} strokeWidth={1.9} />
+                    </View>
+                    <Text style={styles.categoryLabel} numberOfLines={1}>
+                      {c.name}
+                    </Text>
+                  </Tap>
+                );
+              })}
+        </ScrollView>
+
+        {loading ? (
+          <>
+            <RailSkeleton horizontalPadding={gutter} />
+            <RailSkeleton horizontalPadding={gutter} />
+          </>
+        ) : noListings ? (
+          emptyMarket
+        ) : (
+          <>
+            {railsByCategory.map(({ category, items }, i) => (
+              <React.Fragment key={category.id}>
+                <HomeRail title={category.name} data={items} onPressItem={goToProduct} onSeeAll={() => seeAllInCategory(category)} horizontalPadding={gutter} />
+                {i === 0 && (
+                  <ContentCard
+                    title="Sell it this afternoon"
+                    subtitle="Add a photo and a price. Buyers can reach you right away."
+                    ctaLabel="Start selling"
+                    image={SELL_IMAGE}
+                    onPress={() => navigation.navigate("SellTab")}
+                    horizontalPadding={gutter}
+                  />
+                )}
+                {i === 2 && railsByCategory[3] && (
+                  <ContentCard
+                    title={railsByCategory[3].category.name}
+                    subtitle={`${railsByCategory[3].items.length}+ listings across the islands`}
+                    ctaLabel="Explore"
+                    image={railsByCategory[3].items[0]?.images[0]}
+                    onPress={() => seeAllInCategory(railsByCategory[3].category)}
+                    horizontalPadding={gutter}
+                  />
+                )}
+              </React.Fragment>
+            ))}
+            <Text style={[styles.sectionTitle, { paddingHorizontal: gutter, marginTop: spacing.sm }]}>Fresh listings</Text>
+            <StaticProductGrid data={allListings.slice(0, 20)} onPressItem={goToProduct} containerWidth={width} horizontalPadding={gutter} />
+            <Tap style={[styles.moreButton, { marginHorizontal: gutter }]} onPress={() => goToSearch({})}>
+              <Text style={styles.moreButtonText}>See all {allListings.length} listings</Text>
+            </Tap>
+          </>
+        )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
-  desktopContainer: { flex: 1, backgroundColor: colors.background },
-  promoBanner: {
-    backgroundColor: colors.primary,
+  desktopColumn: { maxWidth: MAX_CONTENT_WIDTH, width: "100%", alignSelf: "center", paddingTop: spacing.lg, paddingBottom: spacing.xl * 2 },
+  banner: {
+    flexDirection: "row",
+    backgroundColor: colors.card,
     borderRadius: radius.lg,
-    padding: spacing.xl,
+    overflow: "hidden",
     marginBottom: spacing.lg,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    minHeight: 260,
   },
-  promoTitle: { fontSize: 24, fontWeight: "800", color: "#fff", maxWidth: 420 },
-  promoSubtitle: { fontSize: 13, color: "#FFE8D6", marginTop: spacing.xs, maxWidth: 420 },
-  hero: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xl + spacing.md,
-    borderBottomLeftRadius: radius.lg,
-    borderBottomRightRadius: radius.lg,
-  },
-  heroTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: spacing.sm },
-  heroTitle: { fontSize: 22, fontWeight: "800", color: "#fff", lineHeight: 27 },
-  heroSubtitle: { fontSize: 12, color: "#FFE8D6", marginTop: 4 },
-  heroBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "rgba(255,255,255,0.15)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  heroSearchBar: { marginTop: spacing.lg },
-  categoryRail: { flexGrow: 0, marginTop: spacing.md, marginBottom: spacing.md },
-  categoryItem: { alignItems: "center", width: 64, marginRight: spacing.sm },
-  categoryCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  categoryLabel: { fontSize: 10.5, color: colors.textMuted, marginTop: spacing.xs, textAlign: "center" },
-  sectionTitle: { fontSize: 16, fontWeight: "800", color: colors.text, marginBottom: spacing.sm },
-  categoryFilterRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-  },
-  clearFilter: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 4, paddingHorizontal: spacing.sm },
-  clearFilterText: { color: colors.textMuted, fontSize: 12, fontWeight: "600" },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.lg },
-  errorText: { color: colors.danger, textAlign: "center" },
-  empty: { textAlign: "center", color: colors.textMuted, marginTop: spacing.xl },
-});
+  bannerText: { flex: 1, padding: spacing.xl, justifyContent: "center" },
+  bannerTitle: { fontSize: 36, fontWeight: fontWeight.extrabold, color: colors.text, letterSpacing: -0.8, lineHeight: 42, maxWidth: 480 },
+  bannerSubtitle: { fontSize: fontSize.md, color: colors.textMuted, marginTop: spacing.sm, maxWidth: 420, lineHeight: fontSize.md * 1.45 },
+  bannerActions: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg },
+  bannerPrimary: { backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm + 4 },
+  bannerPrimaryText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.base },
+  bannerSecondary: { backgroundColor: colors.primaryTint, borderRadius: radius.pill, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm + 4 },
+  bannerSecondaryText: { color: colors.primary, fontWeight: fontWeight.bold, fontSize: fontSize.base },
+  bannerImage: { width: "42%", minHeight: 260 },
+  hero: { paddingBottom: spacing.md },
+  heroTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.md },
+  wordmark: { fontSize: fontSize.xxl, fontWeight: fontWeight.extrabold, color: colors.primary, letterSpacing: -0.5 },
+  avatar: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  avatarText: { color: "#fff", fontWeight: fontWeight.extrabold, fontSize: fontSize.base },
+  greeting: { fontSize: fontSize.xl, fontWeight: fontWeight.bold, color: colors.text, marginBottom: spacing.md, letterSpacing: -0.3 },
+  categoryRail: { gap: spacing.md, paddingBottom: spacing.lg },
+  categoryItem: { alignItems: "center", width: 64 },
+  categoryIcon: { width: 56, height: 56, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  categoryLabel: { fontSize: fontSize.caption, color: colors.text, marginTop: 6, textAlign: "center", fontWeight: fontWeight.medium },
+  sectionTitle: { fontSize: fontSize.lg, fontWeight: fontWeight.extrabold, color: colors.text, marginBottom: spacing.sm + 2 },
+  filterRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  clearFilter: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 6, paddingHorizontal: spacing.sm + 2, borderRadius: radius.pill, backgroundColor: colors.card },
+  clearFilterText: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: fontWeight.semibold },
+  moreButton: { alignItems: "center", paddingVertical: spacing.md, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, marginTop: spacing.sm },
+  moreButtonText: { color: colors.text, fontWeight: fontWeight.bold, fontSize: fontSize.base },
+}));

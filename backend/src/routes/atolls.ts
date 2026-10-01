@@ -1,7 +1,7 @@
-import { Router } from "express";
+import { safeRouter } from "../http.js";
 import { prisma } from "../db.js";
 
-export const atollsRouter = Router();
+export const atollsRouter = safeRouter();
 
 atollsRouter.get("/", async (_req, res) => {
   const atolls = await prisma.atoll.findMany({

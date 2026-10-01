@@ -32,6 +32,7 @@ services:
     volumes:
       - ./backend/src:/app/src
       - ./backend/prisma:/app/prisma
+      - alibe-uploads:/app/uploads
 
   mobile:
     build: ./mobile
@@ -57,4 +58,5 @@ services:
 
 volumes:
   alibe-pg-data:
+  alibe-uploads:
   mobile-node-modules:

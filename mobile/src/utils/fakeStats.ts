@@ -13,3 +13,15 @@ export function pseudoRating(id: string): number {
 export function pseudoSoldCount(id: string): number {
   return 5 + (hash(id, 17) % 495);
 }
+
+// Returns a discount percentage for most (not all) listings, purely as
+// decorative demo styling — there's no real "original price" behind it.
+export function pseudoDiscountPercent(id: string): number | null {
+  const roll = hash(id, 13) % 100;
+  if (roll < 35) return null;
+  return 10 + (hash(id, 41) % 46); // 10-55%
+}
+
+export function originalPriceFor(price: number, discountPercent: number): number {
+  return Math.round(price / (1 - discountPercent / 100));
+}
