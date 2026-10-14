@@ -19,6 +19,7 @@ import MediaViewer from "./MediaViewer";
 import EmptyState from "./EmptyState";
 import { useToast } from "./Toast";
 import Tap from "./Tap";
+import { useAppAlert } from "./AppAlertProvider";
 import { FadeIn, Nudge } from "./Motion";
 import SafetyWarning, { shouldShowWarning } from "./SafetyWarning";
 import TrustBadge from "./TrustBadge";
@@ -85,6 +86,7 @@ export default function ChatThreadView({
   const navigation = useNavigation<any>();
   const isFocused = useIsFocused();
   const toast = useToast();
+  const showAlert = useAppAlert();
   const { user } = useAuth();
   const notifications = useNotifications();
   const [conversation, setConversation] = useState<Conversation | null>(null);
@@ -214,6 +216,32 @@ export default function ChatThreadView({
       }
       queue("", { localUri: a.uri, mime: a.mimeType ?? (isVideo ? "video/mp4" : "image/jpeg"), type: isVideo ? "VIDEO" : "IMAGE" });
     }
+  };
+
+  // Seller sells straight to this buyer at the asking price (no offer needed).
+  const [sell] = useSingleFlight(async () => {
+    if (!user || !conversation) return;
+    try {
+      const created = await api.sellToBuyer(conversation.id, user.id);
+      navigation.navigate("OrderDetail", { id: created.id });
+    } catch (e) {
+      toast.error(errorMessage(e, "Couldn't start the sale. Please try again."));
+    } finally {
+      loadThread();
+    }
+  });
+  const confirmSell = () => {
+    if (!conversation) return;
+    const buyerName = conversation.buyer.name;
+    showAlert({
+      title: `Sell to ${buyerName}?`,
+      message: `${conversation.listing.title} for MVR ${conversation.listing.price.toLocaleString()}. It will be reserved for ${buyerName} and you'll arrange delivery. Agreed a different price? Use "Send a price" instead.`,
+      kind: "info",
+      buttons: [
+        { text: "Not yet", style: "cancel" },
+        { text: "Yes, sell it", onPress: sell },
+      ],
+    });
   };
 
   const [respond] = useSingleFlight(async (offer: Offer, action: "ACCEPT" | "DECLINE" | "WITHDRAW") => {
@@ -386,6 +414,12 @@ export default function ChatThreadView({
 
       {(canOffer || canRate) && (
         <View style={styles.actionStrip}>
+          {canOffer && !isBuyer && !order && (
+            <Tap style={[styles.stripButton, styles.stripPrimary]} onPress={confirmSell} scaleTo={0.94}>
+              <Package size={14} color="#fff" />
+              <Text style={[styles.stripText, { color: "#fff" }]}>Sell to {other?.name.split(" ")[0]}</Text>
+            </Tap>
+          )}
           {canOffer && (
             <Tap style={styles.stripButton} onPress={() => setOfferSheet(true)} scaleTo={0.94}>
               <Tag size={14} color={colors.primary} />
@@ -564,6 +598,7 @@ const useStyles = makeStyles((colors) => ({
   orderBarAction: { backgroundColor: colors.primary },
   orderBarText: { flex: 1, fontSize: fontSize.base, fontWeight: fontWeight.bold, color: colors.primary },
   actionStrip: { flexDirection: "row", gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.background },
+  stripPrimary: { backgroundColor: colors.primary },
   stripButton: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.sm + 4, height: 34, borderRadius: radius.pill, backgroundColor: colors.primaryTint },
   stripText: { color: colors.primary, fontWeight: fontWeight.bold, fontSize: fontSize.sm },
   listContent: { paddingHorizontal: spacing.md, paddingVertical: spacing.md, gap: 6 },

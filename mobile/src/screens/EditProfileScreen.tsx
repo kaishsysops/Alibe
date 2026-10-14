@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, ScrollView, ActivityIndicator, Switch, KeyboardAvoidingView, Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Check, ChevronRight, Phone } from "lucide-react-native";
+import { Check, ChevronRight, Phone, Sun, Moon, SunMoon } from "lucide-react-native";
 import { api, Atoll, FullUser, PaymentMethod, errorMessage } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import { useToast } from "../components/Toast";
@@ -47,7 +47,7 @@ function Field({ label, children, helper }: { label: string; children: React.Rea
 
 export default function EditProfileScreen() {
   const styles = useStyles();
-  const { colors, accent } = useTheme();
+  const { colors, accent, mode, setMode } = useTheme();
   const { user, updateUser } = useAuth();
   const navigation = useNavigation<any>();
   const toast = useToast();
@@ -199,6 +199,24 @@ export default function EditProfileScreen() {
             </View>
           </Section>
 
+          <Section title="Light or dark">
+            <View style={styles.modeRow}>
+              {([
+                { key: "system", label: "Automatic", Icon: SunMoon },
+                { key: "light", label: "Light", Icon: Sun },
+                { key: "dark", label: "Dark", Icon: Moon },
+              ] as const).map(({ key, label, Icon }) => {
+                const active = mode === key;
+                return (
+                  <Tap key={key} style={[styles.modeOption, active && styles.modeOptionActive]} onPress={() => setMode(key)} scaleTo={0.94} accessibilityState={{ selected: active }}>
+                    <Icon size={22} color={active ? colors.primary : colors.textMuted} />
+                    <Text style={[styles.modeLabel, active && { color: colors.primary }]}>{label}</Text>
+                  </Tap>
+                );
+              })}
+            </View>
+          </Section>
+
           <Section title="Contact and messaging">
             <Tap style={styles.linkRow} onPress={() => navigation.navigate("ChangePhone")} scaleTo={0.98}>
               <View style={styles.channelIcon}>
@@ -301,6 +319,10 @@ export default function EditProfileScreen() {
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
   scroll: { padding: spacing.md, paddingTop: 0, paddingBottom: spacing.xl, width: "100%", maxWidth: 600, alignSelf: "center" },
+  modeRow: { flexDirection: "row", gap: spacing.sm, padding: spacing.md },
+  modeOption: { flex: 1, alignItems: "center", gap: 6, paddingVertical: spacing.md, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border },
+  modeOptionActive: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
+  modeLabel: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.textMuted },
   sectionTitle: { fontSize: fontSize.base, fontWeight: fontWeight.bold, color: colors.text, marginBottom: spacing.sm, marginLeft: 2 },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, ...cardShadow, overflow: "hidden" },
   field: { paddingHorizontal: spacing.md, paddingTop: spacing.md },

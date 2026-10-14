@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, ScrollView, RefreshControl, Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
-import { WifiOff, X, PackageOpen } from "lucide-react-native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { WifiOff, X, PackageOpen, Bell } from "lucide-react-native";
 import { api, Category, Listing } from "../api/client";
 import { StaticProductGrid } from "../components/ProductGrid";
 import HomeRail from "../components/HomeRail";
@@ -12,6 +12,10 @@ import CategorySidebar, { SIDEBAR_WIDTH } from "../components/CategorySidebar";
 import HomeSearchBar from "../components/HomeSearchBar";
 import EmptyState from "../components/EmptyState";
 import OrderNudge from "../components/OrderNudge";
+import CategoryTile from "../components/CategoryTile";
+import { CountBadge } from "../components/Badges";
+import { useNotifications } from "../api/NotificationsContext";
+import { getRecentlyViewed } from "../utils/recentlyViewed";
 import Tap from "../components/Tap";
 import { RailSkeleton, Skeleton, SkeletonGroup } from "../components/Skeleton";
 import PullRefreshBadge, { usePullRefresh, invisibleRefreshProps } from "../components/PullToRefresh";
@@ -40,6 +44,15 @@ export default function HomeScreen() {
   const [failed, setFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const { scrollY, onScroll } = usePullRefresh();
+  const { data: notifications } = useNotifications();
+  const [recentIds, setRecentIds] = useState<string[]>([]);
+
+  // Recently viewed, refreshed whenever Home comes back into view.
+  useFocusEffect(
+    useCallback(() => {
+      if (user) getRecentlyViewed(user.id).then((list) => setRecentIds(list.map((l) => l.id)));
+    }, [user])
+  );
 
   const loadAll = useCallback(async () => {
     try {
@@ -77,10 +90,22 @@ export default function HomeScreen() {
     [categories, allListings]
   );
 
-  // Mobile category grid: 4 per row, two rows max.
-  const categoryWidth = (width - gutter * 2) / 4;
+  // Mobile category grid: 4 square tiles per row, two rows max.
+  const categoryTile = Math.floor((width - gutter * 2 - spacing.sm * 3) / 4);
+  // Newest photo in each category (listings arrive newest first).
+  const categoryPhoto = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const l of allListings) if (l.images[0] && !map.has(l.category.slug)) map.set(l.category.slug, l.images[0]);
+    return map;
+  }, [allListings]);
   const hasMoreCategories = categories.length > 8;
   const gridCategories = hasMoreCategories ? categories.slice(0, 7) : categories;
+
+  // Use the live listing (current price/status) and drop anything sold or removed.
+  const recentlyViewed = useMemo(() => {
+    const byId = new Map(allListings.map((l) => [l.id, l]));
+    return recentIds.map((id) => byId.get(id)).filter((l): l is Listing => !!l && l.status === "ACTIVE");
+  }, [recentIds, allListings]);
 
   const filtered = activeSlug ? allListings.filter((l) => l.category.slug === activeSlug) : [];
   const activeCategory = categories.find((c) => c.slug === activeSlug);
@@ -220,6 +245,11 @@ export default function HomeScreen() {
         <View style={[styles.hero, { paddingTop: insets.top + spacing.sm, paddingHorizontal: gutter }]}>
           <View style={styles.heroTopRow}>
             <Text style={styles.wordmark}>Alibe</Text>
+            <View style={styles.heroActions}>
+            <Tap style={styles.bell} onPress={() => navigation.navigate("Notifications")} scaleTo={0.88} accessibilityLabel={`Notifications${notifications.total ? `, ${notifications.total} new` : ""}`}>
+              <Bell size={20} color={colors.text} />
+              <CountBadge count={notifications.total} style={styles.bellBadge} />
+            </Tap>
             <Tap
               style={[styles.avatar, { backgroundColor: user?.avatarColor ?? colors.primary }]}
               onPress={() => navigation.navigate("ProfileTab")}
@@ -228,34 +258,32 @@ export default function HomeScreen() {
             >
               <Text style={styles.avatarText}>{(user?.name ?? "?").charAt(0).toUpperCase()}</Text>
             </Tap>
+            </View>
           </View>
           <HomeSearchBar onSubmit={(q) => goToSearch({ q })} />
           <OrderNudge style={{ marginTop: spacing.md }} />
         </View>
 
-        {/* All categories at a glance in a 4-column grid (nothing hidden off-screen);
-            past 8, the last tile becomes "More". */}
+        {/* All categories at a glance, 4 per row, each showing a real photo
+            from that category; past 8, the last tile becomes "More". */}
         <View style={[styles.categoryGrid, { paddingHorizontal: gutter }]}>
           {loading
-            ? Array.from({ length: 8 }).map((_, i) => (
-                <View key={i} style={[styles.categoryItem, { width: categoryWidth }]}>
-                  <Skeleton width={56} height={56} rounded={18} />
-                  <Skeleton width={48} height={10} style={{ marginTop: 8 }} />
-                </View>
-              ))
-            : [...gridCategories.map((c) => ({ key: c.id, name: c.name, slug: c.slug, onPress: () => seeAllInCategory(c) })),
-               ...(hasMoreCategories ? [{ key: "more", name: "More", slug: "", onPress: () => goToSearch({}) }] : [])].map((c) => {
+            ? Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} width={categoryTile} height={categoryTile} rounded={radius.md} />)
+            : [
+                ...gridCategories.map((c) => ({ key: c.id, name: c.name, slug: c.slug, onPress: () => seeAllInCategory(c) })),
+                ...(hasMoreCategories ? [{ key: "more", name: "More", slug: "", onPress: () => goToSearch({}) }] : []),
+              ].map((c) => {
                 const meta = categoryIcons[c.slug];
-                const Icon = meta?.Icon ?? AllCategoriesIcon;
                 return (
-                  <Tap key={c.key} style={[styles.categoryItem, { width: categoryWidth }]} onPress={c.onPress} scaleTo={0.9}>
-                    <View style={[styles.categoryIcon, { backgroundColor: `${meta?.color ?? colors.primary}17` }]}>
-                      <Icon size={24} color={meta?.color ?? colors.primary} strokeWidth={1.9} />
-                    </View>
-                    <Text style={styles.categoryLabel} numberOfLines={2}>
-                      {c.name}
-                    </Text>
-                  </Tap>
+                  <CategoryTile
+                    key={c.key}
+                    name={c.name}
+                    image={categoryPhoto.get(c.slug)}
+                    Icon={meta?.Icon ?? AllCategoriesIcon}
+                    color={meta?.color ?? colors.primary}
+                    size={categoryTile}
+                    onPress={c.onPress}
+                  />
                 );
               })}
         </View>
@@ -269,6 +297,9 @@ export default function HomeScreen() {
           emptyMarket
         ) : (
           <>
+            {recentlyViewed.length >= 2 && (
+              <HomeRail title="Recently viewed" data={recentlyViewed.slice(0, 12)} onPressItem={goToProduct} horizontalPadding={gutter} />
+            )}
             {railsByCategory.map(({ category, items }, i) => (
               <React.Fragment key={category.id}>
                 <HomeRail title={category.name} data={items} onPressItem={goToProduct} onSeeAll={() => seeAllInCategory(category)} horizontalPadding={gutter} />
@@ -327,15 +358,15 @@ const useStyles = makeStyles((colors) => ({
   bannerSecondaryText: { color: colors.primary, fontWeight: fontWeight.bold, fontSize: fontSize.base },
   bannerImage: { width: "42%", minHeight: 260 },
   hero: { paddingBottom: spacing.md },
+  heroActions: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  bell: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  bellBadge: { position: "absolute", top: -4, right: -4 },
   heroTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.md },
   wordmark: { fontSize: fontSize.xxl, fontWeight: fontWeight.extrabold, color: colors.primary, letterSpacing: -0.5 },
   avatar: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
   avatarText: { color: "#fff", fontWeight: fontWeight.extrabold, fontSize: fontSize.base },
   greeting: { fontSize: fontSize.xl, fontWeight: fontWeight.bold, color: colors.text, marginBottom: spacing.md, letterSpacing: -0.3 },
-  categoryGrid: { flexDirection: "row", flexWrap: "wrap", rowGap: spacing.md, paddingBottom: spacing.lg },
-  categoryItem: { alignItems: "center", paddingHorizontal: 2 },
-  categoryIcon: { width: 56, height: 56, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  categoryLabel: { fontSize: fontSize.caption, color: colors.text, marginTop: 6, textAlign: "center", fontWeight: fontWeight.medium },
+  categoryGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, paddingBottom: spacing.lg },
   sectionTitle: { fontSize: fontSize.lg, fontWeight: fontWeight.extrabold, color: colors.text, marginBottom: spacing.sm + 2 },
   filterRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   clearFilter: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 6, paddingHorizontal: spacing.sm + 2, borderRadius: radius.pill, backgroundColor: colors.card },

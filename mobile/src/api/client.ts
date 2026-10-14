@@ -323,6 +323,8 @@ export const api = {
     }),
 
   user: (id: string) => request<PublicUser>(`/users/${id}`),
+  // Someone else's items for sale (seller profile). Active only.
+  sellerListings: (sellerId: string) => request<Listing[]>(`/listings?seller=${encodeURIComponent(sellerId)}`),
   trust: (id: string) => request<TrustSummary>(`/users/${id}/trust`),
   myProfile: (id: string) => request<FullUser>(`/users/${id}/me`),
   updateProfile: (id: string, data: ProfileUpdate) =>

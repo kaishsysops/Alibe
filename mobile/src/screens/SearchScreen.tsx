@@ -2,8 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { View, Text, TextInput, ScrollView, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { Search as SearchIcon, X, SlidersHorizontal, SearchX, ChevronDown } from "lucide-react-native";
-import { api, Atoll, Category, Listing, ListingSort } from "../api/client";
+import { Search as SearchIcon, X, SlidersHorizontal, SearchX, ChevronDown, BellPlus, BellRing } from "lucide-react-native";
+import { api, Atoll, Category, DeliveryOption, errorMessage, Listing, ListingSort } from "../api/client";
+import { useAuth } from "../api/AuthContext";
+import { useSingleFlight } from "../hooks/useSingleFlight";
 import ProductGrid from "../components/ProductGrid";
 import WebNavBar from "../components/WebNavBar";
 import EmptyState from "../components/EmptyState";
@@ -19,6 +21,11 @@ const SORTS: Array<{ key: ListingSort; label: string }> = [
   { key: "newest", label: "Newest" },
   { key: "price_asc", label: "Lowest price" },
   { key: "price_desc", label: "Highest price" },
+];
+const DELIVERIES: Array<{ key: DeliveryOption; label: string }> = [
+  { key: "PICKUP", label: "Pickup" },
+  { key: "FERRY", label: "Ferry" },
+  { key: "COURIER", label: "Courier" },
 ];
 const FILTER_PANEL_WIDTH = 280;
 const DEBOUNCE_MS = 350;
@@ -52,13 +59,18 @@ export default function SearchScreen() {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [sort, setSort] = useState<ListingSort>("newest");
+  const [delivery, setDelivery] = useState<DeliveryOption | undefined>();
+  // Key of the filter combination the user last saved, so the button can
+  // show "Saved" until they change something.
+  const [savedKey, setSavedKey] = useState<string | null>(null);
+  const { user } = useAuth();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [results, setResults] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const requestId = useRef(0);
 
-  const activeFilterCount = (atollId ? 1 : 0) + (condition ? 1 : 0) + (minPrice ? 1 : 0) + (maxPrice ? 1 : 0);
+  const activeFilterCount = (atollId ? 1 : 0) + (condition ? 1 : 0) + (minPrice ? 1 : 0) + (maxPrice ? 1 : 0) + (delivery ? 1 : 0);
   const isBrowsing = !query.trim() && !categorySlug && activeFilterCount === 0;
 
   useEffect(() => {
@@ -69,8 +81,19 @@ export default function SearchScreen() {
   // New params arrive when Home's "See all" or a category tile is tapped
   // while this tab is already mounted.
   useEffect(() => {
-    if (route.params?.q !== undefined) setQuery(route.params.q);
-    if (route.params && "categorySlug" in route.params) setCategorySlug(route.params.categorySlug);
+    const p = route.params;
+    if (!p) return;
+    if (p.q !== undefined) setQuery(p.q);
+    if ("categorySlug" in p) setCategorySlug(p.categorySlug);
+    // Opening a saved search restores every filter it was saved with.
+    if (p.fromSaved) {
+      setAtollId(p.atollId);
+      setCondition(p.condition);
+      setMinPrice(p.minPrice ?? "");
+      setMaxPrice(p.maxPrice ?? "");
+      setDelivery(p.delivery);
+      setQuery(p.q ?? "");
+    }
   }, [route.params]);
 
   const runSearch = useCallback(async () => {
@@ -83,6 +106,7 @@ export default function SearchScreen() {
         condition,
         minPrice: minPrice || undefined,
         maxPrice: maxPrice || undefined,
+        delivery,
         sort,
       });
       // Ignore responses for searches the user has already typed past.
@@ -95,7 +119,7 @@ export default function SearchScreen() {
         setRefreshing(false);
       }
     }
-  }, [query, atollId, categorySlug, condition, minPrice, maxPrice, sort, toast]);
+  }, [query, atollId, categorySlug, condition, minPrice, maxPrice, delivery, sort, toast]);
 
   // Search as you type, debounced; filter taps apply immediately.
   const lastQuery = useRef(query);
@@ -114,9 +138,36 @@ export default function SearchScreen() {
     setCondition(undefined);
     setMinPrice("");
     setMaxPrice("");
+    setDelivery(undefined);
     setSort("newest");
     navigation.setParams({ q: undefined, categorySlug: undefined, categoryName: undefined });
   };
+
+  const currentFilters = {
+    q: query.trim() || undefined,
+    categorySlug,
+    atollId,
+    condition,
+    minPrice: minPrice || undefined,
+    maxPrice: maxPrice || undefined,
+    delivery,
+  };
+  const filtersKey = JSON.stringify(currentFilters);
+  const isSaved = savedKey === filtersKey;
+  const [saveSearch, saving] = useSingleFlight(async () => {
+    if (!user || isSaved) return;
+    const atoll = atolls.find((a) => a.id === atollId);
+    const what = query.trim() ? `"${query.trim()}"` : categories.find((c) => c.slug === categorySlug)?.name ?? "New listings";
+    const label = atoll ? `${what} in ${atoll.name}` : what;
+    setSavedKey(filtersKey);
+    try {
+      await api.saveSearch(user.id, label, currentFilters);
+      toast.success("Saved. We'll let you know when new matches appear.", { label: "View", onPress: () => navigation.navigate("SavedSearches") });
+    } catch (e) {
+      setSavedKey(null);
+      toast.error(errorMessage(e, "Couldn't save this search. Please try again."));
+    }
+  });
 
   const goToProduct = (l: Listing) => navigation.navigate("ProductDetail", { id: l.id });
   const activeCategory = categories.find((c) => c.slug === categorySlug);
@@ -186,6 +237,15 @@ export default function SearchScreen() {
           <TextInput style={styles.priceInput} placeholder="Max" placeholderTextColor={colors.textMuted} keyboardType="number-pad" value={maxPrice} onChangeText={(t) => setMaxPrice(t.replace(/\D/g, ""))} accessibilityLabel="Maximum price" />
         </View>
       </View>
+      <View>
+        <Text style={styles.filterLabel}>Delivery</Text>
+        <View style={styles.wrapRow}>
+          <Chip label="Any" active={!delivery} onPress={() => setDelivery(undefined)} />
+          {DELIVERIES.map((d) => (
+            <Chip key={d.key} label={d.label} active={delivery === d.key} onPress={() => setDelivery(delivery === d.key ? undefined : d.key)} />
+          ))}
+        </View>
+      </View>
       {(activeFilterCount > 0 || sort !== "newest") && (
         <Tap style={styles.resetButton} onPress={clearAll}>
           <Text style={styles.resetText}>Reset all</Text>
@@ -231,6 +291,12 @@ export default function SearchScreen() {
         </Text>
         {!loading && <Text style={styles.resultsCount}>{results.length} found</Text>}
       </View>
+      {!isBrowsing && (
+        <Tap style={[styles.saveSearch, isSaved && styles.saveSearchDone]} onPress={saveSearch} disabled={saving || isSaved} scaleTo={0.96}>
+          {isSaved ? <BellRing size={16} color={colors.success} /> : <BellPlus size={16} color={colors.primary} />}
+          <Text style={[styles.saveSearchText, isSaved && { color: colors.success }]}>{isSaved ? "Saved. We'll alert you to new matches" : "Alert me when new matches appear"}</Text>
+        </Tap>
+      )}
     </View>
   );
 
@@ -368,6 +434,9 @@ const useStyles = makeStyles((colors) => ({
   tileIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", marginBottom: spacing.sm },
   tileName: { fontSize: fontSize.base, fontWeight: fontWeight.bold, color: colors.text },
   tileCount: { fontSize: fontSize.caption, color: colors.textMuted },
+  saveSearch: { flexDirection: "row", alignItems: "center", gap: spacing.sm, alignSelf: "flex-start", marginTop: spacing.sm, marginBottom: spacing.sm, paddingHorizontal: spacing.md, height: 40, borderRadius: radius.pill, backgroundColor: colors.primaryTint },
+  saveSearchDone: { backgroundColor: `${colors.success}18` },
+  saveSearchText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.primary },
   resultsRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
   resultsCount: { fontSize: fontSize.sm, color: colors.textMuted },
 }));

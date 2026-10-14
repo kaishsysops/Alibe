@@ -10,6 +10,9 @@ export const listingsRouter = safeRouter();
 const listQuerySchema = listingFiltersSchema.extend({
   sort: z.enum(["newest", "price_asc", "price_desc"]).optional(),
   viewerId: z.string().optional(),
+  // Public "this seller's items" filter (seller profiles). Not `sellerId`:
+  // that name means "the caller" to the auth layer.
+  seller: z.string().optional(),
 });
 
 const SORTS: Record<string, Prisma.ListingOrderByWithRelationInput> = {
@@ -21,9 +24,10 @@ const SORTS: Record<string, Prisma.ListingOrderByWithRelationInput> = {
 listingsRouter.get("/", async (req, res) => {
   const parsed = listQuerySchema.safeParse(req.query);
   if (!parsed.success) return sendValidationError(res, parsed.error);
-  const { sort, viewerId, ...filters } = parsed.data;
+  const { sort, viewerId, seller, ...filters } = parsed.data;
+  const where = listingWhere(filters, await hiddenSellerIds(viewerId));
   const listings = await prisma.listing.findMany({
-    where: listingWhere(filters, await hiddenSellerIds(viewerId)),
+    where: seller ? { AND: [where, { sellerId: seller }] } : where,
     include: listingInclude,
     orderBy: SORTS[sort ?? "newest"],
   });

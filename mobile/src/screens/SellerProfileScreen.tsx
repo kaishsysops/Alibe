@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { View, Text } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { PackageOpen, UserX } from "lucide-react-native";
-import { api, Listing, PublicUser } from "../api/client";
+import { PackageOpen, UserX, Star } from "lucide-react-native";
+import { api, Listing, PublicUser, Review } from "../api/client";
+import Tap from "../components/Tap";
+import { FadeIn } from "../components/Motion";
+import { timeAgo } from "../utils/time";
 import { useAuth } from "../api/AuthContext";
 import ProductGrid from "../components/ProductGrid";
 import WebNavBar from "../components/WebNavBar";
@@ -27,9 +30,12 @@ export default function SellerProfileScreen() {
   const [listings, setListings] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [showAllReviews, setShowAllReviews] = useState(false);
 
   useEffect(() => {
-    Promise.all([api.user(id), api.myListings(id, "ACTIVE")])
+    api.sellerReviews(id).then(setReviews).catch(() => {});
+    Promise.all([api.user(id), api.sellerListings(id)])
       .then(([u, l]) => {
         setSeller(u);
         setListings(l);
@@ -73,6 +79,40 @@ export default function SellerProfileScreen() {
           <Text style={styles.contactLabel}>Contact</Text>
           <ContactIconButtons contact={seller} size={44} />
         </View>
+      )}
+      {reviews.length > 0 && (
+        <>
+          <Text style={styles.sectionTitle}>
+            Reviews from buyers ({reviews.length})
+          </Text>
+          <View style={{ gap: spacing.sm }}>
+            {(showAllReviews ? reviews : reviews.slice(0, 3)).map((r, i) => (
+              <FadeIn key={r.id} delay={i * 50}>
+                <View style={styles.review}>
+                  <View style={styles.reviewHead}>
+                    <View style={{ flexDirection: "row", gap: 2 }}>
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <Star key={n} size={14} color={colors.gold} fill={r.rating >= n ? colors.gold : "transparent"} />
+                      ))}
+                    </View>
+                    <Text style={styles.reviewMeta}>
+                      {r.reviewer.name} · {timeAgo(r.createdAt, true)}
+                    </Text>
+                  </View>
+                  {!!r.text && <Text style={styles.reviewText}>{r.text}</Text>}
+                  <Text style={styles.reviewItem} numberOfLines={1}>
+                    Bought: {r.listing.title}
+                  </Text>
+                </View>
+              </FadeIn>
+            ))}
+          </View>
+          {reviews.length > 3 && !showAllReviews && (
+            <Tap style={styles.moreReviews} onPress={() => setShowAllReviews(true)} scaleTo={0.96}>
+              <Text style={styles.moreReviewsText}>Show all {reviews.length} reviews</Text>
+            </Tap>
+          )}
+        </>
       )}
       <Text style={styles.sectionTitle}>
         {seller.activeListingsCount} listing{seller.activeListingsCount === 1 ? "" : "s"} for sale
@@ -123,5 +163,12 @@ const useStyles = makeStyles((colors) => ({
   bio: { color: colors.text, fontSize: fontSize.sm, marginTop: spacing.sm, lineHeight: fontSize.sm * 1.45 },
   contactRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.md, backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.sm + 4, paddingLeft: spacing.md, ...cardShadow },
   contactLabel: { fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: colors.text },
+  review: { padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.card, ...cardShadow },
+  reviewHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+  reviewMeta: { flexShrink: 1, fontSize: fontSize.caption, color: colors.textMuted },
+  reviewText: { fontSize: fontSize.base, color: colors.text, marginTop: spacing.sm, lineHeight: fontSize.base * 1.45 },
+  reviewItem: { fontSize: fontSize.caption, color: colors.textMuted, marginTop: spacing.sm },
+  moreReviews: { alignSelf: "center", paddingVertical: spacing.sm, paddingHorizontal: spacing.md, marginTop: spacing.xs },
+  moreReviewsText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.primary },
   sectionTitle: { fontSize: fontSize.lg, fontWeight: fontWeight.extrabold, color: colors.text, marginTop: spacing.lg, marginBottom: spacing.sm },
 }));

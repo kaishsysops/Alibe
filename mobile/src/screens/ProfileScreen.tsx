@@ -2,7 +2,7 @@ import React, { useCallback, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { LogOut, Archive, Heart, Phone, Palette, HelpCircle, Info, ChevronRight, Pencil, Trash2, MessageSquareText, Package, ShieldCheck } from "lucide-react-native";
+import { LogOut, Archive, Heart, Phone, Palette, HelpCircle, Info, ChevronRight, Pencil, Trash2, MessageSquareText, Package, ShieldCheck, BellRing, Bell, Ban, SunMoon } from "lucide-react-native";
 import { api, errorMessage } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import { useFavorites } from "../api/FavoritesContext";
@@ -20,7 +20,7 @@ import { WhatsAppIcon, ViberIcon } from "../components/BrandIcons";
 
 export default function ProfileScreen() {
   const styles = useStyles();
-  const { colors } = useTheme();
+  const { colors, mode } = useTheme();
   const { user, signOut, deleteAccount } = useAuth();
   const { favoriteIds } = useFavorites();
   const navigation = useNavigation<any>();
@@ -80,11 +80,15 @@ export default function ProfileScreen() {
       { icon: Package, label: "My orders", onPress: () => navigation.navigate("Orders") },
       { icon: Archive, label: "My listings", value: counts ? String(counts.active) : undefined, onPress: () => navigation.navigate("MyListings") },
       { icon: Heart, label: "Saved items", value: String(favoriteIds.size), onPress: () => navigation.navigate("Favorites") },
+      { icon: BellRing, label: "Search alerts", onPress: () => navigation.navigate("SavedSearches") },
+      { icon: Bell, label: "Notifications", onPress: () => navigation.navigate("Notifications") },
     ],
     [
       { icon: Phone, label: "Phone number", value: formatPhone(user?.phone), onPress: () => navigation.navigate("ChangePhone") },
       { icon: MessageSquareText, label: "WhatsApp and Viber", value: contactSummary, onPress: () => navigation.navigate("EditProfile", { section: "contact" }) },
       { icon: Palette, label: "App colour", value: <View style={[styles.colorDot, { backgroundColor: colors.primary }]} />, onPress: () => navigation.navigate("EditProfile", { section: "appearance" }) },
+      { icon: SunMoon, label: "Light or dark", value: mode === "system" ? "Automatic" : mode === "dark" ? "Dark" : "Light", onPress: () => navigation.navigate("EditProfile", { section: "appearance" }) },
+      { icon: Ban, label: "Blocked people", onPress: () => navigation.navigate("BlockedUsers") },
     ],
     [
       { icon: ShieldCheck, label: "How Alibe keeps you safe", onPress: () => navigation.navigate("Safety") },
