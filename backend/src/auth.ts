@@ -48,6 +48,7 @@ const PUBLIC: Array<[string, RegExp]> = [
   ["GET", /^\/listings\/?$/],
   ["GET", /^\/listings\/(?!mine\/)[^/]+$/],
   ["GET", /^\/users\/[^/]+$/],
+  ["GET", /^\/users\/[^/]+\/trust$/],
   ["GET", /^\/reviews\/seller\/[^/]+$/],
   ["GET", /^\/uploads\/.+/],
   ["POST", /^\/auth\/otp\/(request|verify)$/],
@@ -68,8 +69,8 @@ const SELF_PATHS: Array<[string | null, RegExp]> = [
   [null, /^\/notifications\/([^/]+)/],
   [null, /^\/blocks\/([^/]+)/],
   ["GET", /^\/saved-searches\/([^/]+)$/],
-  // Everything under /users/:id except the public profile (GET /users/:id).
-  [null, /^\/users\/([^/]+)\/.+/],
+  // Everything under /users/:id except the public profile and trust summary.
+  [null, /^\/users\/([^/]+)\/(?!trust$).+/],
   ["PATCH", /^\/users\/([^/]+)$/],
   ["DELETE", /^\/users\/([^/]+)$/],
 ];

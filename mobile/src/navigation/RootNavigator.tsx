@@ -32,6 +32,7 @@ import BlockedUsersScreen from "../screens/BlockedUsersScreen";
 import VerifyScreen from "../screens/VerifyScreen";
 import OrdersScreen from "../screens/OrdersScreen";
 import OrderDetailScreen from "../screens/OrderDetailScreen";
+import SafetyScreen from "../screens/SafetyScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -45,6 +46,7 @@ const linking = {
       SellerProfile: "seller/:id",
       ChatThread: "chat/:id",
       OrderDetail: "order/:id",
+      Safety: "safety",
       MyListings: "my-listings",
       Favorites: "saved",
       Notifications: "notifications",
@@ -183,6 +185,7 @@ export default function RootNavigator() {
             <Stack.Screen name="Verify" component={VerifyScreen} />
             <Stack.Screen name="Orders" component={OrdersScreen} />
             <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
+            <Stack.Screen name="Safety" component={SafetyScreen} />
           </>
         )}
       </Stack.Navigator>

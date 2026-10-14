@@ -171,6 +171,17 @@ export type FullUser = Required<Omit<User, "createdAt">> & {
   promoOptIn: boolean;
 };
 export type PublicUser = PublicSeller & { bio: string | null; createdAt: string; activeListingsCount: number; rating: SellerRating; deliveredCount: number };
+export type TrustLevel = "CAUTION" | "NEW" | "MEMBER" | "ESTABLISHED" | "TRUSTED";
+export type TrustSummary = {
+  level: TrustLevel;
+  delivered: number;
+  rating: { average: number; count: number };
+  memberDays: number;
+  replyMinutes: number | null;
+  reporters: number;
+  cancelledByThem: number;
+};
+export type MessageFlag = "PAY_FIRST" | "GIFT_CARD_CRYPTO" | "LINK" | "BANK_DETAILS" | "HANDOVER_CODE";
 export type Message = {
   id: string;
   conversationId: string;
@@ -181,6 +192,7 @@ export type Message = {
   offerId?: string | null;
   mediaUrl?: string | null;
   mediaType?: "IMAGE" | "VIDEO" | null;
+  flag?: MessageFlag | null;
 };
 export type OfferStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "COUNTERED" | "WITHDRAWN";
 export type Offer = { id: string; conversationId: string; listingId: string; fromId: string; amount: number; status: OfferStatus; createdAt: string };
@@ -311,6 +323,7 @@ export const api = {
     }),
 
   user: (id: string) => request<PublicUser>(`/users/${id}`),
+  trust: (id: string) => request<TrustSummary>(`/users/${id}/trust`),
   myProfile: (id: string) => request<FullUser>(`/users/${id}/me`),
   updateProfile: (id: string, data: ProfileUpdate) =>
     request<FullUser>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),

@@ -2,7 +2,7 @@ import React, { useCallback, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { LogOut, Archive, Heart, Phone, Palette, HelpCircle, Info, ChevronRight, Pencil, Trash2, MessageSquareText, Package } from "lucide-react-native";
+import { LogOut, Archive, Heart, Phone, Palette, HelpCircle, Info, ChevronRight, Pencil, Trash2, MessageSquareText, Package, ShieldCheck } from "lucide-react-native";
 import { api, errorMessage } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import { useFavorites } from "../api/FavoritesContext";
@@ -87,6 +87,7 @@ export default function ProfileScreen() {
       { icon: Palette, label: "App colour", value: <View style={[styles.colorDot, { backgroundColor: colors.primary }]} />, onPress: () => navigation.navigate("EditProfile", { section: "appearance" }) },
     ],
     [
+      { icon: ShieldCheck, label: "How Alibe keeps you safe", onPress: () => navigation.navigate("Safety") },
       { icon: HelpCircle, label: "Help and support", onPress: () => toast.info("Support chat is coming soon. For now, email help@alibe.mv.") },
       { icon: Info, label: "About Alibe", onPress: () => toast.info("Alibe v0.2. A marketplace for every island in the Maldives.") },
     ],

@@ -2,9 +2,9 @@ import React, { useEffect, useRef, useState } from "react";
 import { View, Text, Image, ScrollView, ActivityIndicator, NativeSyntheticEvent, NativeScrollEvent, useWindowDimensions, Animated, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { MapPin, MessageCircle, Heart, CheckCircle2, RotateCcw, PackageSearch, ChevronRight, ChevronLeft, Clock, Tag, Share2, MoreHorizontal, Pencil, Truck, Ship, Hand, Flag, Ban } from "lucide-react-native";
+import { MapPin, MessageCircle, Heart, CheckCircle2, RotateCcw, PackageSearch, ChevronRight, ChevronLeft, Clock, Tag, Share2, MoreHorizontal, Pencil, Truck, Ship, Hand, Flag, Ban, ShieldCheck } from "lucide-react-native";
 import { api, errorMessage, Listing, newClientId, DeliveryOption } from "../api/client";
-import { VerifiedBadge, RatingSummary } from "../components/Badges";
+import { VerifiedBadge } from "../components/Badges";
 import { OfferSheet, useTrustActions } from "../components/TrustSheets";
 import { useActionSheet } from "../components/Sheet";
 import { shareListing } from "../utils/share";
@@ -25,6 +25,7 @@ import Tap from "../components/Tap";
 import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import { timeAgo } from "../utils/time";
+import TrustBadge from "../components/TrustBadge";
 
 const DELIVERY_META: Record<DeliveryOption, { label: string; icon: any }> = {
   PICKUP: { label: "Pickup", icon: Hand },
@@ -338,10 +339,8 @@ export default function ProductDetailScreen() {
             <Text style={styles.sellerName}>{isOwner ? "You" : listing.seller.name}</Text>
             {listing.seller.verified && <VerifiedBadge size={15} />}
           </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: 2 }}>
-            <RatingSummary rating={listing.seller.rating} size={12} />
-          </View>
           <Text style={styles.sellerMeta}>{sellerDisplay}</Text>
+          <TrustBadge userId={listing.seller.id} />
         </View>
         <Text style={styles.sellerLink}>Profile</Text>
         <ChevronRight size={16} color={colors.primary} />
@@ -351,6 +350,16 @@ export default function ProductDetailScreen() {
         <View style={{ marginTop: spacing.md }}>
           <ContactCard contact={listing.seller} listingTitle={listing.title} />
         </View>
+      )}
+
+      {!isOwner && available && (
+        <Tap style={styles.safetyRow} onPress={() => navigation.navigate("Safety")} scaleTo={0.98}>
+          <ShieldCheck size={20} color={colors.success} />
+          <Text style={styles.safetyText}>
+            <Text style={{ fontWeight: fontWeight.bold }}>Protected by Alibe.</Text> Pay only when the item is in your hands.
+          </Text>
+          <ChevronRight size={16} color={colors.textMuted} />
+        </Tap>
       )}
 
       <Text style={styles.sectionTitle}>About this item</Text>
@@ -494,6 +503,8 @@ const useStyles = makeStyles((colors) => ({
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md },
   tag: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: spacing.sm + 4, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   tagText: { fontSize: fontSize.caption, fontWeight: fontWeight.bold, color: colors.text },
+  safetyRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 2, marginTop: spacing.md, padding: spacing.sm + 4, borderRadius: radius.md, backgroundColor: `${colors.success}14` },
+  safetyText: { flex: 1, fontSize: fontSize.sm, color: colors.text, lineHeight: fontSize.sm * 1.4 },
   sellerCard: {
     flexDirection: "row",
     alignItems: "center",

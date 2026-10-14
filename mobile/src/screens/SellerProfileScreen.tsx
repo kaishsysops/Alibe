@@ -13,6 +13,7 @@ import { Skeleton, SkeletonGroup } from "../components/Skeleton";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, cardShadow, fontSize, fontWeight } from "../theme/theme";
 import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
+import TrustBadge from "../components/TrustBadge";
 
 export default function SellerProfileScreen() {
   const styles = useStyles();
@@ -63,6 +64,7 @@ export default function SellerProfileScreen() {
           <Text style={styles.meta}>
             {seller.username ? `@${seller.username}  ·  ` : ""}Since {memberSince}
           </Text>
+          <TrustBadge userId={seller.id} />
           {!!seller.bio && <Text style={styles.bio}>{seller.bio}</Text>}
         </View>
       </View>

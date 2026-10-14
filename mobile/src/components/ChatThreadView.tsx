@@ -20,6 +20,8 @@ import EmptyState from "./EmptyState";
 import { useToast } from "./Toast";
 import Tap from "./Tap";
 import { FadeIn, Nudge } from "./Motion";
+import SafetyWarning, { shouldShowWarning } from "./SafetyWarning";
+import TrustBadge from "./TrustBadge";
 
 const POLL_INTERVAL_MS = 3000;
 const QUICK_REPLIES_BUYER = ["Is this still available?", "What's your best price?", "Can I see it today?"];
@@ -37,6 +39,7 @@ type Row = {
   clientId?: string;
   media?: { uri: string; type: "IMAGE" | "VIDEO" };
   offer?: Offer;
+  flag?: Message["flag"];
   divider?: boolean;
 };
 
@@ -261,6 +264,7 @@ export default function ChatThreadView({
         mine,
         media: m.mediaUrl && m.mediaType ? { uri: mediaUrl(m.mediaUrl)!, type: m.mediaType } : undefined,
         offer: m.offerId ? offersById.get(m.offerId) : undefined,
+        flag: m.flag,
       });
     }
     for (const p of pending) {
@@ -354,6 +358,13 @@ export default function ChatThreadView({
         </View>
         {showContactButtons && other && isBuyer ? <ContactIconButtons contact={other} listingTitle={listing.title} size={36} /> : <ChevronRight size={18} color={colors.textMuted} />}
       </Tap>
+
+      {/* Who you're talking to, in one line: the other person's trust level. */}
+      {other && (
+        <View style={styles.trustRow}>
+          <TrustBadge userId={other.id} />
+        </View>
+      )}
 
       {order && order.status !== "CANCELLED" && (
         <FadeIn key={order.status} distance={-8}>
@@ -473,7 +484,15 @@ export default function ChatThreadView({
             <View>
               {showDay && <Text style={styles.dayLabel}>{dayLabel(item.createdAt)}</Text>}
               <View style={[styles.bubbleRow, item.mine && styles.bubbleRowMine]}>
-                <View style={{ maxWidth: "80%", alignItems: item.mine ? "flex-end" : "flex-start" }}>{content}</View>
+                <View style={{ maxWidth: "80%", alignItems: item.mine ? "flex-end" : "flex-start" }}>
+                  {content}
+                  {shouldShowWarning(item.flag, item.mine) &&
+                    (item.flag === "HANDOVER_CODE" ? (
+                      <SafetyWarning flag="HANDOVER_CODE" actionLabel="Make a new code" onAction={() => order && navigation.navigate("OrderDetail", { id: order.id })} />
+                    ) : (
+                      <SafetyWarning flag={item.flag!} actionLabel="How to stay safe" onAction={() => navigation.navigate("Safety")} />
+                    ))}
+                </View>
               </View>
               {seen && (
                 <View style={styles.seenRow}>
@@ -540,6 +559,7 @@ const useStyles = makeStyles((colors) => ({
   listingThumb: { width: 44, height: 44, borderRadius: radius.sm, backgroundColor: colors.skeleton },
   listingTitle: { fontSize: fontSize.base, color: colors.text, fontWeight: fontWeight.semibold },
   listingPrice: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.primary, marginTop: 1 },
+  trustRow: { paddingHorizontal: spacing.md, paddingTop: spacing.sm },
   orderBar: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 2, marginHorizontal: spacing.md, marginTop: spacing.sm, paddingHorizontal: spacing.md, minHeight: 48, borderRadius: radius.md, backgroundColor: colors.primaryTint },
   orderBarAction: { backgroundColor: colors.primary },
   orderBarText: { flex: 1, fontSize: fontSize.base, fontWeight: fontWeight.bold, color: colors.primary },

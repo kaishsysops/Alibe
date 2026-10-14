@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import { View, Text, TextInput, ActivityIndicator, KeyboardAvoidingView, ScrollView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ShoppingBag, ArrowRight, Check } from "lucide-react-native";
+import { ShoppingBag, ArrowRight, Check, ShieldCheck } from "lucide-react-native";
 import { api, errorMessage } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import { useToast } from "../components/Toast";
@@ -99,6 +99,12 @@ export default function OnboardingScreen() {
             </View>
             <Text style={styles.headline}>Buy and sell across every atoll.</Text>
             <Text style={styles.tagline}>Phones, furniture, bikes and homes from people near you.</Text>
+            <View style={styles.safeRow}>
+              <ShieldCheck size={18} color={colors.success} />
+              <Text style={styles.safeText}>
+                <Text style={{ fontWeight: fontWeight.bold, color: colors.text }}>Scam protection built in.</Text> Secret handover codes, scam warnings in chat and trust badges on every seller.
+              </Text>
+            </View>
 
             {step === "phone" ? (
               <>
@@ -195,6 +201,8 @@ const useStyles = makeStyles((colors) => ({
   },
   headline: { fontSize: fontSize.display, fontWeight: fontWeight.extrabold, color: colors.text, lineHeight: fontSize.display * 1.15, letterSpacing: -0.5 },
   tagline: { fontSize: fontSize.md, color: colors.textMuted, marginTop: spacing.sm, lineHeight: fontSize.md * 1.4 },
+  safeRow: { flexDirection: "row", gap: spacing.sm + 2, marginTop: spacing.md, padding: spacing.sm + 4, borderRadius: radius.md, backgroundColor: `${colors.success}14` },
+  safeText: { flex: 1, fontSize: fontSize.sm, color: colors.textMuted, lineHeight: fontSize.sm * 1.45 },
   label: { fontSize: fontSize.sm, color: colors.text, marginBottom: spacing.sm, marginTop: spacing.lg, fontWeight: fontWeight.semibold },
   hint: { fontSize: fontSize.caption, color: colors.textMuted, marginTop: spacing.sm },
   swatchRow: { flexDirection: "row", gap: spacing.sm + 2, flexWrap: "wrap" },

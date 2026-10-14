@@ -5,6 +5,7 @@ import { safeRouter, sendValidationError } from "../http.js";
 import { listingInclude, serializeConversation, serializeListing } from "../serializers.js";
 import { notifyUser } from "../push.js";
 import { createOrder } from "./orders.js";
+import { scanMessage } from "../safety.js";
 
 export const conversationsRouter = safeRouter();
 
@@ -155,8 +156,16 @@ conversationsRouter.post("/:id/messages", async (req, res) => {
   if (await isBlockedBetween(conversation.buyerId, conversation.sellerId)) {
     return res.status(403).json({ error: "You can't send messages in this chat." });
   }
+  const order = await prisma.order.findFirst({
+    where: { conversationId: conversation.id, status: { in: ["AWAITING_DISPATCH", "DISPATCHED", "DELIVERED", "DISPUTED"] } },
+    select: { status: true, buyerId: true, handoverCode: true },
+  });
+  const flag = scanMessage(text, {
+    hasOrder: !!order,
+    unsentHandoverCode: order && order.status === "AWAITING_DISPATCH" && order.buyerId === senderId ? order.handoverCode : null,
+  });
   try {
-    const message = await prisma.message.create({ data: { conversationId: conversation.id, senderId, text, clientId, mediaUrl, mediaType } });
+    const message = await prisma.message.create({ data: { conversationId: conversation.id, senderId, text, clientId, mediaUrl, mediaType, flag } });
     const sender = await prisma.user.findUnique({ where: { id: senderId }, select: { name: true } });
     notifyUser(
       senderId === conversation.buyerId ? conversation.sellerId : conversation.buyerId,

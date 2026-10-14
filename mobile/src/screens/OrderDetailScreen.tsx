@@ -682,6 +682,11 @@ function CodeCard({ order, onChange }: { order: Order; onChange: (o: Order) => v
           <BigButton label="Make a new code" onPress={renew} busy={busy} />
         </>
       )}
+      {!locked && (
+        <Tap style={styles.textLink} onPress={renew} disabled={busy} scaleTo={0.96}>
+          <Text style={styles.textLinkText}>{busy ? "Making a new code..." : "Shared it by mistake? Make a new code"}</Text>
+        </Tap>
+      )}
     </View>
   );
 }

@@ -4,6 +4,7 @@ import { prisma } from "../db.js";
 import { safeRouter, sendValidationError, PHONE_REGEX, normalizePhone } from "../http.js";
 import { publicUser, ratingsFor } from "../serializers.js";
 import { deliveredCount, DELIVERIES_TO_VERIFY } from "./orders.js";
+import { trustFor } from "../trust.js";
 
 export const usersRouter = safeRouter();
 
@@ -15,6 +16,13 @@ usersRouter.get("/:id", async (req, res) => {
   if (!user) return res.status(404).json({ error: "We couldn't find that seller." });
   const rating = (await ratingsFor([user.id])).get(user.id) ?? { average: 0, count: 0 };
   res.json({ ...publicUser(user), bio: user.bio, activeListingsCount: user._count.listings, rating, deliveredCount: await deliveredCount(user.id) });
+});
+
+// Public trust summary shown on listings, chats and profiles.
+usersRouter.get("/:id/trust", async (req, res) => {
+  const trust = await trustFor(req.params.id);
+  if (!trust) return res.status(404).json({ error: "We couldn't find that seller." });
+  res.json(trust);
 });
 
 const fullInclude = { island: { include: { atoll: true } } } as const;

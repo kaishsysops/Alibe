@@ -179,6 +179,8 @@ model Message {
   clientId       String?      @unique
   offerId        String?      @unique
   offer          Offer?       @relation(fields: [offerId], references: [id])
+  // Scam pattern spotted by src/safety.ts (PAY_FIRST, LINK, ...), if any.
+  flag           String?
   createdAt      DateTime     @default(now())
 }
 
