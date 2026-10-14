@@ -2,10 +2,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { View, Text, TextInput, ScrollView, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { Search as SearchIcon, X, SlidersHorizontal, SearchX, ChevronDown, BellPlus, BellRing } from "lucide-react-native";
+import { Search as SearchIcon, X, SlidersHorizontal, SearchX, BellPlus, BellRing, Clock, TrendingUp, ArrowUpDown } from "lucide-react-native";
 import { api, Atoll, Category, DeliveryOption, errorMessage, Listing, ListingSort } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import { useSingleFlight } from "../hooks/useSingleFlight";
+import CategoryTile from "../components/CategoryTile";
+import { Sheet, useActionSheet } from "../components/Sheet";
+import { FadeIn } from "../components/Motion";
+import { addRecentSearch, clearRecentSearches, getRecentSearches } from "../utils/recentSearches";
 import ProductGrid from "../components/ProductGrid";
 import WebNavBar from "../components/WebNavBar";
 import EmptyState from "../components/EmptyState";
@@ -28,14 +32,17 @@ const DELIVERIES: Array<{ key: DeliveryOption; label: string }> = [
   { key: "COURIER", label: "Courier" },
 ];
 const FILTER_PANEL_WIDTH = 280;
+// Starting points for people who don't know what to type.
+const POPULAR = ["iPhone", "Scooter", "Sofa", "Laptop", "Bicycle", "Fridge", "PlayStation", "Fishing rod"];
 const DEBOUNCE_MS = 350;
 
 const conditionLabel = (c: string) => c.replace("_", " ").toLowerCase().replace(/^\w/, (m) => m.toUpperCase());
 
-function Chip({ label, active, onPress, activeColor }: { label: string; active: boolean; onPress: () => void; activeColor?: string }) {
+function Chip({ label, active, onPress, activeColor, icon }: { label: string; active: boolean; onPress: () => void; activeColor?: string; icon?: React.ReactNode }) {
   const styles = useStyles();
   return (
     <Tap style={[styles.chip, active && styles.chipActive, active && activeColor ? { backgroundColor: activeColor, borderColor: activeColor } : null]} onPress={onPress} scaleTo={0.92}>
+      {icon}
       <Text style={[styles.chipText, active && styles.chipTextActive, active && activeColor ? { color: "#fff" } : null]}>{label}</Text>
     </Tap>
   );
@@ -48,7 +55,7 @@ export default function SearchScreen() {
   const route = useRoute<any>();
   const insets = useSafeAreaInsets();
   const toast = useToast();
-  const { isDesktopWeb, gutter, contentWidth, width } = useResponsive();
+  const { isDesktopWeb, gutter, contentWidth, width, height } = useResponsive();
 
   const [query, setQuery] = useState<string>(route.params?.q ?? "");
   const [categorySlug, setCategorySlug] = useState<string | undefined>(route.params?.categorySlug);
@@ -64,6 +71,15 @@ export default function SearchScreen() {
   // show "Saved" until they change something.
   const [savedKey, setSavedKey] = useState<string | null>(null);
   const { user } = useAuth();
+  const showSheet = useActionSheet();
+  const [recent, setRecent] = useState<string[]>([]);
+  const [focused, setFocused] = useState(false);
+  useEffect(() => {
+    if (user) getRecentSearches(user.id).then(setRecent);
+  }, [user]);
+  const remember = (q: string) => {
+    if (user && q.trim()) addRecentSearch(user.id, q).then(setRecent);
+  };
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [results, setResults] = useState<Listing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,19 +185,25 @@ export default function SearchScreen() {
     }
   });
 
-  const goToProduct = (l: Listing) => navigation.navigate("ProductDetail", { id: l.id });
+  const goToProduct = (l: Listing) => {
+    remember(query);
+    navigation.navigate("ProductDetail", { id: l.id });
+  };
   const activeCategory = categories.find((c) => c.slug === categorySlug);
 
   const searchBar = (
-    <View style={styles.searchBar}>
-      <SearchIcon size={18} color={colors.textMuted} />
+    <View style={[styles.searchBar, focused && styles.searchBarFocused]}>
+      <SearchIcon size={20} color={focused ? colors.primary : colors.textMuted} />
       <TextInput
         style={styles.input}
-        placeholder="Search Alibe"
+        placeholder="What are you looking for?"
         placeholderTextColor={colors.textMuted}
         value={query}
         onChangeText={setQuery}
         returnKeyType="search"
+        onSubmitEditing={() => remember(query)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         autoCorrect={false}
         accessibilityLabel="Search listings"
       />
@@ -194,24 +216,27 @@ export default function SearchScreen() {
   );
 
   const categoryChips = (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: isDesktopWeb ? 0 : gutter }} keyboardShouldPersistTaps="handled">
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hRow} contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: isDesktopWeb ? 0 : gutter }} keyboardShouldPersistTaps="handled">
       <Chip label="All" active={!categorySlug} onPress={() => setCategorySlug(undefined)} />
-      {categories.map((c) => (
-        <Chip key={c.id} label={c.name} active={categorySlug === c.slug} onPress={() => setCategorySlug(categorySlug === c.slug ? undefined : c.slug)} />
-      ))}
+      {categories.map((c) => {
+        const meta = categoryIcons[c.slug];
+        const Icon = meta?.Icon ?? AllCategoriesIcon;
+        const active = categorySlug === c.slug;
+        return (
+          <Chip
+            key={c.id}
+            label={c.name}
+            active={active}
+            icon={<Icon size={15} color={active ? colors.inverseText : meta?.color ?? colors.primary} strokeWidth={2.2} />}
+            onPress={() => setCategorySlug(active ? undefined : c.slug)}
+          />
+        );
+      })}
     </ScrollView>
   );
 
   const filterControls = (
     <View style={{ gap: spacing.md }}>
-      <View>
-        <Text style={styles.filterLabel}>Sort by</Text>
-        <View style={styles.wrapRow}>
-          {SORTS.map((s) => (
-            <Chip key={s.key} label={s.label} active={sort === s.key} onPress={() => setSort(s.key)} />
-          ))}
-        </View>
-      </View>
       <View>
         <Text style={styles.filterLabel}>Location</Text>
         <View style={styles.wrapRow}>
@@ -254,28 +279,107 @@ export default function SearchScreen() {
     </View>
   );
 
+  // Every active filter as a removable pill, so it's obvious what's applied.
+  const atollName = atolls.find((a) => a.id === atollId)?.name;
+  const activePills: Array<{ key: string; label: string; clear: () => void }> = [
+    ...(atollName ? [{ key: "atoll", label: atollName, clear: () => setAtollId(undefined) }] : []),
+    ...(condition ? [{ key: "condition", label: conditionLabel(condition), clear: () => setCondition(undefined) }] : []),
+    ...(minPrice ? [{ key: "min", label: `From MVR ${Number(minPrice).toLocaleString()}`, clear: () => setMinPrice("") }] : []),
+    ...(maxPrice ? [{ key: "max", label: `Up to MVR ${Number(maxPrice).toLocaleString()}`, clear: () => setMaxPrice("") }] : []),
+    ...(delivery ? [{ key: "delivery", label: DELIVERIES.find((d) => d.key === delivery)!.label, clear: () => setDelivery(undefined) }] : []),
+  ];
+  const pillsRow = activePills.length > 0 && (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hRow} contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: isDesktopWeb ? 0 : gutter, paddingTop: spacing.sm }}>
+      {activePills.map((p) => (
+        <Tap key={p.key} style={styles.activePill} onPress={p.clear} scaleTo={0.92} accessibilityLabel={`Remove ${p.label}`}>
+          <Text style={styles.activePillText}>{p.label}</Text>
+          <X size={13} color={colors.primary} strokeWidth={2.8} />
+        </Tap>
+      ))}
+    </ScrollView>
+  );
+
+  const sortLabel = SORTS.find((x) => x.key === sort)!.label;
+  const sortPill = (
+    <Tap
+      style={styles.sortPill}
+      scaleTo={0.94}
+      onPress={() => showSheet({ title: "Sort by", actions: SORTS.map((x) => ({ label: x.key === sort ? `${x.label}  ✓` : x.label, onPress: () => setSort(x.key) })) })}
+      accessibilityLabel={`Sort: ${sortLabel}`}
+    >
+      <ArrowUpDown size={14} color={colors.text} />
+      <Text style={styles.sortText}>{sortLabel}</Text>
+    </Tap>
+  );
+
+  // Before typing: recent searches, popular ideas and photo category cards.
+  const startBlock = (
+    <View>
+      {recent.length > 0 && (
+        <FadeIn style={{ marginBottom: spacing.lg }}>
+          <View style={styles.blockHead}>
+            <Text style={styles.sectionTitle}>Recent searches</Text>
+            <Tap
+              onPress={() => {
+                if (user) clearRecentSearches(user.id);
+                setRecent([]);
+              }}
+              hitSlop={8}
+              scaleTo={0.9}
+            >
+              <Text style={styles.clearText}>Clear</Text>
+            </Tap>
+          </View>
+          <View style={styles.wrapRow}>
+            {recent.map((q) => (
+              <Tap key={q} style={styles.suggestion} onPress={() => setQuery(q)} scaleTo={0.94}>
+                <Clock size={14} color={colors.textMuted} />
+                <Text style={styles.suggestionText}>{q}</Text>
+              </Tap>
+            ))}
+          </View>
+        </FadeIn>
+      )}
+      <FadeIn delay={60} style={{ marginBottom: spacing.lg }}>
+        <Text style={styles.sectionTitle}>Popular right now</Text>
+        <View style={styles.wrapRow}>
+          {POPULAR.map((q) => (
+            <Tap key={q} style={styles.suggestion} onPress={() => setQuery(q)} scaleTo={0.94}>
+              <TrendingUp size={14} color={colors.primary} />
+              <Text style={styles.suggestionText}>{q}</Text>
+            </Tap>
+          ))}
+        </View>
+      </FadeIn>
+    </View>
+  );
+
   // Category tiles: shown while the user is browsing rather than searching.
   const tileColumns = isDesktopWeb ? 4 : width >= 600 ? 4 : 2;
+  const latestPhoto = new Map<string, string>();
+  for (const l of results) if (l.images[0] && !latestPhoto.has(l.category.slug)) latestPhoto.set(l.category.slug, l.images[0]);
   const tileAreaWidth = isDesktopWeb ? contentWidth - FILTER_PANEL_WIDTH - spacing.lg : width - gutter * 2;
   const tileWidth = Math.floor((tileAreaWidth - spacing.sm * (tileColumns - 1)) / tileColumns);
   const categoryTiles = (
     <View style={{ marginBottom: spacing.lg }}>
-      <Text style={styles.sectionTitle}>Browse categories</Text>
+      <Text style={styles.sectionTitle}>Browse by category</Text>
       <View style={styles.tileGrid}>
         {categories.map((c) => {
           const meta = categoryIcons[c.slug];
           const Icon = meta?.Icon ?? AllCategoriesIcon;
           const tint = meta?.color ?? colors.primary;
           return (
-            <Tap key={c.id} style={[styles.tile, { width: tileWidth, backgroundColor: `${tint}12` }]} onPress={() => setCategorySlug(c.slug)} scaleTo={0.95}>
-              <View style={[styles.tileIcon, { backgroundColor: `${tint}22` }]}>
-                <Icon size={20} color={tint} strokeWidth={2} />
-              </View>
-              <Text style={styles.tileName} numberOfLines={1}>
-                {c.name}
-              </Text>
-              <Text style={styles.tileCount}>{c.listingCount ?? 0} listings</Text>
-            </Tap>
+            <CategoryTile
+              key={c.id}
+              name={c.name}
+              subtitle={`${c.listingCount ?? 0} listings`}
+              image={latestPhoto.get(c.slug)}
+              Icon={Icon}
+              color={tint}
+              size={tileWidth}
+              height={Math.round(tileWidth * 0.62)}
+              onPress={() => setCategorySlug(c.slug)}
+            />
           );
         })}
       </View>
@@ -284,12 +388,16 @@ export default function SearchScreen() {
 
   const resultsHeader = (
     <View style={{ paddingHorizontal: isDesktopWeb ? 0 : gutter }}>
+      {isBrowsing && startBlock}
       {isBrowsing && categories.length > 0 && categoryTiles}
       <View style={styles.resultsRow}>
-        <Text style={styles.sectionTitle}>
-          {isBrowsing ? "Latest listings" : activeCategory && !query.trim() ? activeCategory.name : query.trim() ? `Results for "${query.trim()}"` : "Results"}
-        </Text>
-        {!loading && <Text style={styles.resultsCount}>{results.length} found</Text>}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={[styles.sectionTitle, { marginBottom: 0 }]} numberOfLines={1}>
+            {isBrowsing ? "Latest listings" : activeCategory && !query.trim() ? activeCategory.name : query.trim() ? `"${query.trim()}"` : "Results"}
+          </Text>
+          {!loading && <Text style={styles.resultsCount}>{results.length} {results.length === 1 ? "item" : "items"}</Text>}
+        </View>
+        {sortPill}
       </View>
       {!isBrowsing && (
         <Tap style={[styles.saveSearch, isSaved && styles.saveSearchDone]} onPress={saveSearch} disabled={saving || isSaved} scaleTo={0.96}>
@@ -355,10 +463,11 @@ export default function SearchScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
+      <Text style={[styles.pageTitle, { paddingHorizontal: gutter }]}>Search</Text>
       <View style={[styles.mobileTop, { paddingHorizontal: gutter }]}>
         <View style={{ flex: 1 }}>{searchBar}</View>
-        <Tap style={[styles.filtersButton, (filtersOpen || activeFilterCount > 0) && styles.filtersButtonActive]} onPress={() => setFiltersOpen((v) => !v)} scaleTo={0.9} accessibilityLabel="Filters">
-          <SlidersHorizontal size={18} color={filtersOpen || activeFilterCount > 0 ? "#fff" : colors.text} />
+        <Tap style={[styles.filtersButton, activeFilterCount > 0 && styles.filtersButtonActive]} onPress={() => setFiltersOpen(true)} scaleTo={0.9} accessibilityLabel="Filters">
+          <SlidersHorizontal size={20} color={activeFilterCount > 0 ? "#fff" : colors.text} />
           {activeFilterCount > 0 && (
             <View style={styles.filterBadge}>
               <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
@@ -366,27 +475,29 @@ export default function SearchScreen() {
           )}
         </Tap>
       </View>
-      <View style={{ marginBottom: spacing.sm }}>{categoryChips}</View>
-      {filtersOpen && (
-        <View style={[styles.filterSheet, { marginHorizontal: gutter }]}>
+      {categoryChips}
+      {pillsRow}
+      <View style={{ height: spacing.sm + 4 }} />
+      <ProductGrid
+        data={results}
+        loading={loading && results.length === 0}
+        onPressItem={goToProduct}
+        horizontalPadding={gutter}
+        ListHeaderComponent={resultsHeader}
+        ListEmptyComponent={empty}
+        refreshControl={refreshControl}
+      />
+
+      <Sheet visible={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filters">
+        <ScrollView style={{ maxHeight: height * 0.6 }} contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md }} keyboardShouldPersistTaps="handled">
           {filterControls}
-          <Tap style={styles.doneButton} onPress={() => setFiltersOpen(false)}>
-            <Text style={styles.doneText}>Show {loading ? "" : `${results.length} `}results</Text>
-            <ChevronDown size={16} color="#fff" />
+        </ScrollView>
+        <View style={{ paddingHorizontal: spacing.lg }}>
+          <Tap style={styles.doneButton} onPress={() => setFiltersOpen(false)} scaleTo={0.97}>
+            <Text style={styles.doneText}>{loading ? "Searching..." : `Show ${results.length} ${results.length === 1 ? "item" : "items"}`}</Text>
           </Tap>
         </View>
-      )}
-      {!filtersOpen && (
-        <ProductGrid
-          data={results}
-          loading={loading && results.length === 0}
-          onPressItem={goToProduct}
-          horizontalPadding={gutter}
-          ListHeaderComponent={resultsHeader}
-          ListEmptyComponent={empty}
-          refreshControl={refreshControl}
-        />
-      )}
+      </Sheet>
     </View>
   );
 }
@@ -395,25 +506,28 @@ const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
   desktopColumn: { maxWidth: MAX_CONTENT_WIDTH, width: "100%", alignSelf: "center", flex: 1, paddingTop: spacing.lg },
   desktopTop: { flexDirection: "row", alignItems: "center", gap: spacing.lg, marginBottom: spacing.lg },
-  mobileTop: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.sm + 4 },
+  hRow: { flexGrow: 0, flexShrink: 0 },
+  pageTitle: { fontSize: fontSize.display, fontWeight: fontWeight.extrabold, color: colors.text, letterSpacing: -0.5, marginBottom: spacing.sm + 4 },
+  mobileTop: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.md },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.card,
     borderRadius: radius.pill,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    height: 48,
-    paddingHorizontal: spacing.md,
-    gap: spacing.sm,
+    height: 52,
+    paddingHorizontal: spacing.md + 2,
+    gap: spacing.sm + 2,
+    ...cardShadow,
   },
+  searchBarFocused: { borderColor: colors.primary },
   input: { flex: 1, height: "100%", fontSize: fontSize.md, color: colors.text, outlineStyle: "none" as any },
   clearInput: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" },
-  filtersButton: { width: 48, height: 48, borderRadius: 24, alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  filtersButton: { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   filtersButtonActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   filterBadge: { position: "absolute", top: 4, right: 4, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: colors.text, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   filterBadgeText: { color: colors.inverseText, fontSize: fontSize.micro, fontWeight: fontWeight.extrabold },
-  filterSheet: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.md, ...cardShadow, gap: spacing.md },
   filterCard: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.md, ...cardShadow, marginBottom: spacing.xl },
   filterLabel: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.text, marginBottom: spacing.sm },
   wrapRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
@@ -422,21 +536,25 @@ const useStyles = makeStyles((colors) => ({
   priceDash: { color: colors.textMuted, fontSize: fontSize.sm },
   resetButton: { alignSelf: "flex-start", paddingVertical: spacing.xs },
   resetText: { color: colors.primary, fontWeight: fontWeight.bold, fontSize: fontSize.sm },
-  doneButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: colors.primary, borderRadius: radius.pill, height: 48 },
-  doneText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.base },
-  chip: { paddingHorizontal: spacing.md, height: 36, justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  doneButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: colors.primary, borderRadius: radius.pill, height: 54, marginTop: spacing.sm },
+  doneText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.md },
+  chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.md, height: 38, justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   chipActive: { backgroundColor: colors.text, borderColor: colors.text },
   chipText: { color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.semibold },
   chipTextActive: { color: colors.inverseText },
   sectionTitle: { fontSize: fontSize.lg, fontWeight: fontWeight.extrabold, color: colors.text, marginBottom: spacing.sm + 2 },
   tileGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  tile: { borderRadius: radius.md, padding: spacing.md, gap: 2 },
-  tileIcon: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", marginBottom: spacing.sm },
-  tileName: { fontSize: fontSize.base, fontWeight: fontWeight.bold, color: colors.text },
-  tileCount: { fontSize: fontSize.caption, color: colors.textMuted },
   saveSearch: { flexDirection: "row", alignItems: "center", gap: spacing.sm, alignSelf: "flex-start", marginTop: spacing.sm, marginBottom: spacing.sm, paddingHorizontal: spacing.md, height: 40, borderRadius: radius.pill, backgroundColor: colors.primaryTint },
   saveSearchDone: { backgroundColor: `${colors.success}18` },
   saveSearchText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.primary },
-  resultsRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between" },
-  resultsCount: { fontSize: fontSize.sm, color: colors.textMuted },
+  resultsRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md, marginBottom: spacing.sm },
+  resultsCount: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
+  sortPill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.md, height: 38, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  sortText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.text },
+  activePill: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.sm + 4, height: 32, borderRadius: radius.pill, backgroundColor: colors.primaryTint },
+  activePillText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.primary },
+  blockHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  clearText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.textMuted, marginBottom: spacing.sm + 2 },
+  suggestion: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.sm + 6, height: 38, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  suggestionText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text },
 }));
