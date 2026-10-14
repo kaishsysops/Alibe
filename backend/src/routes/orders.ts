@@ -41,6 +41,8 @@ function serializeOrder(o: FullOrder, viewerId: string) {
     listing: serializeListing(o.listing),
     buyer: publicUser(o.buyer),
     seller: publicUser(o.seller),
+    // How the seller wants to be paid, so the buyer knows what to bring.
+    paymentMethod: o.seller.paymentMethod,
     role: viewerId === o.sellerId ? "SELLER" : "BUYER",
   };
 }

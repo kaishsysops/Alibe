@@ -252,6 +252,8 @@ model Order {
   deliveredAt    DateTime?
   verifiedBy     String?
   problem        String?
+  // Nudges sent to a seller who hasn't sent the item yet (see reminders.ts).
+  remindersSent  Int            @default(0)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 }

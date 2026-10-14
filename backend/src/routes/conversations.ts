@@ -225,36 +225,80 @@ conversationsRouter.post("/offers/:offerId/respond", async (req, res) => {
   // Validation gate: only a pending offer can change. A repeated tap (or a
   // stale screen) gets the current state back instead of a second action.
   const result = await prisma.$transaction(async (tx) => {
+    // An item can only be sold once: if it's already reserved for someone
+    // else, this offer can't be accepted.
+    // (A repeat tap on an already-accepted offer skips this and falls through
+    // to the "nothing changed" path below.)
+    if (action === "ACCEPT") {
+      const [fresh, listing] = await Promise.all([
+        tx.offer.findUniqueOrThrow({ where: { id: offer.id }, select: { status: true } }),
+        tx.listing.findUniqueOrThrow({ where: { id: offer.listingId }, select: { status: true } }),
+      ]);
+      if (fresh.status === "PENDING" && listing.status !== "ACTIVE") return "UNAVAILABLE" as const;
+    }
     const changed = await tx.offer.updateMany({ where: { id: offer.id, status: "PENDING" }, data: { status: nextStatus } });
     if (changed.count === 0) return null;
     const text =
-      action === "ACCEPT" ? `Accepted the offer of ${formatMvr(offer.amount)}. The item is reserved and an order has been created.` : action === "DECLINE" ? `Declined the offer of ${formatMvr(offer.amount)}.` : `Withdrew the offer of ${formatMvr(offer.amount)}.`;
+      action === "ACCEPT"
+        ? `Accepted the offer of ${formatMvr(offer.amount)}. The item is now reserved for you.`
+        : action === "DECLINE"
+        ? `Declined the offer of ${formatMvr(offer.amount)}.`
+        : `Withdrew the offer of ${formatMvr(offer.amount)}.`;
     await tx.message.create({ data: { conversationId: conversation.id, senderId: userId, text } });
-    // Accepting turns the offer into an order the seller must deliver.
-    if (action === "ACCEPT") {
-      await createOrder(tx, {
-        listingId: offer.listingId,
-        conversationId: conversation.id,
-        buyerId: conversation.buyerId,
-        sellerId: conversation.sellerId,
-        amount: offer.amount,
-        offerId: offer.id,
-      });
-    }
     await tx.conversation.update({ where: { id: conversation.id }, data: { updatedAt: new Date() } });
-    return true;
+    if (action !== "ACCEPT") return { orderId: "", closed: [] as Array<{ conversationId: string; buyerId: string; sellerId: string; amount: number }> };
+
+    // Accepting turns the offer into an order the seller must deliver.
+    const { order } = await createOrder(tx, {
+      listingId: offer.listingId,
+      conversationId: conversation.id,
+      buyerId: conversation.buyerId,
+      sellerId: conversation.sellerId,
+      amount: offer.amount,
+      offerId: offer.id,
+    });
+    // Every other open offer on this item is closed, and those buyers are told.
+    const others = await tx.offer.findMany({
+      where: { listingId: offer.listingId, status: "PENDING", id: { not: offer.id } },
+      include: { conversation: true },
+    });
+    if (others.length) {
+      await tx.offer.updateMany({ where: { id: { in: others.map((o) => o.id) } }, data: { status: "DECLINED" } });
+      for (const o of others) {
+        await tx.message.create({
+          data: { conversationId: o.conversationId, senderId: o.conversation.sellerId, text: "Sorry, this item has been sold to someone else, so your offer was closed." },
+        });
+        await tx.conversation.update({ where: { id: o.conversationId }, data: { updatedAt: new Date() } });
+      }
+    }
+    return { orderId: order.id, closed: others.map((o) => ({ conversationId: o.conversationId, buyerId: o.conversation.buyerId, sellerId: o.conversation.sellerId, amount: o.amount })) };
   });
+  if (result === "UNAVAILABLE") {
+    return res.status(409).json({ error: "This item is already reserved for another buyer, so this offer can't be accepted." });
+  }
   if (result) {
     const responder = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
-    const verb = action === "ACCEPT" ? "accepted" : action === "DECLINE" ? "declined" : "withdrew";
-    notifyUser(userId === conversation.buyerId ? conversation.sellerId : conversation.buyerId, `${responder?.name ?? "Someone"} ${verb} the offer`, formatMvr(offer.amount), {
-      type: "offer",
-      conversationId: conversation.id,
-    });
+    const name = responder?.name ?? "Someone";
+    const otherId = userId === conversation.buyerId ? conversation.sellerId : conversation.buyerId;
+    if (action === "ACCEPT") {
+      notifyUser(otherId, `${name} accepted your offer`, `${formatMvr(offer.amount)}. Open the order to see what happens next.`, {
+        type: "order",
+        orderId: result.orderId,
+        conversationId: conversation.id,
+      });
+      for (const c of result.closed) {
+        notifyUser(c.buyerId, "This item was sold", "Your offer was closed because the seller sold it to someone else.", { type: "offer", conversationId: c.conversationId });
+      }
+    } else {
+      const verb = action === "DECLINE" ? "declined" : "withdrew";
+      notifyUser(otherId, `${name} ${verb} the offer`, formatMvr(offer.amount), { type: "offer", conversationId: conversation.id });
+    }
   }
   const current = await prisma.offer.findUniqueOrThrow({ where: { id: offer.id } });
   if (!result && current.status !== nextStatus) {
     return res.status(409).json({ error: "This offer was already answered.", offer: current });
   }
-  res.json(current);
+  // Accepting hands back the order so the app can open it straight away.
+  const order = current.status === "ACCEPTED" ? await prisma.order.findUnique({ where: { offerId: offer.id }, select: { id: true } }) : null;
+  res.json({ ...current, orderId: order?.id ?? null });
 });

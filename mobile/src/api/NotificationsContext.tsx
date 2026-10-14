@@ -23,7 +23,7 @@ const openChat = (conversationId: string) => {
 };
 
 const openOrder = (orderId: string) => {
-  if (navigationRef.isReady()) (navigationRef as any).navigate("Orders", { orderId });
+  if (navigationRef.isReady()) (navigationRef as any).navigate("OrderDetail", { id: orderId });
 };
 
 // Desktop web: browser notification when the Alibe tab is in the background.

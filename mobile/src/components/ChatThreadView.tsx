@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { View, Text, TextInput, FlatList, Platform, AppState, Image, ActivityIndicator } from "react-native";
 import { useIsFocused, useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import { Send, Clock, AlertCircle, ChevronRight, MessageCircle, ImagePlus, Play, Tag, Star, Ban, CheckCheck } from "lucide-react-native";
-import { api, Conversation, Message, Offer, newClientId, errorMessage, mediaUrl, uploadMedia } from "../api/client";
+import { Send, Clock, AlertCircle, ChevronRight, MessageCircle, ImagePlus, Play, Tag, Star, Ban, CheckCheck, Package } from "lucide-react-native";
+import { api, Conversation, Message, Offer, Thread, newClientId, errorMessage, mediaUrl, uploadMedia } from "../api/client";
 import { useAuth, DRAFT_PREFIX } from "../api/AuthContext";
 import { useNotifications } from "../api/NotificationsContext";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
@@ -19,6 +19,7 @@ import MediaViewer from "./MediaViewer";
 import EmptyState from "./EmptyState";
 import { useToast } from "./Toast";
 import Tap from "./Tap";
+import { FadeIn, Nudge } from "./Motion";
 
 const POLL_INTERVAL_MS = 3000;
 const QUICK_REPLIES_BUYER = ["Is this still available?", "What's your best price?", "Can I see it today?"];
@@ -88,6 +89,7 @@ export default function ChatThreadView({
   const [offers, setOffers] = useState<Offer[]>([]);
   const [otherLastReadAt, setOtherLastReadAt] = useState<string | null>(null);
   const [blocked, setBlocked] = useState(false);
+  const [order, setOrder] = useState<Thread["order"]>(null);
   const [pending, setPending] = useState<Pending[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -135,6 +137,7 @@ export default function ChatThreadView({
       setOffers(t.offers);
       setOtherLastReadAt(t.otherLastReadAt);
       setBlocked(t.blocked);
+      setOrder(t.order);
       notifications.refresh();
     } catch {
       // keep what we have; next poll retries
@@ -216,8 +219,11 @@ export default function ChatThreadView({
     const next = action === "ACCEPT" ? "ACCEPTED" : action === "DECLINE" ? "DECLINED" : "WITHDRAWN";
     setOffers((prev) => prev.map((o) => (o.id === offer.id ? { ...o, status: next } : o)));
     try {
-      await api.respondToOffer(offer.id, user.id, action);
-      if (action === "ACCEPT") toast.success("Offer accepted. The item is now reserved for this buyer.");
+      const r = await api.respondToOffer(offer.id, user.id, action);
+      if (action === "ACCEPT" && r.orderId) {
+        // Take the seller straight to the next step: sending the item.
+        navigation.navigate("OrderDetail", { id: r.orderId });
+      }
     } catch (e) {
       toast.error(errorMessage(e, "Couldn't update the offer."));
     } finally {
@@ -285,6 +291,19 @@ export default function ChatThreadView({
   const listing = conversation.listing;
   const pendingOffer = offers.find((o) => o.status === "PENDING");
   const canOffer = listing.status === "ACTIVE" && !blocked;
+  // Rating only makes sense once the buyer actually has the item.
+  const canRate = isBuyer && order?.status === "DELIVERED";
+  // Plain-language pointer to the order and whose turn it is.
+  const orderNeedsMe = !!order && !isBuyer && (order.status === "AWAITING_DISPATCH" || order.status === "DISPATCHED");
+  const orderBarLabel = !order
+    ? ""
+    : order.status === "AWAITING_DISPATCH"
+    ? isBuyer ? "Order confirmed · See your secret code" : "Next step: send the item"
+    : order.status === "DISPATCHED"
+    ? isBuyer ? "On its way · See your secret code" : "Next step: enter the buyer's code"
+    : order.status === "DELIVERED"
+    ? "Delivered · View order"
+    : "Problem reported · View order";
 
   const renderOffer = (offer: Offer, mine: boolean) => {
     const actionable = offer.status === "PENDING";
@@ -336,7 +355,25 @@ export default function ChatThreadView({
         {showContactButtons && other && isBuyer ? <ContactIconButtons contact={other} listingTitle={listing.title} size={36} /> : <ChevronRight size={18} color={colors.textMuted} />}
       </Tap>
 
-      {(canOffer || (isBuyer && messages.length > 0)) && (
+      {order && order.status !== "CANCELLED" && (
+        <FadeIn key={order.status} distance={-8}>
+        <Tap style={[styles.orderBar, orderNeedsMe && styles.orderBarAction]} onPress={() => navigation.navigate("OrderDetail", { id: order.id })} scaleTo={0.98}>
+          <Package size={20} color={orderNeedsMe ? "#fff" : colors.primary} />
+          <Text style={[styles.orderBarText, orderNeedsMe && { color: "#fff" }]} numberOfLines={1}>
+            {orderBarLabel}
+          </Text>
+          {orderNeedsMe ? (
+            <Nudge>
+              <ChevronRight size={18} color="#fff" />
+            </Nudge>
+          ) : (
+            <ChevronRight size={18} color={colors.primary} />
+          )}
+        </Tap>
+        </FadeIn>
+      )}
+
+      {(canOffer || canRate) && (
         <View style={styles.actionStrip}>
           {canOffer && (
             <Tap style={styles.stripButton} onPress={() => setOfferSheet(true)} scaleTo={0.94}>
@@ -344,7 +381,7 @@ export default function ChatThreadView({
               <Text style={styles.stripText}>{pendingOffer ? "New offer" : isBuyer ? "Make an offer" : "Send a price"}</Text>
             </Tap>
           )}
-          {isBuyer && messages.length > 0 && (
+          {canRate && (
             <Tap style={styles.stripButton} onPress={() => setReviewSheet(true)} scaleTo={0.94}>
               <Star size={14} color={colors.primary} />
               <Text style={styles.stripText}>Rate seller</Text>
@@ -503,6 +540,9 @@ const useStyles = makeStyles((colors) => ({
   listingThumb: { width: 44, height: 44, borderRadius: radius.sm, backgroundColor: colors.skeleton },
   listingTitle: { fontSize: fontSize.base, color: colors.text, fontWeight: fontWeight.semibold },
   listingPrice: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.primary, marginTop: 1 },
+  orderBar: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 2, marginHorizontal: spacing.md, marginTop: spacing.sm, paddingHorizontal: spacing.md, minHeight: 48, borderRadius: radius.md, backgroundColor: colors.primaryTint },
+  orderBarAction: { backgroundColor: colors.primary },
+  orderBarText: { flex: 1, fontSize: fontSize.base, fontWeight: fontWeight.bold, color: colors.primary },
   actionStrip: { flexDirection: "row", gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.background },
   stripButton: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.sm + 4, height: 34, borderRadius: radius.pill, backgroundColor: colors.primaryTint },
   stripText: { color: colors.primary, fontWeight: fontWeight.bold, fontSize: fontSize.sm },

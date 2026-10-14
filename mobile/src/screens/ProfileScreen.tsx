@@ -2,7 +2,7 @@ import React, { useCallback, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { LogOut, Archive, Heart, Phone, Palette, HelpCircle, Info, ChevronRight, Pencil, Trash2, MessageSquareText } from "lucide-react-native";
+import { LogOut, Archive, Heart, Phone, Palette, HelpCircle, Info, ChevronRight, Pencil, Trash2, MessageSquareText, Package } from "lucide-react-native";
 import { api, errorMessage } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import { useFavorites } from "../api/FavoritesContext";
@@ -77,6 +77,7 @@ export default function ProfileScreen() {
 
   const groups: Array<Array<{ icon: any; label: string; value?: React.ReactNode; onPress: () => void }>> = [
     [
+      { icon: Package, label: "My orders", onPress: () => navigation.navigate("Orders") },
       { icon: Archive, label: "My listings", value: counts ? String(counts.active) : undefined, onPress: () => navigation.navigate("MyListings") },
       { icon: Heart, label: "Saved items", value: String(favoriteIds.size), onPress: () => navigation.navigate("Favorites") },
     ],
@@ -128,7 +129,10 @@ export default function ProfileScreen() {
       {groups.map((items, gi) => (
         <View key={gi} style={styles.menuCard}>
           {items.map((item, i) => (
-            <Tap key={item.label} style={[styles.menuRow, i > 0 && styles.menuRowBorder]} onPress={item.onPress} scaleTo={0.98}>
+            <React.Fragment key={item.label}>
+            {/* Inset divider that starts at the label, iOS-settings style. */}
+            {i > 0 && <View style={styles.menuDivider} />}
+            <Tap style={styles.menuRow} onPress={item.onPress} scaleTo={0.98}>
               <View style={styles.menuIcon}>
                 <item.icon size={18} color={colors.text} />
               </View>
@@ -136,6 +140,7 @@ export default function ProfileScreen() {
               {typeof item.value === "string" ? <Text style={styles.menuValue}>{item.value}</Text> : item.value}
               <ChevronRight size={16} color={colors.textMuted} />
             </Tap>
+            </React.Fragment>
           ))}
         </View>
       ))}
@@ -183,7 +188,7 @@ const useStyles = makeStyles((colors) => ({
   statLabel: { fontSize: fontSize.caption, color: colors.textMuted },
   menuCard: { backgroundColor: colors.card, borderRadius: radius.lg, ...cardShadow, marginTop: spacing.md, overflow: "hidden" },
   menuRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 4, paddingHorizontal: spacing.md, minHeight: 56 },
-  menuRowBorder: { borderTopWidth: 1, borderTopColor: colors.border },
+  menuDivider: { height: 1, backgroundColor: colors.border, marginLeft: spacing.md + 34 + spacing.sm + 4 },
   menuIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" },
   menuLabel: { flex: 1, fontSize: fontSize.base, color: colors.text, fontWeight: fontWeight.medium },
   menuValue: { fontSize: fontSize.sm, color: colors.textMuted },

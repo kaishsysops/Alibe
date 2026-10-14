@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { View, Text, FlatList, RefreshControl } from "react-native";
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
-import { Package } from "lucide-react-native";
+import { ChevronRight, Package } from "lucide-react-native";
 import { api, Order, OrderStatus } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import ScreenHeader from "../components/ScreenHeader";
@@ -11,6 +11,7 @@ import { ListingImage } from "../components/ListingCard";
 import { RowSkeleton } from "../components/Skeleton";
 import { useToast } from "../components/Toast";
 import Tap from "../components/Tap";
+import { FadeIn } from "../components/Motion";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { Colors, spacing, radius, fontSize, fontWeight, cardShadow } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
@@ -19,9 +20,9 @@ import { timeAgo } from "../utils/time";
 export function orderStatusMeta(status: OrderStatus, role: "BUYER" | "SELLER", colors: Colors) {
   switch (status) {
     case "AWAITING_DISPATCH":
-      return { label: role === "SELLER" ? "Send it" : "Being prepared", color: role === "SELLER" ? colors.danger : colors.gold, needsAction: role === "SELLER" };
+      return { label: role === "SELLER" ? "Send it now" : "Being prepared", color: role === "SELLER" ? colors.primary : colors.gold, needsAction: role === "SELLER" };
     case "DISPATCHED":
-      return { label: role === "SELLER" ? "Enter code" : "On its way", color: role === "SELLER" ? colors.danger : colors.primary, needsAction: role === "SELLER" };
+      return { label: role === "SELLER" ? "Enter buyer's code" : "On its way", color: colors.primary, needsAction: role === "SELLER" };
     case "DELIVERED":
       return { label: "Delivered", color: colors.success, needsAction: false };
     case "DISPUTED":
@@ -113,11 +114,12 @@ export default function OrdersScreen() {
           onAction={() => (tab === "BUYING" ? navigation.navigate("Tabs", { screen: "SearchTab" }) : navigation.navigate("MyListings"))}
         />
       }
-      renderItem={({ item }) => {
+      renderItem={({ item, index }) => {
         const meta = orderStatusMeta(item.status, item.role, colors);
         const other = item.role === "SELLER" ? item.buyer : item.seller;
         return (
-          <Tap style={[styles.row, meta.needsAction && styles.rowAction]} onPress={() => navigation.navigate("ChatThread", { id: item.conversationId })} scaleTo={0.98}>
+          <FadeIn delay={Math.min(index, 8) * 50}>
+          <Tap style={[styles.row, meta.needsAction && styles.rowAction]} onPress={() => navigation.navigate("OrderDetail", { id: item.id })} scaleTo={0.98}>
             <ListingImage uri={item.listing.images[0]} style={styles.thumb} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.title} numberOfLines={1}>
@@ -126,12 +128,16 @@ export default function OrdersScreen() {
               <Text style={styles.meta} numberOfLines={1}>
                 MVR {item.amount.toLocaleString()} {item.role === "SELLER" ? "to" : "from"} {other.name}
               </Text>
-              <Text style={styles.time}>{timeAgo(item.createdAt, true)}</Text>
+              <View style={styles.statusRow}>
+                <View style={[styles.status, { backgroundColor: `${meta.color}1A` }]}>
+                  <Text style={[styles.statusText, { color: meta.color }]}>{meta.label}</Text>
+                </View>
+                <Text style={styles.time}>{timeAgo(item.createdAt, true)}</Text>
+              </View>
             </View>
-            <View style={[styles.status, { backgroundColor: `${meta.color}1A` }]}>
-              <Text style={[styles.statusText, { color: meta.color }]}>{meta.label}</Text>
-            </View>
+            <ChevronRight size={18} color={colors.textMuted} />
           </Tap>
+          </FadeIn>
         );
       }}
     />
@@ -171,10 +177,11 @@ const useStyles = makeStyles((colors) => ({
   tabCountText: { color: "#fff", fontSize: fontSize.micro, fontWeight: fontWeight.extrabold },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 4, padding: spacing.sm + 4, borderRadius: radius.lg, backgroundColor: colors.card, ...cardShadow },
   rowAction: { borderWidth: 1.5, borderColor: colors.primaryLight },
-  thumb: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.skeleton },
+  thumb: { width: 64, height: 64, borderRadius: radius.md, backgroundColor: colors.skeleton },
   title: { fontSize: fontSize.base, fontWeight: fontWeight.bold, color: colors.text },
   meta: { fontSize: fontSize.sm, color: colors.text, marginTop: 2 },
-  time: { fontSize: fontSize.caption, color: colors.textMuted, marginTop: 2 },
+  time: { fontSize: fontSize.caption, color: colors.textMuted },
+  statusRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: 6 },
   status: { paddingHorizontal: spacing.sm + 2, height: 26, borderRadius: radius.pill, justifyContent: "center" },
   statusText: { fontSize: fontSize.caption, fontWeight: fontWeight.bold },
 }));

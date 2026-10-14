@@ -11,6 +11,7 @@ import { reviewsRouter, reportsRouter, blocksRouter } from "./routes/trust.js";
 import { savedSearchesRouter, notificationsRouter } from "./routes/engagement.js";
 import { uploadsRouter, UPLOAD_DIR } from "./routes/uploads.js";
 import { ordersRouter } from "./routes/orders.js";
+import { startReminders } from "./reminders.js";
 
 const app = express();
 app.use(cors());
@@ -43,5 +44,6 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 
 const port =process.env.PORT ? Number(process.env.PORT) : 4000;
 app.listen(port, "0.0.0.0", () => {
+  startReminders();
   console.log(`Alibe backend listening on http://0.0.0.0:${port}`);
 });

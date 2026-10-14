@@ -32,8 +32,8 @@ authRouter.post("/otp/verify", async (req, res) => {
   const { phone, name, themeColor } = parsed.data;
   const user = await prisma.user.upsert({
     where: { phone },
-    // The colour picked on the welcome screen wins over whatever was saved before.
-    update: themeColor ? { themeColor } : {},
+    // Returning users keep the colour they saved; the device's colour only seeds new accounts.
+    update: {},
     create: { phone, name: name ?? "New Seller", themeColor },
   });
   res.json({ token: `mock-token-${user.id}`, user });

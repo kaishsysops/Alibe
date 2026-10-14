@@ -33,7 +33,7 @@ export default function NotificationsScreen() {
 
   const open = async (item: NotificationItem) => {
     if (item.type === "order") {
-      navigation.navigate("Orders", { tab: item.role === "SELLER" ? "SELLING" : "BUYING" });
+      navigation.navigate("OrderDetail", { id: item.orderId });
     } else if (item.type === "saved_search") {
       await api.markSearchSeen(item.savedSearchId).catch(() => {});
       refresh();

@@ -11,6 +11,7 @@ import WebNavBar from "../components/WebNavBar";
 import CategorySidebar, { SIDEBAR_WIDTH } from "../components/CategorySidebar";
 import HomeSearchBar from "../components/HomeSearchBar";
 import EmptyState from "../components/EmptyState";
+import OrderNudge from "../components/OrderNudge";
 import Tap from "../components/Tap";
 import { RailSkeleton, Skeleton, SkeletonGroup } from "../components/Skeleton";
 import PullRefreshBadge, { usePullRefresh, invisibleRefreshProps } from "../components/PullToRefresh";
@@ -133,6 +134,7 @@ export default function HomeScreen() {
               </View>
               <Image source={{ uri: HERO_IMAGE }} style={styles.bannerImage} />
             </View>
+            <OrderNudge style={{ marginBottom: spacing.lg }} />
 
             <View style={{ flexDirection: "row" }}>
               {loading ? (
@@ -222,8 +224,8 @@ export default function HomeScreen() {
               <Text style={styles.avatarText}>{(user?.name ?? "?").charAt(0).toUpperCase()}</Text>
             </Tap>
           </View>
-          <Text style={styles.greeting}>{firstName ? `Hi ${firstName}, what are you looking for?` : "What are you looking for?"}</Text>
           <HomeSearchBar onSubmit={(q) => goToSearch({ q })} />
+          <OrderNudge style={{ marginTop: spacing.md }} />
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.categoryRail, { paddingHorizontal: gutter }]}>
@@ -242,7 +244,7 @@ export default function HomeScreen() {
                     <View style={[styles.categoryIcon, { backgroundColor: `${meta?.color ?? colors.primary}17` }]}>
                       <Icon size={24} color={meta?.color ?? colors.primary} strokeWidth={1.9} />
                     </View>
-                    <Text style={styles.categoryLabel} numberOfLines={1}>
+                    <Text style={styles.categoryLabel} numberOfLines={2}>
                       {c.name}
                     </Text>
                   </Tap>
@@ -322,8 +324,9 @@ const useStyles = makeStyles((colors) => ({
   avatar: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
   avatarText: { color: "#fff", fontWeight: fontWeight.extrabold, fontSize: fontSize.base },
   greeting: { fontSize: fontSize.xl, fontWeight: fontWeight.bold, color: colors.text, marginBottom: spacing.md, letterSpacing: -0.3 },
-  categoryRail: { gap: spacing.md, paddingBottom: spacing.lg },
-  categoryItem: { alignItems: "center", width: 64 },
+  categoryRail: { gap: spacing.sm, paddingBottom: spacing.lg },
+  // Wide enough that "Electronics" fits; longer names wrap to a second line.
+  categoryItem: { alignItems: "center", width: 78 },
   categoryIcon: { width: 56, height: 56, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   categoryLabel: { fontSize: fontSize.caption, color: colors.text, marginTop: 6, textAlign: "center", fontWeight: fontWeight.medium },
   sectionTitle: { fontSize: fontSize.lg, fontWeight: fontWeight.extrabold, color: colors.text, marginBottom: spacing.sm + 2 },

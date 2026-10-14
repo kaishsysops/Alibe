@@ -102,9 +102,6 @@ export default function OnboardingScreen() {
 
             {step === "phone" ? (
               <>
-                <Text style={styles.label}>Pick your colour</Text>
-                <AccentPicker />
-
                 <Text style={styles.label}>Phone number</Text>
                 <View style={styles.phoneField}>
                   <Text style={styles.phonePrefix}>+960</Text>
@@ -194,6 +191,7 @@ const useStyles = makeStyles((colors) => ({
     alignItems: "center",
     justifyContent: "center",
     marginBottom: spacing.lg,
+    alignSelf: "center",
   },
   headline: { fontSize: fontSize.display, fontWeight: fontWeight.extrabold, color: colors.text, lineHeight: fontSize.display * 1.15, letterSpacing: -0.5 },
   tagline: { fontSize: fontSize.md, color: colors.textMuted, marginTop: spacing.sm, lineHeight: fontSize.md * 1.4 },

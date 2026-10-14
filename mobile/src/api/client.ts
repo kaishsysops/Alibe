@@ -191,6 +191,7 @@ export type Order = {
   listing: Listing;
   buyer: PublicSeller;
   seller: PublicSeller;
+  paymentMethod: PaymentMethod | null;
 };
 export type DispatchDetails = { method: DeliveryOption; boatName?: string; boatDeparture?: string; cargoReference?: string; courierName?: string; pickupNote?: string };
 export type VerificationProgress = { verificationStatus: "NONE" | "VERIFIED"; verifiedAt: string | null; delivered: number; required: number };
@@ -319,7 +320,7 @@ export const api = {
   makeOffer: (conversationId: string, fromId: string, amount: number, clientId: string) =>
     request<Offer>(`/conversations/${conversationId}/offers`, { method: "POST", body: JSON.stringify({ fromId, amount, clientId }) }),
   respondToOffer: (offerId: string, userId: string, action: "ACCEPT" | "DECLINE" | "WITHDRAW") =>
-    request<Offer>(`/conversations/offers/${offerId}/respond`, { method: "POST", body: JSON.stringify({ userId, action }) }),
+    request<Offer & { orderId?: string | null }>(`/conversations/offers/${offerId}/respond`, { method: "POST", body: JSON.stringify({ userId, action }) }),
 
   sellerReviews: (sellerId: string) => request<Review[]>(`/reviews/seller/${sellerId}`),
   reviewEligibility: (reviewerId: string, listingId: string) =>
