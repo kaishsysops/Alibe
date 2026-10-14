@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, FlatList, RefreshControl } from "react-native";
+import { View, Text, SectionList, RefreshControl } from "react-native";
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { ChevronRight, Package } from "lucide-react-native";
 import { api, Order, OrderStatus } from "../api/client";
@@ -64,6 +64,24 @@ export default function OrdersScreen() {
   );
 
   const visible = orders.filter((o) => (tab === "SELLING" ? o.role === "SELLER" : o.role === "BUYER"));
+  // Grouped so finished orders are easy to find: anything waiting on you
+  // first, then completed (with totals), then cancelled.
+  const inProgress = visible
+    .filter((o) => o.status === "AWAITING_DISPATCH" || o.status === "DISPATCHED" || o.status === "DISPUTED")
+    .sort((a, b) => Number(orderStatusMeta(b.status, b.role, colors).needsAction) - Number(orderStatusMeta(a.status, a.role, colors).needsAction));
+  const completed = visible.filter((o) => o.status === "DELIVERED");
+  const cancelled = visible.filter((o) => o.status === "CANCELLED");
+  const completedTotal = completed.reduce((sum, o) => sum + o.amount, 0);
+  const sections = [
+    { key: "progress", title: "In progress", note: "", data: inProgress },
+    {
+      key: "completed",
+      title: "Completed",
+      note: completed.length ? `${completed.length} ${tab === "SELLING" ? "sold" : "bought"} · MVR ${completedTotal.toLocaleString()}` : "",
+      data: completed,
+    },
+    { key: "cancelled", title: "Cancelled", note: "", data: cancelled },
+  ].filter((sec) => sec.data.length > 0);
   const actionCount = (role: "BUYER" | "SELLER") => orders.filter((o) => o.role === role && orderStatusMeta(o.status, role, colors).needsAction).length;
 
   const tabs = (
@@ -90,10 +108,18 @@ export default function OrdersScreen() {
       <RowSkeleton count={4} />
     </View>
   ) : (
-    <FlatList
-      data={visible}
+    <SectionList
+      sections={sections}
       keyExtractor={(o) => o.id}
-      contentContainerStyle={{ paddingHorizontal: isDesktopWeb ? 0 : gutter, paddingBottom: spacing.xl, gap: spacing.sm, flexGrow: 1 }}
+      stickySectionHeadersEnabled={false}
+      contentContainerStyle={{ paddingHorizontal: isDesktopWeb ? 0 : gutter, paddingBottom: spacing.xl, flexGrow: 1 }}
+      ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+      renderSectionHeader={({ section }) => (
+        <View style={styles.sectionHead}>
+          <Text style={styles.sectionTitle}>{section.title}</Text>
+          {!!section.note && <Text style={styles.sectionNote}>{section.note}</Text>}
+        </View>
+      )}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -132,7 +158,11 @@ export default function OrdersScreen() {
                 <View style={[styles.status, { backgroundColor: `${meta.color}1A` }]}>
                   <Text style={[styles.statusText, { color: meta.color }]}>{meta.label}</Text>
                 </View>
-                <Text style={styles.time}>{timeAgo(item.createdAt, true)}</Text>
+                <Text style={styles.time}>
+                  {item.status === "DELIVERED" && item.deliveredAt
+                    ? `on ${new Date(item.deliveredAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
+                    : timeAgo(item.createdAt, true)}
+                </Text>
               </View>
             </View>
             <ChevronRight size={18} color={colors.textMuted} />
@@ -181,6 +211,9 @@ const useStyles = makeStyles((colors) => ({
   title: { fontSize: fontSize.base, fontWeight: fontWeight.bold, color: colors.text },
   meta: { fontSize: fontSize.sm, color: colors.text, marginTop: 2 },
   time: { fontSize: fontSize.caption, color: colors.textMuted },
+  sectionHead: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginTop: spacing.md, marginBottom: spacing.sm },
+  sectionTitle: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.text },
+  sectionNote: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.textMuted },
   statusRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: 6 },
   status: { paddingHorizontal: spacing.sm + 2, height: 26, borderRadius: radius.pill, justifyContent: "center" },
   statusText: { fontSize: fontSize.caption, fontWeight: fontWeight.bold },

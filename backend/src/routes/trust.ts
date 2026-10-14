@@ -21,17 +21,18 @@ reviewsRouter.get("/seller/:sellerId", async (req, res) => {
   res.json(reviews.map((r) => ({ ...r, reviewer: publicUser(r.reviewer) })));
 });
 
-// A buyer may review a seller once per item, and only for an item they
-// actually discussed with that seller (a chat with at least one message).
+// A buyer may review a seller once per item, and only after actually buying
+// it (a delivered order). Chatting alone isn't enough: otherwise a second
+// account could rate itself, or a rival could leave fake bad reviews, and
+// ratings feed every seller's trust badge.
+const hasBought = async (buyerId: string, listingId: string) =>
+  !!(await prisma.order.findFirst({ where: { buyerId, listingId, status: "DELIVERED" }, select: { id: true } }));
+
 reviewsRouter.get("/eligibility", async (req, res) => {
   const reviewerId = String(req.query.reviewerId ?? "");
   const listingId = String(req.query.listingId ?? "");
-  const conversation = await prisma.conversation.findUnique({
-    where: { listingId_buyerId: { listingId, buyerId: reviewerId } },
-    include: { _count: { select: { messages: true } } },
-  });
   const existing = await prisma.review.findUnique({ where: { reviewerId_listingId: { reviewerId, listingId } } });
-  res.json({ eligible: !!conversation && conversation._count.messages > 0, existing });
+  res.json({ eligible: await hasBought(reviewerId, listingId), existing });
 });
 
 const reviewSchema = z.object({
@@ -51,12 +52,8 @@ reviewsRouter.post("/", async (req, res) => {
   const listing = await prisma.listing.findUnique({ where: { id: listingId } });
   if (!listing) return res.status(404).json({ error: "This listing is no longer available." });
   if (listing.sellerId === reviewerId) return res.status(400).json({ error: "You can't review yourself." });
-  const conversation = await prisma.conversation.findUnique({
-    where: { listingId_buyerId: { listingId, buyerId: reviewerId } },
-    include: { _count: { select: { messages: true } } },
-  });
-  if (!conversation || conversation._count.messages === 0) {
-    return res.status(403).json({ error: "You can review a seller after chatting with them about an item." });
+  if (!(await hasBought(reviewerId, listingId))) {
+    return res.status(403).json({ error: "You can review a seller once you've received an item from them." });
   }
   // Upsert: submitting twice edits the same review rather than adding another.
   const review = await prisma.review.upsert({
