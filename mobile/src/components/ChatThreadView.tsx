@@ -44,6 +44,16 @@ type Row = {
   divider?: boolean;
 };
 
+function MaybeSlideIn({ animate, style, children }: { animate: boolean; style: any; children: React.ReactNode }) {
+  return animate ? (
+    <FadeIn distance={12} style={style}>
+      {children}
+    </FadeIn>
+  ) : (
+    <View style={style}>{children}</View>
+  );
+}
+
 export function useOtherParty(c: Conversation | null, userId?: string) {
   if (!c) return null;
   return c.buyerId === userId ? c.seller : c.buyer;
@@ -103,6 +113,9 @@ export default function ChatThreadView({
   const [viewer, setViewer] = useState<{ uri: string; type: "IMAGE" | "VIDEO" } | null>(null);
   // Where "New messages" goes: the read position when the chat was opened.
   const readMarker = useRef<string | null | undefined>(undefined);
+  // Messages newer than this slide in; history already there when the chat
+  // opened doesn't animate.
+  const openedAt = useRef(Date.now());
   // Composer text survives leaving the chat and coming back.
   const [draft, setDraft] = usePersistentState(`${DRAFT_PREFIX}chat.${conversationId}`, { text: "" });
 
@@ -114,6 +127,7 @@ export default function ChatThreadView({
     setLoaded(false);
     setFailed(false);
     readMarker.current = undefined;
+    openedAt.current = Date.now();
     api
       .conversation(conversationId)
       .then((c) => {
@@ -518,7 +532,12 @@ export default function ChatThreadView({
             <View>
               {showDay && <Text style={styles.dayLabel}>{dayLabel(item.createdAt)}</Text>}
               <View style={[styles.bubbleRow, item.mine && styles.bubbleRowMine]}>
-                <View style={{ maxWidth: "80%", alignItems: item.mine ? "flex-end" : "flex-start" }}>
+                <MaybeSlideIn
+                  // Incoming new messages, and my own as soon as I hit send. (My
+                  // confirmed copy replaces the pending one silently.)
+                  animate={item.mine ? !!item.status : new Date(item.createdAt).getTime() > openedAt.current}
+                  style={{ maxWidth: "80%", alignItems: item.mine ? "flex-end" : "flex-start" }}
+                >
                   {content}
                   {shouldShowWarning(item.flag, item.mine) &&
                     (item.flag === "HANDOVER_CODE" ? (
@@ -526,7 +545,7 @@ export default function ChatThreadView({
                     ) : (
                       <SafetyWarning flag={item.flag!} actionLabel="How to stay safe" onAction={() => navigation.navigate("Safety")} />
                     ))}
-                </View>
+                </MaybeSlideIn>
               </View>
               {seen && (
                 <View style={styles.seenRow}>

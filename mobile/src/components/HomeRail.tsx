@@ -6,6 +6,7 @@ import ListingCard from "./ListingCard";
 import Tap from "./Tap";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, fontSize, fontWeight } from "../theme/theme";
+import { FadeIn } from "./Motion";
 
 const RAIL_CARD_WIDTH = 164;
 
@@ -44,7 +45,11 @@ export default function HomeRail({
         data={data}
         keyExtractor={(l) => l.id}
         contentContainerStyle={{ paddingHorizontal: horizontalPadding, gap: spacing.md }}
-        renderItem={({ item }) => <ListingCard listing={item} onPress={() => onPressItem(item)} width={cardWidth} />}
+        renderItem={({ item, index }) => (
+          <FadeIn delay={Math.min(index, 4) * 60} distance={10}>
+            <ListingCard listing={item} onPress={() => onPressItem(item)} width={cardWidth} />
+          </FadeIn>
+        )}
       />
     </View>
   );

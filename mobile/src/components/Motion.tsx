@@ -84,6 +84,45 @@ export function Nudge({ distance = 4, children }: { distance?: number; children:
   return <Animated.View style={{ transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [0, distance] }) }] }}>{children}</Animated.View>;
 }
 
+// Slow up-and-down hover for illustrations (empty states).
+export function Float({ distance = 6, children }: { distance?: number; children: React.ReactNode }) {
+  const reduceMotion = useReducedMotion();
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(v, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver }),
+        Animated.timing(v, { toValue: 0, duration: 1600, easing: Easing.inOut(Easing.sin), useNativeDriver }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [reduceMotion]);
+  return <Animated.View style={{ transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, -distance] }) }] }}>{children}</Animated.View>;
+}
+
+// Plays a quick settle-in each time a tab screen gains focus.
+export function FocusSettle({ focused, children }: { focused: boolean; children: React.ReactNode }) {
+  const reduceMotion = useReducedMotion();
+  const v = useRef(new Animated.Value(1)).current;
+  const first = useRef(true);
+  useEffect(() => {
+    if (!focused) return;
+    if (first.current || reduceMotion) {
+      first.current = false;
+      return;
+    }
+    v.setValue(0);
+    Animated.timing(v, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver }).start();
+  }, [focused, reduceMotion]);
+  return (
+    <Animated.View style={{ flex: 1, opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] }), transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }}>
+      {children}
+    </Animated.View>
+  );
+}
+
 // Celebration for a finished delivery: the icon springs in while two rings
 // ripple out behind it.
 export function SuccessBurst({ color, size = 64, children }: { color: string; size?: number; children: React.ReactNode }) {

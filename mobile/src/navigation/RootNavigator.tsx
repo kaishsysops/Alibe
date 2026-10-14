@@ -1,14 +1,16 @@
-import React from "react";
-import { View } from "react-native";
-import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
+import React, { useEffect, useRef } from "react";
+import { Animated, Platform, View } from "react-native";
+import { NavigationContainer, DefaultTheme, useIsFocused } from "@react-navigation/native";
+import { FocusSettle } from "../components/Motion";
+import { useReducedMotion } from "../hooks/useReducedMotion";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Home, Search, Plus, User, MessageCircle } from "lucide-react-native";
 import { useAuth } from "../api/AuthContext";
 import { useTheme } from "../theme/ThemeContext";
+import { DEFAULT_ACCENT } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
-import SplashScreen from "../components/SplashScreen";
 import { navigationRef } from "./navigationRef";
 import { useNotifications } from "../api/NotificationsContext";
 
@@ -68,9 +70,33 @@ const TAB_ICONS: Record<string, typeof Home> = {
 const FLOATING_BAR_MARGIN = 20;
 const FLOATING_BAR_HEIGHT = 56;
 
+// Each tab screen settles in (slight rise + fade) when you switch to it.
+function settle<P extends object>(Screen: React.ComponentType<P>) {
+  return function Settled(props: P) {
+    const focused = useIsFocused();
+    return (
+      <FocusSettle focused={focused}>
+        <Screen {...props} />
+      </FocusSettle>
+    );
+  };
+}
+const HomeTabScreen = settle(HomeScreen);
+const SearchTabScreen = settle(SearchScreen);
+const SellTabScreen = settle(SellScreen);
+const ChatsTabScreen = settle(ChatsScreen);
+const ProfileTabScreen = settle(ProfileScreen);
+
 function TabIcon({ route, focused }: { route: string; focused: boolean }) {
   const { colors } = useTheme();
   const Icon = TAB_ICONS[route];
+  const reduceMotion = useReducedMotion();
+  // The active bubble springs in; the icon gets a little bounce.
+  const v = useRef(new Animated.Value(focused ? 1 : 0)).current;
+  useEffect(() => {
+    if (reduceMotion) return v.setValue(focused ? 1 : 0);
+    Animated.spring(v, { toValue: focused ? 1 : 0, friction: 6, tension: 140, useNativeDriver: Platform.OS !== "web" }).start();
+  }, [focused, reduceMotion]);
   // "Sell" is the primary action, so it's always a filled accent circle.
   if (route === "SellTab") {
     return (
@@ -80,17 +106,21 @@ function TabIcon({ route, focused }: { route: string; focused: boolean }) {
     );
   }
   return (
-    <View
-      style={{
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        alignItems: "center",
-        justifyContent: "center",
-        backgroundColor: focused ? colors.primaryTint : "transparent",
-      }}
-    >
-      <Icon size={21} color={focused ? colors.primary : colors.textMuted} strokeWidth={focused ? 2.4 : 2} />
+    <View style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}>
+      <Animated.View
+        style={{
+          position: "absolute",
+          width: 44,
+          height: 44,
+          borderRadius: 22,
+          backgroundColor: colors.primaryTint,
+          opacity: v,
+          transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }],
+        }}
+      />
+      <Animated.View style={{ transform: [{ scale: v.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.15, 1] }) }] }}>
+        <Icon size={21} color={focused ? colors.primary : colors.textMuted} strokeWidth={focused ? 2.4 : 2} />
+      </Animated.View>
     </View>
   );
 }
@@ -133,12 +163,12 @@ function Tabs() {
             },
       })}
     >
-      <Tab.Screen name="HomeTab" component={HomeScreen} options={{ title: "Home" }} />
-      <Tab.Screen name="SearchTab" component={SearchScreen} options={{ title: "Search" }} />
-      <Tab.Screen name="SellTab" component={SellScreen} options={{ title: "Sell" }} />
+      <Tab.Screen name="HomeTab" component={HomeTabScreen} options={{ title: "Home" }} />
+      <Tab.Screen name="SearchTab" component={SearchTabScreen} options={{ title: "Search" }} />
+      <Tab.Screen name="SellTab" component={SellTabScreen} options={{ title: "Sell" }} />
       <Tab.Screen
         name="ChatsTab"
-        component={ChatsScreen}
+        component={ChatsTabScreen}
         options={{
           title: "Chats",
           // Unread message count, so a new message is visible from any tab.
@@ -146,7 +176,7 @@ function Tabs() {
           tabBarBadgeStyle: { backgroundColor: colors.danger, color: "#fff", fontSize: 10, fontWeight: "800", top: 6 },
         }}
       />
-      <Tab.Screen name="ProfileTab" component={ProfileScreen} options={{ title: "Profile" }} />
+      <Tab.Screen name="ProfileTab" component={ProfileTabScreen} options={{ title: "Profile" }} />
     </Tab.Navigator>
   );
 }
@@ -155,7 +185,8 @@ export default function RootNavigator() {
   const { user, isLoading } = useAuth();
   const { colors } = useTheme();
 
-  if (isLoading) return <SplashScreen />;
+  // Until sign-in state is known, the animated splash (App.tsx) covers this.
+  if (isLoading) return <View style={{ flex: 1, backgroundColor: DEFAULT_ACCENT }} />;
 
   return (
     <NavigationContainer
@@ -165,7 +196,8 @@ export default function RootNavigator() {
       documentTitle={{ formatter: () => "Alibe" }}
     >
       {/* Every pushed screen renders its own compact ScreenHeader, so native headers stay off. */}
-      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
+      {/* Same slide-in on both platforms (Android's default is a plain fade). */}
+      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background }, animation: "slide_from_right" }}>
         {!user ? (
           <Stack.Screen name="Onboarding" component={OnboardingScreen} />
         ) : (

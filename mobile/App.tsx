@@ -9,10 +9,20 @@ import { AppAlertProvider } from "./src/components/AppAlertProvider";
 import { NotificationsProvider } from "./src/api/NotificationsContext";
 import { ActionSheetProvider } from "./src/components/Sheet";
 import RootNavigator from "./src/navigation/RootNavigator";
+import AnimatedSplash from "./src/components/AnimatedSplash";
+import { useAuth } from "./src/api/AuthContext";
+
+function Splash() {
+  const { isLoading } = useAuth();
+  return <AnimatedSplash ready={!isLoading} />;
+}
 
 function ThemedStatusBar() {
   const { scheme } = useTheme();
-  return <StatusBar style={scheme === "dark" ? "light" : "dark"} />;
+  const { user, isLoading } = useAuth();
+  // Splash and welcome screens sit on the brand colour: white status bar there.
+  const onBrand = isLoading || !user;
+  return <StatusBar style={onBrand || scheme === "dark" ? "light" : "dark"} />;
 }
 
 export default function App() {
@@ -27,6 +37,7 @@ export default function App() {
                   <ActionSheetProvider>
                     <ThemedStatusBar />
                     <RootNavigator />
+                    <Splash />
                   </ActionSheetProvider>
                 </AppAlertProvider>
               </FavoritesProvider>

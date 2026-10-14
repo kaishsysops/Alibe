@@ -4,6 +4,7 @@ import { LucideIcon } from "lucide-react-native";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight } from "../theme/theme";
 import Tap from "./Tap";
+import { FadeIn, Float } from "./Motion";
 
 // Every "nothing here" moment gets an illustration, a reason, and a way
 // forward — a screen is never just blank.
@@ -32,12 +33,14 @@ export default function EmptyState({
   const { colors } = useTheme();
   const accent = tone === "error" ? colors.danger : colors.primary;
   return (
-    <View style={[styles.container, compact && { paddingVertical: spacing.lg }]}>
-      <View style={[styles.halo, { backgroundColor: `${accent}0D` }]}>
-        <View style={[styles.iconBadge, { backgroundColor: `${accent}1A` }]}>
-          <Icon size={30} color={accent} strokeWidth={1.75} />
+    <FadeIn style={[styles.container, compact && { paddingVertical: spacing.lg }]}>
+      <Float>
+        <View style={[styles.halo, { backgroundColor: `${accent}0D` }]}>
+          <View style={[styles.iconBadge, { backgroundColor: `${accent}1A` }]}>
+            <Icon size={30} color={accent} strokeWidth={1.75} />
+          </View>
         </View>
-      </View>
+      </Float>
       <Text style={styles.title}>{title}</Text>
       {!!message && <Text style={styles.message}>{message}</Text>}
       {!!actionLabel && !!onAction && (
@@ -50,7 +53,7 @@ export default function EmptyState({
           <Text style={[styles.secondaryText, { color: accent }]}>{secondaryLabel}</Text>
         </Tap>
       )}
-    </View>
+    </FadeIn>
   );
 }
 

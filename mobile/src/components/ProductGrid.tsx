@@ -4,6 +4,7 @@ import { Listing } from "../api/client";
 import ListingCard from "./ListingCard";
 import { GridSkeleton } from "./Skeleton";
 import { spacing, tabBarClearance } from "../theme/theme";
+import { FadeIn } from "./Motion";
 
 const CARD_MIN_WIDTH = 168;
 const GRID_GAP = spacing.md;
@@ -68,9 +69,11 @@ export default function ProductGrid({
       refreshControl={refreshControl}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
-      renderItem={({ item }) =>
-        renderCard ? renderCard(item, cardWidth) : <ListingCard listing={item} onPress={() => onPressItem(item)} width={cardWidth} />
-      }
+      renderItem={({ item, index }) => (
+        <FadeIn delay={Math.min(index, 8) * 45}>
+          {renderCard ? renderCard(item, cardWidth) : <ListingCard listing={item} onPress={() => onPressItem(item)} width={cardWidth} />}
+        </FadeIn>
+      )}
     />
   );
 }
@@ -102,8 +105,10 @@ export function StaticProductGrid({
 
   return (
     <View style={{ flexDirection: "row", flexWrap: "wrap", paddingHorizontal: horizontalPadding, columnGap: GRID_GAP }}>
-      {data.map((item) => (
-        <ListingCard key={item.id} listing={item} onPress={() => onPressItem(item)} width={cardWidth} />
+      {data.map((item, index) => (
+        <FadeIn key={item.id} delay={Math.min(index, 8) * 45}>
+          <ListingCard listing={item} onPress={() => onPressItem(item)} width={cardWidth} />
+        </FadeIn>
       ))}
     </View>
   );
