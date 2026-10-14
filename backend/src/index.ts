@@ -12,10 +12,12 @@ import { savedSearchesRouter, notificationsRouter } from "./routes/engagement.js
 import { uploadsRouter, UPLOAD_DIR } from "./routes/uploads.js";
 import { ordersRouter } from "./routes/orders.js";
 import { startReminders } from "./reminders.js";
+import { authenticate } from "./auth.js";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(authenticate);
 
 app.get("/health", (_req, res) => res.json({ ok: true, service: "alibe-backend" }));
 app.use("/categories", categoriesRouter);

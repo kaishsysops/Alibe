@@ -8,6 +8,18 @@ import { createOrder } from "./orders.js";
 
 export const conversationsRouter = safeRouter();
 
+// Every /conversations/:id/... route is for the chat's buyer and seller only.
+conversationsRouter.param("id", (req, res, next, id) => {
+  prisma.conversation
+    .findUnique({ where: { id }, select: { buyerId: true, sellerId: true } })
+    .then((c) => {
+      if (!c) return res.status(404).json({ error: "This conversation no longer exists." });
+      if (req.userId !== c.buyerId && req.userId !== c.sellerId) return res.status(403).json({ error: "You're not part of this chat." });
+      next();
+    })
+    .catch(next);
+});
+
 const conversationInclude = {
   listing: { include: listingInclude },
   buyer: true,
@@ -136,7 +148,7 @@ conversationsRouter.post("/:id/messages", async (req, res) => {
 
   if (clientId) {
     const existing = await prisma.message.findUnique({ where: { clientId } });
-    if (existing) return res.status(200).json(existing);
+    if (existing && existing.conversationId === req.params.id) return res.status(200).json(existing);
   }
   const conversation = await prisma.conversation.findUnique({ where: { id: req.params.id } });
   if (!conversation) return res.status(404).json({ error: "This conversation no longer exists." });

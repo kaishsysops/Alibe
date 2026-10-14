@@ -51,12 +51,12 @@ savedSearchesRouter.post("/", async (req, res) => {
 });
 
 savedSearchesRouter.post("/:id/seen", async (req, res) => {
-  await prisma.savedSearch.updateMany({ where: { id: req.params.id }, data: { lastSeenAt: new Date() } });
+  await prisma.savedSearch.updateMany({ where: { id: req.params.id, userId: req.userId }, data: { lastSeenAt: new Date() } });
   res.status(204).send();
 });
 
 savedSearchesRouter.delete("/:id", async (req, res) => {
-  await prisma.savedSearch.deleteMany({ where: { id: req.params.id } });
+  await prisma.savedSearch.deleteMany({ where: { id: req.params.id, userId: req.userId } });
   res.status(204).send();
 });
 

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { prisma } from "../db.js";
 import { safeRouter, PHONE_REGEX, normalizePhone } from "../http.js";
+import { createSession, deleteSession } from "../auth.js";
 
 export const authRouter = safeRouter();
 
@@ -36,5 +37,17 @@ authRouter.post("/otp/verify", async (req, res) => {
     update: {},
     create: { phone, name: name ?? "New Seller", themeColor },
   });
-  res.json({ token: `mock-token-${user.id}`, user });
+  res.json({ token: await createSession(user.id), user });
+});
+
+// Signs this device out: its token stops working immediately, and its push
+// token is dropped so the next person on the phone doesn't get our pushes.
+authRouter.post("/logout", async (req, res) => {
+  const token = (req.headers.authorization ?? "").replace(/^Bearer /, "");
+  const pushToken = typeof req.body?.pushToken === "string" ? req.body.pushToken : null;
+  if (pushToken && req.userId) {
+    await prisma.$executeRaw`UPDATE "User" SET "pushTokens" = array_remove("pushTokens", ${pushToken}) WHERE id = ${req.userId}`;
+  }
+  if (token) await deleteSession(token);
+  res.status(204).send();
 });

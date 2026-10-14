@@ -125,7 +125,6 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       clearInterval(interval);
       sub.remove();
       tapSub?.remove();
-      if (pushToken) api.removePushToken(user.id, pushToken).catch(() => {});
     };
   }, [user, refresh]);
 

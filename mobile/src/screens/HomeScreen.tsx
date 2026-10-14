@@ -77,6 +77,11 @@ export default function HomeScreen() {
     [categories, allListings]
   );
 
+  // Mobile category grid: 4 per row, two rows max.
+  const categoryWidth = (width - gutter * 2) / 4;
+  const hasMoreCategories = categories.length > 8;
+  const gridCategories = hasMoreCategories ? categories.slice(0, 7) : categories;
+
   const filtered = activeSlug ? allListings.filter((l) => l.category.slug === activeSlug) : [];
   const activeCategory = categories.find((c) => c.slug === activeSlug);
   const firstName = user?.name?.split(" ")[0];
@@ -228,19 +233,22 @@ export default function HomeScreen() {
           <OrderNudge style={{ marginTop: spacing.md }} />
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.categoryRail, { paddingHorizontal: gutter }]}>
+        {/* All categories at a glance in a 4-column grid (nothing hidden off-screen);
+            past 8, the last tile becomes "More". */}
+        <View style={[styles.categoryGrid, { paddingHorizontal: gutter }]}>
           {loading
-            ? Array.from({ length: 6 }).map((_, i) => (
-                <View key={i} style={styles.categoryItem}>
+            ? Array.from({ length: 8 }).map((_, i) => (
+                <View key={i} style={[styles.categoryItem, { width: categoryWidth }]}>
                   <Skeleton width={56} height={56} rounded={18} />
                   <Skeleton width={48} height={10} style={{ marginTop: 8 }} />
                 </View>
               ))
-            : categories.map((c) => {
+            : [...gridCategories.map((c) => ({ key: c.id, name: c.name, slug: c.slug, onPress: () => seeAllInCategory(c) })),
+               ...(hasMoreCategories ? [{ key: "more", name: "More", slug: "", onPress: () => goToSearch({}) }] : [])].map((c) => {
                 const meta = categoryIcons[c.slug];
                 const Icon = meta?.Icon ?? AllCategoriesIcon;
                 return (
-                  <Tap key={c.id} style={styles.categoryItem} onPress={() => seeAllInCategory(c)} scaleTo={0.9}>
+                  <Tap key={c.key} style={[styles.categoryItem, { width: categoryWidth }]} onPress={c.onPress} scaleTo={0.9}>
                     <View style={[styles.categoryIcon, { backgroundColor: `${meta?.color ?? colors.primary}17` }]}>
                       <Icon size={24} color={meta?.color ?? colors.primary} strokeWidth={1.9} />
                     </View>
@@ -250,7 +258,7 @@ export default function HomeScreen() {
                   </Tap>
                 );
               })}
-        </ScrollView>
+        </View>
 
         {loading ? (
           <>
@@ -324,9 +332,8 @@ const useStyles = makeStyles((colors) => ({
   avatar: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
   avatarText: { color: "#fff", fontWeight: fontWeight.extrabold, fontSize: fontSize.base },
   greeting: { fontSize: fontSize.xl, fontWeight: fontWeight.bold, color: colors.text, marginBottom: spacing.md, letterSpacing: -0.3 },
-  categoryRail: { gap: spacing.sm, paddingBottom: spacing.lg },
-  // Wide enough that "Electronics" fits; longer names wrap to a second line.
-  categoryItem: { alignItems: "center", width: 78 },
+  categoryGrid: { flexDirection: "row", flexWrap: "wrap", rowGap: spacing.md, paddingBottom: spacing.lg },
+  categoryItem: { alignItems: "center", paddingHorizontal: 2 },
   categoryIcon: { width: 56, height: 56, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   categoryLabel: { fontSize: fontSize.caption, color: colors.text, marginTop: 6, textAlign: "center", fontWeight: fontWeight.medium },
   sectionTitle: { fontSize: fontSize.lg, fontWeight: fontWeight.extrabold, color: colors.text, marginBottom: spacing.sm + 2 },

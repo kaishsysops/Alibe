@@ -1,12 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { api, User } from "./client";
+import { api, setAuthToken, setSignedOutHandler, User } from "./client";
 import { useTheme } from "../theme/ThemeContext";
 
 type AuthState = {
   user: User | null;
   isLoading: boolean;
-  signIn: (user: User) => Promise<void>;
+  signIn: (user: User, token: string) => Promise<void>;
   signOut: () => Promise<void>;
   updateUser: (patch: Partial<User>) => Promise<void>;
   deleteAccount: () => Promise<void>;
@@ -14,6 +14,7 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
 const STORAGE_KEY = "alibe.user";
+const TOKEN_KEY = "alibe.token";
 // Per-user drafts (sell form, chat composers) live under this prefix and are
 // wiped on sign-out so the next person on the device starts clean.
 export const DRAFT_PREFIX = "alibe.draft.";
@@ -30,9 +31,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((raw) => {
-        if (raw) setUser(JSON.parse(raw));
+    AsyncStorage.multiGet([STORAGE_KEY, TOKEN_KEY])
+      .then(([[, raw], [, token]]) => {
+        // A saved user without a token is from before sessions existed: they
+        // sign in again once.
+        if (raw && token) {
+          setAuthToken(token);
+          setUser(JSON.parse(raw));
+        }
       })
       .catch(() => {})
       .finally(() => setIsLoading(false));
@@ -58,19 +64,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user?.id]);
 
   const signIn = useCallback(
-    async (u: User) => {
+    async (u: User, token: string) => {
+      setAuthToken(token);
       setUser(u);
       if (u.themeColor) setAccent(u.themeColor);
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(u));
+      await AsyncStorage.multiSet([
+        [STORAGE_KEY, JSON.stringify(u)],
+        [TOKEN_KEY, token],
+      ]);
     },
     [setAccent]
   );
 
-  const signOut = useCallback(async () => {
+  // Local half of signing out: forget the session on this device.
+  const clearSession = useCallback(async () => {
+    setAuthToken(null);
     setUser(null);
-    await AsyncStorage.removeItem(STORAGE_KEY);
+    await AsyncStorage.multiRemove([STORAGE_KEY, TOKEN_KEY]);
     await clearDrafts();
   }, []);
+
+  const signOut = useCallback(async () => {
+    // Tell the server first (revokes the token and this phone's push token);
+    // sign out locally even if that fails.
+    await api.logout().catch(() => {});
+    await clearSession();
+  }, [clearSession]);
+
+  // The server says our session is gone (revoked or expired): back to sign-in.
+  useEffect(() => {
+    setSignedOutHandler(() => clearSession());
+    return () => setSignedOutHandler(null);
+  }, [clearSession]);
 
   const updateUser = useCallback(async (patch: Partial<User>) => {
     setUser((prev) => {
@@ -84,8 +109,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const deleteAccount = useCallback(async () => {
     if (!user) return;
     await api.deleteAccount(user.id);
-    await signOut();
-  }, [user, signOut]);
+    await clearSession();
+  }, [user, clearSession]);
 
   return (
     <AuthContext.Provider value={{ user, isLoading, signIn, signOut, updateUser, deleteAccount }}>{children}</AuthContext.Provider>

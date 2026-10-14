@@ -21,12 +21,29 @@ function fallbackMessage(status: number) {
   return "Something went wrong. Please try again.";
 }
 
+// Session token from sign-in, sent on every request. AuthContext owns it.
+let authToken: string | null = null;
+let onSignedOut: (() => void) | null = null;
+// Last push token this device registered, so sign-out can unregister it.
+let devicePushToken: string | null = null;
+
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
+export function setSignedOutHandler(handler: (() => void) | null) {
+  onSignedOut = handler;
+}
+
+function authHeaders(): Record<string, string> {
+  return authToken ? { Authorization: `Bearer ${authToken}` } : {};
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${BASE_URL}${path}`, {
-      headers: { "Content-Type": "application/json" },
       ...options,
+      headers: { "Content-Type": "application/json", ...authHeaders(), ...(options?.headers as Record<string, string>) },
     });
   } catch {
     throw new ApiError(0, OFFLINE_MESSAGE);
@@ -36,6 +53,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     try {
       const body = await res.json();
       if (typeof body?.error === "string") message = body.error;
+      // The session expired or was revoked: drop back to the sign-in screen.
+      if (res.status === 401 && body?.code === "SIGNED_OUT" && authToken) onSignedOut?.();
     } catch {
       // non-JSON error body — keep the generic sentence
     }
@@ -68,6 +87,7 @@ export async function uploadMedia(localUri: string, mimeType: string, onProgress
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${BASE_URL}/uploads`);
+    if (authToken) xhr.setRequestHeader("Authorization", `Bearer ${authToken}`);
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
     xhr.onload = () => {
       let body: any = null;
@@ -358,8 +378,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ senderId, text, clientId, mediaUrl: media?.url, mediaType: media?.type }),
     }),
-  registerPushToken: (userId: string, token: string) =>
-    request<void>(`/users/${userId}/push-tokens`, { method: "POST", body: JSON.stringify({ token }) }),
-  removePushToken: (userId: string, token: string) =>
-    request<void>(`/users/${userId}/push-tokens?token=${encodeURIComponent(token)}`, { method: "DELETE" }),
+  registerPushToken: (userId: string, token: string) => {
+    devicePushToken = token;
+    return request<void>(`/users/${userId}/push-tokens`, { method: "POST", body: JSON.stringify({ token }) });
+  },
+  logout: () => request<void>("/auth/logout", { method: "POST", body: JSON.stringify({ pushToken: devicePushToken ?? undefined }) }),
 };

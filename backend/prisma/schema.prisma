@@ -79,6 +79,7 @@ model User {
   messages               Message[]
   conversationsAsBuyer   Conversation[] @relation("BuyerConversations")
   conversationsAsSeller  Conversation[] @relation("SellerConversations")
+  sessions               Session[]
 }
 
 enum Condition {
@@ -324,4 +325,15 @@ model SavedSearch {
   createdAt     DateTime @default(now())
 
   @@unique([userId, paramsKey])
+}
+
+// A signed-in device. Only a hash of the token is stored (see src/auth.ts).
+model Session {
+  tokenHash  String   @id
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  @@index([userId])
 }

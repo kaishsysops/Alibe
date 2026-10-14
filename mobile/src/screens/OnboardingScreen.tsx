@@ -75,8 +75,8 @@ export default function OnboardingScreen() {
 
   const [verify, verifying] = useSingleFlight(async (fullCode: string) => {
     try {
-      const { user } = await api.verifyOtp(fullPhone, fullCode, accent);
-      await signIn(user);
+      const { user, token } = await api.verifyOtp(fullPhone, fullCode, accent);
+      await signIn(user, token);
     } catch (e) {
       setCode("");
       toast.error(errorMessage(e));
