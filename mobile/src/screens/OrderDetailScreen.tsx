@@ -699,7 +699,7 @@ function EnterCodeCard({ order, onChange }: { order: Order; onChange: (o: Order)
   const showAlert = useAppAlert();
   const [code, setCode] = useState("");
   const [focused, setFocused] = useState(false);
-  const input = useRef<TextInput>(null);
+  const input = useRef<React.ComponentRef<typeof TextInput>>(null);
   const locked = order.codeAttempts >= MAX_CODE_ATTEMPTS;
   const [shakeStyle, shake] = useShake();
 

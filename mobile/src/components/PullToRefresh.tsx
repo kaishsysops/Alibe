@@ -69,7 +69,7 @@ export default function PullRefreshBadge({ scrollY, refreshing }: { scrollY: Ani
   }, [refreshing]);
 
   const pull = scrollY.interpolate({ inputRange: [-PULL_DISTANCE, 0], outputRange: [1, 0], extrapolate: "clamp" });
-  const progress = holding ? hold : pull;
+  const progress = (holding ? hold : pull) as Animated.AnimatedInterpolation<number>;
 
   const dropY = progress.interpolate({ inputRange: [0, 1], outputRange: [0, travel] });
   const dropScale = progress.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0.55, 0.8, 1], extrapolate: "clamp" });

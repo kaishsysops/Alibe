@@ -227,6 +227,7 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <PullRefreshBadge scrollY={scrollY} refreshing={refreshing} />
       <ScrollView
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

@@ -26,7 +26,7 @@ export default function ChangePhoneScreen() {
   const [step, setStep] = useState<"phone" | "otp">("phone");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
-  const otpRef = useRef<TextInput>(null);
+  const otpRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const fullPhone = toE164(phone);
   const valid = phone.replace(/\D/g, "").length >= 7;
 

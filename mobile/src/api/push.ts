@@ -15,7 +15,7 @@ if (Platform.OS !== "web") {
   Notifications.setNotificationHandler({
     handleNotification: async (n) => {
       const isActiveChat = n.request.content.data?.conversationId === activeConversationId;
-      return { shouldShowAlert: !isActiveChat, shouldPlaySound: !isActiveChat, shouldSetBadge: true };
+      return { shouldShowBanner: !isActiveChat, shouldShowList: !isActiveChat, shouldPlaySound: !isActiveChat, shouldSetBadge: true };
     },
   });
 }

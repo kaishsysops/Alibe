@@ -65,3 +65,25 @@ Status as of 2026-10-02. Items are grouped by what's left to do; the scam-preven
 15. **Report review queue**: an admin screen for reports, with auto-hiding of listings that get several reports.
 16. **Auto-suspend** accounts with confirmed delivery problems or many reports; block their phone number.
 17. **Dispute flow**: when a buyer reports a delivery problem, both sides add evidence (photos, chat) and staff decide.
+
+## Next build: interactivity + features (decided 2026-10-18)
+
+Order of work: fix bugs as found (no separate audit), but do the foundation first.
+
+**Foundation**
+- [ ] Upgrade Expo SDK 51 → latest, then add Reanimated, Gesture Handler, expo-haptics. Smoke-test core flow after.
+
+**Feel**: Apple (springy physics, blur, haptics) + Airbnb (photo-led, shared transitions) + Vinted/Depop (swipe galleries, quick offers). Web matters equally: every gesture needs a mouse/hover/keyboard equivalent.
+- [ ] Gestures: swipe chat rows, swipeable/pinch-zoom photos, draggable sheets, long-press quick-peek
+- [ ] Delight: heart particle burst, delivery confetti, count-up numbers, price-drop tag animation
+- [ ] Transitions: card → detail shared photo, morphing tab icons, collapsing headers, photo parallax
+- [ ] Rich components: blur headers, shimmer skeletons, verified-progress ring, stories row
+
+**New features**
+- [ ] Price drop alerts (+ "was MVR X" strikethrough)
+- [ ] Stories row on Home, built automatically (New today, Price drops, Under MVR 500, On your island, Top sellers) with full-screen swipe viewer
+- [ ] Bundles: buyer combines any items from one seller into one offer/order; seller can set an optional multi-item discount
+- [ ] Alibe Pay (TEST MODE ONLY): buyer pays Alibe, seller paid out within 24h after handover code, minus seller-paid fee. Fee tiers: <MVR 1,000 = 5%, 1,000-10,000 = 3%, >10,000 = 2%, max MVR 500. "Pay (test)" button instead of real bank; admin screen to mark payouts sent. Before real money: check MMA licensing / a licensed gateway (decided 2026-10-19).
+- [ ] Seller dashboard (views/saves/messages, tips)
+- [ ] Make an offer from card (long-press → offer slider)
+- [ ] Atoll map: custom drawn SVG map, count bubble per atoll, tap to browse (no map tiles/API key)

@@ -56,7 +56,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       const alertable = next.items.filter((i) => i.type !== "saved_search");
       if (seen.current) {
         for (const item of alertable) {
-          if (seen.current.has(item.id) || item.type === "saved_search") continue;
+          if (seen.current.has(item.id)) continue;
           if (item.conversationId === activeConversation.current) continue;
           const title =
             item.type === "message"

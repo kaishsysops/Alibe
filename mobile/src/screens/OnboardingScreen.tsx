@@ -99,8 +99,8 @@ export default function OnboardingScreen() {
   const [step, setStep] = useState<Step>("welcome");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
-  const phoneInputRef = useRef<TextInput>(null);
-  const otpInputRef = useRef<TextInput>(null);
+  const phoneInputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const otpInputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const sheet = useRef(new Animated.Value(0)).current;
   const fullPhone = toE164(phone);
   const phoneValid = /^\+[0-9]{7,15}$/.test(fullPhone) && phone.replace(/\D/g, "").length >= 7;

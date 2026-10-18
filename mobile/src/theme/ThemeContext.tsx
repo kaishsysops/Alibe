@@ -1,5 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { StyleSheet, useColorScheme } from "react-native";
+import { ImageStyle, StyleSheet, TextStyle, useColorScheme, ViewStyle } from "react-native";
+
+// RN 0.88 dropped the public StyleSheet.NamedStyles type; this is the same shape.
+type NamedStyles<T> = { [P in keyof T]: ViewStyle | TextStyle | ImageStyle };
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { buildColors, Colors, DEFAULT_ACCENT, Scheme } from "./theme";
 
@@ -63,7 +66,7 @@ export function useTheme() {
 
 // Theme-aware StyleSheet: define styles as a function of the palette and get
 // back a hook. Sheets are cached per accent + light/dark, so switching is cheap.
-export function makeStyles<T extends StyleSheet.NamedStyles<T>>(factory: (c: Colors) => T) {
+export function makeStyles<T extends NamedStyles<T>>(factory: (c: Colors) => T) {
   const cache = new Map<string, T>();
   return function useStyles(): T {
     const { colors } = useTheme();

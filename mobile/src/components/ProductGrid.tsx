@@ -36,7 +36,7 @@ export default function ProductGrid({
   data: Listing[];
   onPressItem: (l: Listing) => void;
   loading?: boolean;
-  ListHeaderComponent?: React.ReactElement | null;
+  ListHeaderComponent?: React.JSX.Element | null;
   ListEmptyComponent?: React.ReactElement;
   refreshControl?: React.ReactElement;
   containerWidth?: number;
@@ -51,12 +51,14 @@ export default function ProductGrid({
   return (
     <FlatList
       key={numColumns}
+      // A desktop-style scrollbar would eat into the column width math.
+      showsVerticalScrollIndicator={false}
       data={loading ? [] : data}
       keyExtractor={(l) => l.id}
       numColumns={numColumns}
       columnWrapperStyle={{ paddingHorizontal: horizontalPadding, gap: GRID_GAP }}
       contentContainerStyle={{ paddingTop: spacing.sm, paddingBottom: bottomPadding, flexGrow: 1 }}
-      ListHeaderComponent={ListHeaderComponent}
+      ListHeaderComponent={ListHeaderComponent ?? undefined}
       ListEmptyComponent={
         loading ? (
           <View style={{ paddingHorizontal: horizontalPadding }}>

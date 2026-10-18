@@ -8,7 +8,9 @@
     "splash": {
       "backgroundColor": "#FF6A00"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.alibe.app"
@@ -25,7 +27,10 @@
         {
           "photosPermission": "Alibe uses your photos so you can add listing images."
         }
-      ]
+      ],
+      "expo-status-bar",
+      "expo-video",
+      "expo-image"
     ]
   }
 }
