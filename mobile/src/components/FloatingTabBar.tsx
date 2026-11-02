@@ -9,6 +9,7 @@ import { Home, MessageCircle, Plus, Search, User } from "lucide-react-native";
 import { useTheme } from "../theme/ThemeContext";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 import { useKeyboardVisible } from "../hooks/useKeyboardVisible";
+import { fontSize } from "../theme/theme";
 
 const ICONS: Record<string, typeof Home> = { HomeTab: Home, SearchTab: Search, SellTab: Plus, ChatsTab: MessageCircle, ProfileTab: User };
 
@@ -194,5 +195,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  badgeText: { color: "#fff", fontSize: 10, fontWeight: "800" },
+  badgeText: { color: "#fff", fontSize: fontSize.micro, fontWeight: "800" },
 });

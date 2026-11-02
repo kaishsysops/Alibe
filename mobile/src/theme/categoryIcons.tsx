@@ -1,4 +1,4 @@
-import { Smartphone, Car, Sofa, Shirt, Home, Briefcase, Wrench, Leaf, ShoppingBag, LucideIcon } from "lucide-react-native";
+import { Smartphone, Car, Sofa, Shirt, Home, Briefcase, Wrench, Leaf, ShoppingBag, HeartPulse, Trophy, Baby, BookOpen, Package, LucideIcon } from "lucide-react-native";
 
 export const categoryIcons: Record<string, { Icon: LucideIcon; color: string }> = {
   electronics: { Icon: Smartphone, color: "#2E86DE" },
@@ -9,6 +9,11 @@ export const categoryIcons: Record<string, { Icon: LucideIcon; color: string }> 
   jobs: { Icon: Briefcase, color: "#5B4FE9" },
   services: { Icon: Wrench, color: "#B8860B" },
   "home-garden": { Icon: Leaf, color: "#27AE60" },
+  "health-beauty": { Icon: HeartPulse, color: "#E8590C" },
+  "sports-hobbies": { Icon: Trophy, color: "#0B7285" },
+  "baby-kids": { Icon: Baby, color: "#F06595" },
+  "books-office": { Icon: BookOpen, color: "#6741D9" },
+  other: { Icon: Package, color: "#6B7280" },
 };
 
 export const AllCategoriesIcon = ShoppingBag;

@@ -99,6 +99,12 @@ export const lineHeight = {
   relaxed: 1.6,
 };
 
+// One size per kind of control, so buttons and fields line up across screens.
+export const controlHeight = { primary: 56, secondary: 50, input: 52 };
+
+// Page widths on desktop web: single-column forms, and lists or detail pages.
+export const contentWidth = { form: 560, list: 720 };
+
 // Shared soft-elevation shadow for cards/floating elements — used instead of
 // hard borders per the card-based, shadow-over-border style direction.
 export const cardShadow = {

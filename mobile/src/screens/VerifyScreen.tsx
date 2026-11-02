@@ -10,7 +10,7 @@ import { VerifiedBadge } from "../components/Badges";
 import { Skeleton, SkeletonGroup } from "../components/Skeleton";
 import Tap from "../components/Tap";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
-import { spacing, radius, fontSize, fontWeight, cardShadow } from "../theme/theme";
+import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, contentWidth } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
 
 const STEPS = [
@@ -109,7 +109,7 @@ export default function VerifyScreen() {
 
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
-  scroll: { padding: spacing.md, paddingBottom: spacing.xl, width: "100%", maxWidth: 600, alignSelf: "center" },
+  scroll: { padding: spacing.md, paddingBottom: spacing.xl, width: "100%", maxWidth: contentWidth.form, alignSelf: "center" },
   hero: { alignItems: "center", backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.lg, ...cardShadow },
   heroIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: `${colors.verified}1F`, alignItems: "center", justifyContent: "center", marginBottom: spacing.sm },
   heroTitle: { fontSize: fontSize.xl, fontWeight: fontWeight.extrabold, color: colors.text, textAlign: "center" },
@@ -127,6 +127,6 @@ const useStyles = makeStyles((colors) => ({
   stepTitle: { fontSize: fontSize.base, fontWeight: fontWeight.bold, color: colors.text },
   stepText: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2, lineHeight: fontSize.sm * 1.45 },
   footnote: { fontSize: fontSize.caption, color: colors.textMuted, marginTop: spacing.sm, textAlign: "center" },
-  button: { height: 52, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", marginTop: spacing.lg },
-  buttonText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.md },
+  button: { height: controlHeight.primary, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", marginTop: spacing.lg },
+  buttonText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.lg },
 }));

@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
 import { safeRouter, sendValidationError } from "../http.js";
 import { publicUser } from "../serializers.js";
+import { notifyUser } from "../push.js";
 
 // Reviews, reports and blocks: the trust & safety endpoints.
 export const reviewsRouter = safeRouter();
@@ -76,6 +77,19 @@ const reportSchema = z
   })
   .refine((r) => !!r.listingId !== !!r.reportedUserId, { message: "target" });
 
+// Enough different people flagging a listing takes it down until staff look, so
+// a scam doesn't stay up overnight. Staff can put it back from the report queue.
+const REPORTS_TO_HIDE = 3;
+
+async function hideIfReportedEnough(listingId: string) {
+  const open = await prisma.report.count({ where: { listingId, resolvedAt: null } });
+  if (open < REPORTS_TO_HIDE) return;
+  const hidden = await prisma.listing.updateMany({ where: { id: listingId, hiddenAt: null }, data: { hiddenAt: new Date() } });
+  if (!hidden.count) return;
+  const listing = await prisma.listing.findUnique({ where: { id: listingId }, select: { title: true, sellerId: true } });
+  if (listing) notifyUser(listing.sellerId, "Your listing is being checked", `"${listing.title}" was reported and is hidden while we take a look.`, { type: "listing_hidden" });
+}
+
 reportsRouter.post("/", async (req, res) => {
   const parsed = reportSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Please choose a reason for the report." });
@@ -85,7 +99,8 @@ reportsRouter.post("/", async (req, res) => {
   const where = listingId ? { reporterId_listingId: { reporterId, listingId } } : { reporterId_reportedUserId: { reporterId, reportedUserId: reportedUserId! } };
   try {
     // Reporting the same thing again updates the earlier report.
-    const report = await prisma.report.upsert({ where: where as any, update: data, create: { reporterId, listingId, reportedUserId, ...data } });
+    const report = await prisma.report.upsert({ where: where as any, update: { ...data, resolvedAt: null }, create: { reporterId, listingId, reportedUserId, ...data } });
+    if (listingId) await hideIfReportedEnough(listingId);
     res.status(201).json(report);
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return res.status(200).json({ ok: true });

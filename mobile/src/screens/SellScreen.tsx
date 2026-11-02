@@ -3,15 +3,16 @@ import { View, Text, TextInput, Image, ScrollView, ActivityIndicator, KeyboardAv
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import { ImagePlus, ChevronLeft, Check, TrendingUp, Star, X, Plus } from "lucide-react-native";
+import { ImagePlus, ChevronLeft, Check, TrendingUp, Star, X, Plus, Phone } from "lucide-react-native";
 import { api, Category, Atoll, Island, newClientId, errorMessage, Listing, DeliveryOption, uploadMedia, mediaUrl } from "../api/client";
 import { useAuth, DRAFT_PREFIX } from "../api/AuthContext";
 import { useToast } from "../components/Toast";
 import WebNavBar from "../components/WebNavBar";
 import Tap from "../components/Tap";
+import EmptyState from "../components/EmptyState";
 import { Skeleton, SkeletonGroup } from "../components/Skeleton";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
-import { spacing, radius, cardShadow, tabBarClearance, fontSize, fontWeight } from "../theme/theme";
+import { spacing, radius, cardShadow, tabBarClearance, fontSize, fontWeight, controlHeight, contentWidth } from "../theme/theme";
 import { categoryIcons } from "../theme/categoryIcons";
 import { useResponsive } from "../hooks/useResponsive";
 import { usePersistentState } from "../hooks/usePersistentState";
@@ -30,7 +31,7 @@ const DELIVERY: Array<{ value: DeliveryOption; label: string; hint: string }> = 
   { value: "FERRY", label: "Ferry cargo", hint: "Send to another island" },
   { value: "COURIER", label: "Courier", hint: "Local delivery on your island" },
 ];
-const MAX_FORM_WIDTH = 600;
+const MAX_FORM_WIDTH = contentWidth.form;
 const STEPS = ["Photos", "Details", "Category", "Location"];
 
 type Draft = {
@@ -63,7 +64,29 @@ const emptyDraft = (): Draft => ({
   requestId: newClientId(),
 });
 
+// Sellers need a verified number: it's what makes a ban for scamming stick.
 export default function SellScreen() {
+  const { user } = useAuth();
+  const navigation = useNavigation<any>();
+  const { isDesktopWeb } = useResponsive();
+  if (user && !user.phone) {
+    return (
+      <View style={{ flex: 1 }}>
+        {isDesktopWeb && <WebNavBar />}
+        <EmptyState
+          icon={Phone}
+          title="Add your phone number to sell"
+          message="Buyers feel safer when every seller has a confirmed number. It only takes a minute, and you can hide it from your listings."
+          actionLabel="Add my number"
+          onAction={() => navigation.navigate("ChangePhone")}
+        />
+      </View>
+    );
+  }
+  return <SellForm />;
+}
+
+function SellForm() {
   const styles = useStyles();
   const { colors } = useTheme();
   const { user } = useAuth();
@@ -517,7 +540,7 @@ const useStyles = makeStyles((colors) => ({
     borderColor: colors.border,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
-    height: 50,
+    height: controlHeight.input,
     fontSize: fontSize.md,
     color: colors.text,
     outlineStyle: "none" as any,
@@ -552,6 +575,6 @@ const useStyles = makeStyles((colors) => ({
   reviewLabel: { fontSize: fontSize.sm, color: colors.textMuted },
   reviewValue: { fontSize: fontSize.sm, color: colors.text, fontWeight: fontWeight.semibold },
   footerWrap: { paddingTop: spacing.sm + 4, backgroundColor: colors.background },
-  nextButton: { backgroundColor: colors.primary, borderRadius: radius.pill, height: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.xs },
-  nextButtonText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.md },
+  nextButton: { backgroundColor: colors.primary, borderRadius: radius.pill, height: controlHeight.primary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.xs },
+  nextButtonText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.lg },
 }));

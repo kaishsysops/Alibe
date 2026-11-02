@@ -1,9 +1,10 @@
 import React, { useCallback, useState } from "react";
 import { View, Text, FlatList, RefreshControl } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { BellOff, MessageCircle, Tag, BellRing, ChevronRight, Package } from "lucide-react-native";
+import { BellOff, MessageCircle, Tag, BellRing, ChevronRight, Package, TrendingDown, Wallet } from "lucide-react-native";
 import { api, NotificationItem } from "../api/client";
 import { useNotifications } from "../api/NotificationsContext";
+import { useAuth } from "../api/AuthContext";
 import ScreenHeader from "../components/ScreenHeader";
 import WebNavBar from "../components/WebNavBar";
 import EmptyState from "../components/EmptyState";
@@ -12,7 +13,7 @@ import { CountBadge } from "../components/Badges";
 import { RowSkeleton } from "../components/Skeleton";
 import Tap from "../components/Tap";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
-import { spacing, radius, fontSize, fontWeight, cardShadow } from "../theme/theme";
+import { spacing, radius, fontSize, fontWeight, cardShadow, contentWidth } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
 import { timeAgo } from "../utils/time";
 
@@ -22,6 +23,7 @@ export default function NotificationsScreen() {
   const navigation = useNavigation<any>();
   const { isDesktopWeb, gutter } = useResponsive();
   const { data, refresh } = useNotifications();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(!data.items.length);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -32,7 +34,13 @@ export default function NotificationsScreen() {
   );
 
   const open = async (item: NotificationItem) => {
-    if (item.type === "order") {
+    if (item.type === "purchase") {
+      navigation.navigate("Purchases");
+    } else if (item.type === "price_drop") {
+      if (user) await api.markPriceDropSeen(user.id, item.listingId).catch(() => {});
+      refresh();
+      navigation.navigate("ProductDetail", { id: item.listingId });
+    } else if (item.type === "order") {
       navigation.navigate("OrderDetail", { id: item.orderId });
     } else if (item.type === "saved_search") {
       await api.markSearchSeen(item.savedSearchId).catch(() => {});
@@ -47,7 +55,11 @@ export default function NotificationsScreen() {
 
   const renderItem = ({ item }: { item: NotificationItem }) => {
     const meta =
-      item.type === "message"
+      item.type === "purchase"
+        ? { Icon: Wallet, title: `Pay MVR ${item.amount.toLocaleString()}`, body: "Transfer the money and upload your slip.", sub: item.label }
+        : item.type === "price_drop"
+        ? { Icon: TrendingDown, title: `Price drop: MVR ${item.price.toLocaleString()}`, body: `Was MVR ${item.previousPrice.toLocaleString()}. You saved this item.`, sub: item.listingTitle }
+        : item.type === "message"
         ? { Icon: MessageCircle, title: item.count > 1 ? `${item.count} new messages from ${item.fromName}` : `New message from ${item.fromName}`, body: item.preview, sub: item.listingTitle }
         : item.type === "offer"
         ? { Icon: Tag, title: `${item.fromName} offered MVR ${item.amount.toLocaleString()}`, body: "Tap to accept, counter or decline.", sub: item.listingTitle }
@@ -56,7 +68,7 @@ export default function NotificationsScreen() {
           ? { Icon: Package, title: `Send ${item.listingTitle} to ${item.fromName}`, body: "You're responsible for delivery. Open the order to send it.", sub: item.listingTitle }
           : { Icon: Package, title: `${item.listingTitle} is on its way`, body: "Confirm once you have it so the seller's delivery is verified.", sub: item.fromName }
         : { Icon: BellRing, title: `${item.newCount} new match${item.newCount === 1 ? "" : "es"} for "${item.label}"`, body: "From your saved search.", sub: null };
-    const image = item.type === "saved_search" ? null : item.image;
+    const image = item.type === "saved_search" || item.type === "purchase" ? null : item.image;
     return (
       <Tap style={styles.row} onPress={() => open(item)} scaleTo={0.98}>
         <View>
@@ -145,7 +157,7 @@ export default function NotificationsScreen() {
 
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
-  desktopColumn: { maxWidth: 720, width: "100%", alignSelf: "center", flex: 1, paddingTop: spacing.lg, paddingHorizontal: spacing.lg },
+  desktopColumn: { maxWidth: contentWidth.list, width: "100%", alignSelf: "center", flex: 1, paddingTop: spacing.lg, paddingHorizontal: spacing.lg },
   header: { fontSize: fontSize.xxl, fontWeight: fontWeight.extrabold, color: colors.text, marginBottom: spacing.md },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 4, padding: spacing.sm + 4, borderRadius: radius.lg, backgroundColor: colors.card, ...cardShadow },
   thumb: { width: 52, height: 52, borderRadius: radius.md, backgroundColor: colors.skeleton },

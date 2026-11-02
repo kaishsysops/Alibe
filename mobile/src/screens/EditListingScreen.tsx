@@ -14,7 +14,7 @@ import { Skeleton, SkeletonGroup } from "../components/Skeleton";
 import { useToast } from "../components/Toast";
 import Tap from "../components/Tap";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
-import { spacing, radius, fontSize, fontWeight, cardShadow } from "../theme/theme";
+import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, contentWidth } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import { usePersistentState } from "../hooks/usePersistentState";
@@ -170,7 +170,7 @@ export default function EditListingScreen() {
       <View style={styles.container}>
         {header}
         <SkeletonGroup>
-          <View style={{ padding: spacing.md, gap: spacing.md, maxWidth: 640, width: "100%", alignSelf: "center" }}>
+          <View style={{ padding: spacing.md, gap: spacing.md, maxWidth: contentWidth.form, width: "100%", alignSelf: "center" }}>
             {[110, 200, 140, 120].map((h, i) => (
               <Skeleton key={i} height={h} rounded={radius.lg} />
             ))}
@@ -270,12 +270,12 @@ export default function EditListingScreen() {
 
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
-  scroll: { padding: spacing.md, paddingBottom: spacing.xl, gap: spacing.md, width: "100%", maxWidth: 640, alignSelf: "center" },
+  scroll: { padding: spacing.md, paddingBottom: spacing.xl, gap: spacing.md, width: "100%", maxWidth: contentWidth.form, alignSelf: "center" },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.md, ...cardShadow },
   sectionTitle: { fontSize: fontSize.base, fontWeight: fontWeight.bold, color: colors.text },
   helper: { fontSize: fontSize.caption, color: colors.textMuted, marginTop: 2, marginBottom: spacing.sm },
   label: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text, marginBottom: 6, marginTop: spacing.sm },
-  input: { height: 48, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, fontSize: fontSize.md, color: colors.text, backgroundColor: colors.background, outlineStyle: "none" as any },
+  input: { height: controlHeight.input, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, fontSize: fontSize.md, color: colors.text, backgroundColor: colors.background, outlineStyle: "none" as any },
   textArea: { height: 120, paddingTop: spacing.sm + 2, textAlignVertical: "top" },
   photoGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   photo: { width: 92, height: 92, borderRadius: radius.md, overflow: "hidden", backgroundColor: colors.skeleton },
@@ -289,9 +289,9 @@ const useStyles = makeStyles((colors) => ({
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.semibold },
   chipTextActive: { color: "#fff" },
-  deleteButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.xs + 2, height: 48 },
+  deleteButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.xs + 2, height: controlHeight.secondary },
   deleteText: { color: colors.danger, fontWeight: fontWeight.semibold, fontSize: fontSize.sm },
   footer: { paddingHorizontal: spacing.md, paddingTop: spacing.sm + 2, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
-  saveButton: { flexDirection: "row", gap: spacing.xs, backgroundColor: colors.primary, borderRadius: radius.pill, height: 52, alignItems: "center", justifyContent: "center", width: "100%", maxWidth: 640, alignSelf: "center" },
-  saveText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.md },
+  saveButton: { flexDirection: "row", gap: spacing.xs, backgroundColor: colors.primary, borderRadius: radius.pill, height: controlHeight.primary, alignItems: "center", justifyContent: "center", width: "100%", maxWidth: contentWidth.form, alignSelf: "center" },
+  saveText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.lg },
 }));

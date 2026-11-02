@@ -24,7 +24,16 @@ import ChatThreadScreen from "../screens/ChatThreadScreen";
 import SellerProfileScreen from "../screens/SellerProfileScreen";
 import FavoritesScreen from "../screens/FavoritesScreen";
 import EditProfileScreen from "../screens/EditProfileScreen";
-import ChangePhoneScreen from "../screens/ChangePhoneScreen";
+import { ChangeEmailScreen, ChangePhoneScreen } from "../screens/ChangeContactScreen";
+import AdminReportsScreen from "../screens/AdminReportsScreen";
+import AdminIbayScreen from "../screens/AdminIbayScreen";
+import IbayBrowseScreen from "../screens/IbayBrowseScreen";
+import IbayItemScreen from "../screens/IbayItemScreen";
+import PurchasesScreen from "../screens/PurchasesScreen";
+import BuyAdScreen from "../screens/BuyAdScreen";
+import BoostScreen from "../screens/BoostScreen";
+import BuyForYouScreen from "../screens/BuyForYouScreen";
+import AdminMoneyScreen from "../screens/AdminMoneyScreen";
 import EditListingScreen from "../screens/EditListingScreen";
 import NotificationsScreen from "../screens/NotificationsScreen";
 import SavedSearchesScreen from "../screens/SavedSearchesScreen";
@@ -52,6 +61,15 @@ const linking = {
       Notifications: "notifications",
       SavedSearches: "saved-searches",
       EditProfile: "settings",
+      IbayBrowse: "ibay",
+      IbayItem: "ibay/:id",
+      AdminReports: "admin/reports",
+      AdminIbay: "admin/ibay",
+      AdminMoney: "admin/money",
+      Purchases: "purchases",
+      BuyAd: "advertise",
+      Boost: "boost/:id",
+      BuyForYou: "buy-for-you/:id",
     },
   },
 };
@@ -120,10 +138,10 @@ export default function RootNavigator() {
       {/* Same slide-in on both platforms (Android's default is a plain fade). */}
       <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background }, animation: "slide_from_right" }}>
         {!user ? (
-          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+          <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ animation: "fade" }} />
         ) : (
           <>
-            <Stack.Screen name="Tabs" component={Tabs} />
+            <Stack.Screen name="Tabs" component={Tabs} options={{ animation: "fade" }} />
             <Stack.Screen name="ProductDetail" component={ProductDetailScreen} />
             <Stack.Screen name="ChatThread" component={ChatThreadScreen} />
             <Stack.Screen name="MyListings" component={MyListingsScreen} />
@@ -131,6 +149,16 @@ export default function RootNavigator() {
             <Stack.Screen name="Favorites" component={FavoritesScreen} />
             <Stack.Screen name="EditProfile" component={EditProfileScreen} />
             <Stack.Screen name="ChangePhone" component={ChangePhoneScreen} />
+            <Stack.Screen name="ChangeEmail" component={ChangeEmailScreen} />
+            <Stack.Screen name="AdminReports" component={AdminReportsScreen} />
+            <Stack.Screen name="AdminIbay" component={AdminIbayScreen} />
+            <Stack.Screen name="IbayBrowse" component={IbayBrowseScreen} />
+            <Stack.Screen name="IbayItem" component={IbayItemScreen} />
+            <Stack.Screen name="Purchases" component={PurchasesScreen} />
+            <Stack.Screen name="BuyAd" component={BuyAdScreen} />
+            <Stack.Screen name="Boost" component={BoostScreen} />
+            <Stack.Screen name="BuyForYou" component={BuyForYouScreen} />
+            <Stack.Screen name="AdminMoney" component={AdminMoneyScreen} />
             <Stack.Screen name="EditListing" component={EditListingScreen} />
             <Stack.Screen name="Notifications" component={NotificationsScreen} />
             <Stack.Screen name="SavedSearches" component={SavedSearchesScreen} />

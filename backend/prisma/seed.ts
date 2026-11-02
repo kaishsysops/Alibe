@@ -12,6 +12,11 @@ const CATEGORIES = [
   { name: "Jobs", slug: "jobs", icon: "briefcase" },
   { name: "Services", slug: "services", icon: "wrench" },
   { name: "Home & Garden", slug: "home-garden", icon: "flower" },
+  { name: "Health & Beauty", slug: "health-beauty", icon: "heart-pulse" },
+  { name: "Sports & Hobbies", slug: "sports-hobbies", icon: "trophy" },
+  { name: "Baby & Kids", slug: "baby-kids", icon: "baby" },
+  { name: "Books & Office", slug: "books-office", icon: "book-open" },
+  { name: "Other", slug: "other", icon: "package" },
 ];
 
 const ATOLLS: Record<string, string[]> = {

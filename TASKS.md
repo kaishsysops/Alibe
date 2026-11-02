@@ -1,29 +1,14 @@
 # Alibe – open tasks
 
-Status as of 2026-10-02. Items are grouped by what's left to do; the scam-prevention list at the bottom is a menu to choose from in the next build.
+Status as of 2026-11-02. Cut down to what matters before launch; everything else is under "Parked".
 
-## Unfinished from this build
+## Done since 2026-10-02
+Order detail screen, order banner in chat, "Sell to this buyer", order notifications open the order, saved searches, recently viewed, bell on Home, seller reviews, profile rows, dark mode toggle, Report/Block in chat, session auth. Expo SDK 58 upgrade + animated tab bar, merged to main.
 
-### Orders and delivery verification
-- [ ] **Order detail screen** (`OrderDetail`). The backend is complete (`/orders/*`); the app only has the Orders list, which opens the order's chat.
-  - Seller: pick delivery method, ferry fields (boat name, departure date/time, cargo ref), courier name, pickup note, "Mark as sent", cancel before sending, enter the buyer's 4-digit code to complete delivery.
-  - Buyer: show handover code with the warning "Only share this when the item is in your hands", "Send code to seller" for ferry/courier, "Create a new code" after a lockout, "Report a problem", "Rate seller" after delivery.
-  - Timeline: ordered → sent → delivered and verified.
-- [ ] **Order banner in chat**: show the live order (status + "Open order") at the top of the chat. `/conversations/:id/thread` already returns `order`.
-- [ ] **"Sell to this buyer" button** in chat for sellers (`POST /orders`, already built).
-- [ ] Point order notifications at `OrderDetail` once it exists (they go to the Orders list for now).
-
-### Features picked but not wired into the app yet (backend done)
-- [ ] **Saved searches**: "Save search" button on the Search screen, plus the delivery filter chip (`delivery=PICKUP|FERRY|COURIER`). Saved Searches screen is built but nothing links to it yet.
-- [ ] **Recently viewed rail** on Home (`utils/recentlyViewed.ts` records views already).
-- [ ] **Bell icon on mobile Home** linking to Notifications (desktop nav bar already has it).
-- [ ] **Seller profile**: rating summary, reviews list (`GET /reviews/seller/:id`), delivery count, verified tick, menu with Report/Block.
-- [ ] **Profile rows**: Orders, Verified seller progress, Saved searches, Notifications, Blocked users, Appearance.
-- [ ] **Dark mode toggle UI**: `useTheme().setMode("system" | "light" | "dark")` exists; add the selector to Edit Profile. The app currently follows the system setting.
-- [ ] **Report/Block in chat header menu** (product page has it).
+Built 2026-11-02: email sign-in, real one-time codes, new onboarding, report queue with auto-hide and bans, verified phone before selling, new-account limits, prohibited items filter, price drop alerts, photo zoom, private iBay catalogue. Scam phrase/link/bank/handover-code warnings and trust levels were already in place.
 
 ### Push notifications
-- [ ] Run `npx eas init` (free Expo account) so the app gets a project id; real lock-screen push then works automatically (token registration + server sending are built).
+- [ ] Push no longer works in Expo Go (SDK 53+): needs a development build. Run `npx eas init` (free Expo account) so the app gets a project id; real lock-screen push then works automatically (token registration + server sending are built).
 - [ ] Test on a physical device. Until then, phones get in-app banners and local notifications only while the app is running.
 
 ### Verification pass not done
@@ -31,59 +16,39 @@ Status as of 2026-10-02. Items are grouped by what's left to do; the scam-preven
 - [ ] Re-run the taste-skill checklist on the new screens (copy has no em-dashes, labels above inputs, contrast in dark mode).
 
 ### Housekeeping
-- [ ] The Expo SDK is 51; the current store version of Expo Go may not open it. Upgrade the SDK before inviting testers.
 - [ ] Production deploy: Dockerfile still runs `prisma db push --accept-data-loss` + `tsx watch`; switch to build + `node dist/index.js` and proper migrations. Add Caddy + HTTPS for a VPS.
 - [ ] Uploaded files live in the `alibe-uploads` Docker volume on one machine. Move to object storage (e.g. Cloudflare R2) before hosting.
-- [ ] Real authentication: the API trusts the user id sent by the app. Add session tokens before any public test.
-- [ ] Real SMS OTP (currently always `1234`).
+- [ ] SMS gateway (Dhiraagu/Ooredoo aggregator) in `backend/src/messaging.ts`. Codes are real now, but in production phone sign-in refuses to send until this exists.
+- [ ] Email sending: set `RESEND_API_KEY` and verify the `MAIL_FROM` domain. Never exercised against the real service yet.
+- [ ] Per-IP limit on `/auth/*/request` (each address is capped, but one IP can still try many addresses). Needs the real proxy setup to read client IPs.
 
-## Scam prevention: options to choose from next build
+## Launch blockers
+- [ ] SMS gateway, email provider, hosting and photo storage (see Housekeeping). Nobody outside the network can use the app without them.
+- [ ] Stop people ending up with a second, empty account when they sign in with an email they haven't linked.
 
-**Delivery and payment**
-1. **Escrow / held payment**: buyer pays into Alibe (BML transfer reference), released to the seller only when the handover code is entered. Strongest protection against "paid but never received".
-2. **Payment only after code**: until escrow exists, the app tells buyers never to pay in full before receiving, and shows this in chat when money is mentioned.
-3. **Ferry proof**: require a photo of the cargo receipt when marking a ferry order as sent; show it to the buyer.
-4. **Delivery deadline**: if an order isn't sent within N days, auto-cancel and flag the seller.
+## Staff accounts
+- [ ] Change the `kaish` password before hosting anywhere public: `docker exec -e ADMIN_PASSWORD='...' alibe-backend npx tsx prisma/set-admin.ts kaish`
 
-**Chat safety**
-5. **Scam phrase detection** in chat: warn on "pay first", "send deposit", gift cards, crypto, links to fake payment pages, requests to move to another app before an order exists.
-6. **Link and phone-number warnings**: flag messages with external links or bank account numbers from accounts younger than N days.
-7. **Never share your handover code early**: banner whenever a buyer's code is typed into chat before the item is sent.
+- Staff sign-in opens by typing the secret number into the phone field. Change it with `docker exec -e STAFF_CODE=<8 digits> alibe-backend npx tsx prisma/set-staff-code.ts`
 
-**Account trust**
-8. **New-account limits**: cap listings/messages per day for accounts under 7 days old; slow down bulk messaging.
-9. **Phone reputation**: one account per phone number (already enforced); block re-registration of banned numbers.
-10. **Trust score on profiles**: verified deliveries, account age, response rate, reviews, reports against them, shown as a simple badge.
-11. **Optional ID check** (NID photo reviewed by staff) as a second, stronger tier above delivery verification.
+## iBay catalogue
+- [ ] Get iBay's agreement or legal advice before hosting the public showcase. Only the robots.txt rules were followed so far. Admin > iBay items has the on/off switch; a new database starts with it off.
+- Category mapping lives in `backend/src/ibayCategories.ts`. iBay's Wanted and Announcements sections are never shown. Location and delivery filters can't apply: iBay's cards don't give them.
+- Home and Search mix iBay items with Alibe's own (`mix=1` on `/listings`), always badged "On iBay". Taking turns for newest; merged by price for price sorts.
+- iBay items show Alibe's price everywhere: seller's price plus 15% (`backend/src/money.ts`, changeable in Payments and prices). The seller's price and the margin only reach staff screens, and the price is labelled as Alibe's.
+- Money: boosts, ads and buy-for-you are paid by bank transfer plus slip, approved in Profile > Payments and prices. Nothing is live until staff approve.
+- [ ] Enter real bank details and prices in the admin screen. Prices are placeholders; payments stay off until the bank details are in.
+- [ ] Before taking real money: business registration, tax and advice on reselling. Add a card/BML gateway later if volume justifies it.
+- [ ] Payment slips sit in the public uploads folder under random names. Move them behind admin-only access before real use.
+- [ ] Item pages are read live from iBay the first time someone opens them (cached 6 hours). Watch this once there's real traffic.
+- [ ] Decide whether phone numbers sellers typed into titles should be stripped.
+- Refresh: `docker exec -d alibe-backend sh -c 'npx tsx prisma/import-ibay.ts > /tmp/ibay.log 2>&1'`
 
-**Listings**
-12. **Price anomaly flags**: warn buyers when a price is far below the category's usual range ("too good to be true").
-13. **Duplicate/stolen photo detection**: hash uploaded images and flag listings reusing photos from other accounts or the web.
-14. **Prohibited items filter** on titles/descriptions (weapons, drugs, counterfeit goods).
+## Next if real users ask for it
+- [ ] Ferry proof: photo of the cargo receipt when marking a ferry order as sent.
+- [ ] Banner telling buyers never to pay in full before receiving.
+- [ ] Dispute flow: both sides add evidence, staff decide.
+- [ ] Duplicate/stolen photo detection.
 
-**Moderation**
-15. **Report review queue**: an admin screen for reports, with auto-hiding of listings that get several reports.
-16. **Auto-suspend** accounts with confirmed delivery problems or many reports; block their phone number.
-17. **Dispute flow**: when a buyer reports a delivery problem, both sides add evidence (photos, chat) and staff decide.
-
-## Next build: interactivity + features (decided 2026-10-18)
-
-Order of work: fix bugs as found (no separate audit), but do the foundation first.
-
-**Foundation**
-- [ ] Upgrade Expo SDK 51 → latest, then add Reanimated, Gesture Handler, expo-haptics. Smoke-test core flow after.
-
-**Feel**: Apple (springy physics, blur, haptics) + Airbnb (photo-led, shared transitions) + Vinted/Depop (swipe galleries, quick offers). Web matters equally: every gesture needs a mouse/hover/keyboard equivalent.
-- [ ] Gestures: swipe chat rows, swipeable/pinch-zoom photos, draggable sheets, long-press quick-peek
-- [ ] Delight: heart particle burst, delivery confetti, count-up numbers, price-drop tag animation
-- [ ] Transitions: card → detail shared photo, morphing tab icons, collapsing headers, photo parallax
-- [ ] Rich components: blur headers, shimmer skeletons, verified-progress ring, stories row
-
-**New features**
-- [ ] Price drop alerts (+ "was MVR X" strikethrough)
-- [ ] Stories row on Home, built automatically (New today, Price drops, Under MVR 500, On your island, Top sellers) with full-screen swipe viewer
-- [ ] Bundles: buyer combines any items from one seller into one offer/order; seller can set an optional multi-item discount
-- [ ] Alibe Pay (TEST MODE ONLY): buyer pays Alibe, seller paid out within 24h after handover code, minus seller-paid fee. Fee tiers: <MVR 1,000 = 5%, 1,000-10,000 = 3%, >10,000 = 2%, max MVR 500. "Pay (test)" button instead of real bank; admin screen to mark payouts sent. Before real money: check MMA licensing / a licensed gateway (decided 2026-10-19).
-- [ ] Seller dashboard (views/saves/messages, tips)
-- [ ] Make an offer from card (long-press → offer slider)
-- [ ] Atoll map: custom drawn SVG map, count bubble per atoll, tap to browse (no map tiles/API key)
+## Parked (decided 2026-11-02: not needed before there are real users)
+Alibe Pay and escrow (licensing, holding other people's money), Stories, atoll map, bundles, seller dashboard, offer from card, confetti and other delight effects, morphing icons, parallax, collapsing headers, optional ID check, price anomaly flags, delivery deadlines, simulator tap control.

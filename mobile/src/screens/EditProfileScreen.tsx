@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, ScrollView, ActivityIndicator, Switch, KeyboardAvoidingView, Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Check, ChevronRight, Phone, Sun, Moon, SunMoon } from "lucide-react-native";
+import { Check, ChevronRight, Mail, Phone, Sun, Moon, SunMoon } from "lucide-react-native";
 import { api, Atoll, FullUser, PaymentMethod, errorMessage } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import { useToast } from "../components/Toast";
@@ -13,7 +13,7 @@ import { Skeleton, SkeletonGroup } from "../components/Skeleton";
 import { WhatsAppIcon, ViberIcon } from "../components/BrandIcons";
 import { AccentPicker } from "./OnboardingScreen";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
-import { spacing, radius, cardShadow, fontSize, fontWeight } from "../theme/theme";
+import { spacing, radius, cardShadow, fontSize, fontWeight, controlHeight, contentWidth } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import { formatPhone } from "../utils/phone";
@@ -58,7 +58,6 @@ export default function EditProfileScreen() {
   const [form, setForm] = useState({
     name: "",
     username: "",
-    email: "",
     bio: "",
     avatarColor: AVATAR_COLORS[0],
     islandId: undefined as string | undefined,
@@ -81,7 +80,6 @@ export default function EditProfileScreen() {
         setForm({
           name: p.name,
           username: p.username ?? "",
-          email: p.email ?? "",
           bio: p.bio ?? "",
           avatarColor: p.avatarColor ?? AVATAR_COLORS[0],
           islandId: p.islandId ?? undefined,
@@ -118,7 +116,6 @@ export default function EditProfileScreen() {
       const updated = await api.updateProfile(user.id, {
         name: form.name.trim(),
         username: form.username.trim() || null,
-        email: form.email.trim() || null,
         bio: form.bio.trim() || null,
         avatarColor: form.avatarColor,
         islandId: form.islandId ?? null,
@@ -145,7 +142,7 @@ export default function EditProfileScreen() {
       <View style={styles.container}>
         {header}
         <SkeletonGroup>
-          <View style={{ padding: spacing.md, gap: spacing.md, maxWidth: 600, width: "100%", alignSelf: "center" }}>
+          <View style={{ padding: spacing.md, gap: spacing.md, maxWidth: contentWidth.form, width: "100%", alignSelf: "center" }}>
             {[120, 180, 220, 90].map((h, i) => (
               <Skeleton key={i} height={h} rounded={radius.lg} />
             ))}
@@ -173,13 +170,13 @@ export default function EditProfileScreen() {
         <Switch value={enabled} onValueChange={onToggle} trackColor={{ true: colors.primary, false: colors.border }} thumbColor="#fff" accessibilityLabel={`Enable ${name}`} />
       </View>
       {enabled && (
-        <Field label={`${name} number`} helper={`Leave empty to use your account number, ${formatPhone(profile.phone)}.`}>
+        <Field label={`${name} number`} helper={profile.phone ? `Leave empty to use your account number, ${formatPhone(profile.phone)}.` : `The number buyers should use on ${name}.`}>
           <TextInput
             style={styles.input}
             value={number}
             onChangeText={onNumber}
             keyboardType="phone-pad"
-            placeholder={formatPhone(profile.phone)}
+            placeholder={formatPhone(profile.phone) || "777 1234"}
             placeholderTextColor={colors.textMuted}
             accessibilityLabel={`${name} number`}
           />
@@ -224,20 +221,36 @@ export default function EditProfileScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.switchLabel}>Phone number</Text>
-                <Text style={styles.switchHint}>{formatPhone(user?.phone)}</Text>
+                <Text style={styles.switchHint}>{formatPhone(user?.phone) || "Not added yet. Buyers can only chat with you."}</Text>
               </View>
-              <Text style={styles.linkText}>Change</Text>
+              <Text style={styles.linkText}>{user?.phone ? "Change" : "Add"}</Text>
               <ChevronRight size={16} color={colors.primary} />
             </Tap>
             <View style={styles.divider} />
-            <View style={[styles.switchRow, { padding: spacing.md }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.switchLabel}>Show my number on listings</Text>
-                <Text style={styles.switchHint}>Lets buyers call you directly.</Text>
+            <Tap style={styles.linkRow} onPress={() => navigation.navigate("ChangeEmail")} scaleTo={0.98}>
+              <View style={styles.channelIcon}>
+                <Mail size={18} color={colors.primary} />
               </View>
-              <Switch value={form.showPhone} onValueChange={(v) => set({ showPhone: v })} trackColor={{ true: colors.primary, false: colors.border }} thumbColor="#fff" />
-            </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.switchLabel}>Email</Text>
+                <Text style={styles.switchHint}>{user?.email || "Add one to sign in with your email too."}</Text>
+              </View>
+              <Text style={styles.linkText}>{user?.email ? "Change" : "Add"}</Text>
+              <ChevronRight size={16} color={colors.primary} />
+            </Tap>
             <View style={styles.divider} />
+            {!!user?.phone && (
+              <>
+                <View style={[styles.switchRow, { padding: spacing.md }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.switchLabel}>Show my number on listings</Text>
+                    <Text style={styles.switchHint}>Lets buyers call you directly.</Text>
+                  </View>
+                  <Switch value={form.showPhone} onValueChange={(v) => set({ showPhone: v })} trackColor={{ true: colors.primary, false: colors.border }} thumbColor="#fff" />
+                </View>
+                <View style={styles.divider} />
+              </>
+            )}
             {contactRow(form.whatsappEnabled, (v) => set({ whatsappEnabled: v }), form.whatsappNumber, (v) => set({ whatsappNumber: v }), "WhatsApp", <WhatsAppIcon size={20} />)}
             <View style={styles.divider} />
             {contactRow(form.viberEnabled, (v) => set({ viberEnabled: v }), form.viberNumber, (v) => set({ viberNumber: v }), "Viber", <ViberIcon size={20} />)}
@@ -272,9 +285,6 @@ export default function EditProfileScreen() {
             </Field>
             <Field label="Bio" helper={`${form.bio.length}/160`}>
               <TextInput style={[styles.input, styles.textArea]} value={form.bio} onChangeText={(t) => set({ bio: t })} placeholder="What do you usually sell?" placeholderTextColor={colors.textMuted} multiline maxLength={160} />
-            </Field>
-            <Field label="Email">
-              <TextInput style={styles.input} value={form.email} onChangeText={(t) => set({ email: t })} placeholder="you@example.com" placeholderTextColor={colors.textMuted} autoCapitalize="none" keyboardType="email-address" />
             </Field>
           </Section>
 
@@ -318,7 +328,7 @@ export default function EditProfileScreen() {
 
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
-  scroll: { padding: spacing.md, paddingTop: 0, paddingBottom: spacing.xl, width: "100%", maxWidth: 600, alignSelf: "center" },
+  scroll: { padding: spacing.md, paddingTop: 0, paddingBottom: spacing.xl, width: "100%", maxWidth: contentWidth.form, alignSelf: "center" },
   modeRow: { flexDirection: "row", gap: spacing.sm, padding: spacing.md },
   modeOption: { flex: 1, alignItems: "center", gap: 6, paddingVertical: spacing.md, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border },
   modeOptionActive: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
@@ -328,7 +338,7 @@ const useStyles = makeStyles((colors) => ({
   field: { paddingHorizontal: spacing.md, paddingTop: spacing.md },
   label: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text, marginBottom: 6 },
   helper: { fontSize: fontSize.caption, color: colors.textMuted, marginTop: 6 },
-  input: { height: 48, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, fontSize: fontSize.md, color: colors.text, backgroundColor: colors.background, outlineStyle: "none" as any },
+  input: { height: controlHeight.input, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, fontSize: fontSize.md, color: colors.text, backgroundColor: colors.background, outlineStyle: "none" as any },
   textArea: { height: 88, paddingTop: spacing.sm + 2, textAlignVertical: "top" },
   avatarRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.md, paddingTop: spacing.md },
   avatarPreview: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center" },
@@ -348,6 +358,6 @@ const useStyles = makeStyles((colors) => ({
   chipText: { color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.semibold },
   chipTextActive: { color: "#fff" },
   footer: { paddingHorizontal: spacing.md, paddingTop: spacing.sm + 2, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
-  saveButton: { backgroundColor: colors.primary, borderRadius: radius.pill, height: 52, alignItems: "center", justifyContent: "center", width: "100%", maxWidth: 600, alignSelf: "center" },
-  saveText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.md },
+  saveButton: { backgroundColor: colors.primary, borderRadius: radius.pill, height: controlHeight.primary, alignItems: "center", justifyContent: "center", width: "100%", maxWidth: contentWidth.form, alignSelf: "center" },
+  saveText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.lg },
 }));

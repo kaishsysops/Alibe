@@ -4,7 +4,7 @@ import { Flag, Ban, ShieldAlert, PackageX, Tags, MessageCircleWarning, HelpCircl
 import { api, errorMessage, PublicSeller, ReportReason } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
-import { spacing, radius, fontSize, fontWeight } from "../theme/theme";
+import { spacing, radius, fontSize, fontWeight, controlHeight } from "../theme/theme";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import { useAppAlert } from "./AppAlertProvider";
 import { useActionSheet, Sheet } from "./Sheet";
@@ -185,8 +185,8 @@ const useStyles = makeStyles((colors) => ({
   quick: { flex: 1, height: 40, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   quickActive: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
   quickText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.text },
-  primary: { height: 52, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", marginTop: spacing.md },
-  primaryText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.md },
+  primary: { height: controlHeight.primary, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", marginTop: spacing.md },
+  primaryText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.lg },
   starRow: { flexDirection: "row", justifyContent: "center", gap: spacing.sm, paddingVertical: spacing.sm },
   textArea: { minHeight: 96, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, padding: spacing.sm + 4, fontSize: fontSize.base, color: colors.text, textAlignVertical: "top", outlineStyle: "none" as any },
 }));

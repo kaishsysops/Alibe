@@ -5,7 +5,7 @@ an Expo (React Native) app, all containerized and running in OrbStack.
 
 ## What's implemented
 
-- Phone/OTP login (mocked — any phone number, code is always `1234`)
+- Sign in with a phone number or email and a one-time code (email sends through Resend when `RESEND_API_KEY` is set; SMS has no gateway yet; in development the code appears on screen)
 - Home feed with category filter chips
 - Search with text + atoll filter
 - Product detail page
@@ -44,7 +44,7 @@ Open http://localhost:8081 directly — the mobile container serves the web
 build there once Metro logs `Web is waiting on http://localhost:8081`. Open
 Chrome DevTools (⌘⌥I) → toggle device toolbar (⌘⇧M) → pick "iPhone 14 Pro" or
 similar to view it at a true mobile viewport. Log in with any phone number
-and code `1234`.
+or email; in development the code appears on the screen.
 
 **On your actual phone (real mobile view, recommended):**
 1. Install the **Expo Go** app from the App Store / Play Store.

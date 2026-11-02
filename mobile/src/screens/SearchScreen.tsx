@@ -16,7 +16,7 @@ import EmptyState from "../components/EmptyState";
 import Tap from "../components/Tap";
 import { useToast } from "../components/Toast";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
-import { spacing, radius, conditionColors, cardShadow, fontSize, fontWeight } from "../theme/theme";
+import { spacing, radius, conditionColors, cardShadow, fontSize, fontWeight, controlHeight } from "../theme/theme";
 import { categoryIcons, AllCategoriesIcon } from "../theme/categoryIcons";
 import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
 
@@ -116,6 +116,7 @@ export default function SearchScreen() {
     const id = ++requestId.current;
     try {
       const list = await api.listings({
+        mix: "1",
         q: query.trim() || undefined,
         atollId,
         categorySlug,
@@ -536,7 +537,7 @@ const useStyles = makeStyles((colors) => ({
   priceDash: { color: colors.textMuted, fontSize: fontSize.sm },
   resetButton: { alignSelf: "flex-start", paddingVertical: spacing.xs },
   resetText: { color: colors.primary, fontWeight: fontWeight.bold, fontSize: fontSize.sm },
-  doneButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: colors.primary, borderRadius: radius.pill, height: 54, marginTop: spacing.sm },
+  doneButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: colors.primary, borderRadius: radius.pill, height: controlHeight.primary, marginTop: spacing.sm },
   doneText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.md },
   chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.md, height: 38, justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   chipActive: { backgroundColor: colors.text, borderColor: colors.text },

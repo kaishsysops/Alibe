@@ -23,12 +23,12 @@ function useOpen() {
 
 // Full contact card for a listing / seller: the phone number plus one-tap
 // Call, WhatsApp and Viber buttons (each only if the seller enabled it).
-export function ContactCard({ contact, listingTitle }: { contact: Contact; listingTitle?: string }) {
+export function ContactCard({ contact, listingTitle, greeting: customGreeting }: { contact: Contact; listingTitle?: string; greeting?: string }) {
   const styles = useStyles();
   const { colors } = useTheme();
   const open = useOpen();
   if (!hasContactOptions(contact)) return null;
-  const greeting = listingTitle ? `Hi! I'm interested in "${listingTitle}" on Alibe. Is it still available?` : "Hi! I found you on Alibe.";
+  const greeting = customGreeting ?? (listingTitle ? `Hi! I'm interested in "${listingTitle}" on Alibe. Is it still available?` : "Hi! I found you on Alibe.");
 
   return (
     <View style={styles.card}>

@@ -11,7 +11,7 @@ import { RowSkeleton } from "../components/Skeleton";
 import { useToast } from "../components/Toast";
 import Tap from "../components/Tap";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
-import { spacing, radius, fontSize, fontWeight, cardShadow } from "../theme/theme";
+import { spacing, radius, fontSize, fontWeight, cardShadow, contentWidth } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
 
 export default function BlockedUsersScreen() {
@@ -85,7 +85,7 @@ export default function BlockedUsersScreen() {
 
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
-  desktopColumn: { maxWidth: 640, width: "100%", alignSelf: "center", flex: 1, paddingTop: spacing.lg, paddingHorizontal: spacing.lg },
+  desktopColumn: { maxWidth: contentWidth.list, width: "100%", alignSelf: "center", flex: 1, paddingTop: spacing.lg, paddingHorizontal: spacing.lg },
   header: { fontSize: fontSize.xxl, fontWeight: fontWeight.extrabold, color: colors.text, marginBottom: spacing.md },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 4, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.card, ...cardShadow },
   avatar: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },

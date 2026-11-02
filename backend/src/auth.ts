@@ -20,6 +20,9 @@ declare global {
   }
 }
 
+// A device that hasn't been used for this long has to sign in again.
+const SESSION_IDLE_MS = 90 * 24 * 3600_000;
+
 const hash = (token: string) => crypto.createHash("sha256").update(token).digest("hex");
 
 // Creates a session and returns the raw token. Only its hash is stored, so a
@@ -51,7 +54,8 @@ const PUBLIC: Array<[string, RegExp]> = [
   ["GET", /^\/users\/[^/]+\/trust$/],
   ["GET", /^\/reviews\/seller\/[^/]+$/],
   ["GET", /^\/uploads\/.+/],
-  ["POST", /^\/auth\/otp\/(request|verify)$/],
+  ["POST", /^\/auth\/(otp|email)\/(request|verify)$/],
+  ["POST", /^\/auth\/staff$/],
 ];
 
 // Body/query fields that name the person *doing* the action. If present they
@@ -83,7 +87,9 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     const token = bearer(req);
     if (token) {
       const session = await prisma.session.findUnique({ where: { tokenHash: hash(token) }, select: { userId: true, lastUsedAt: true } });
-      if (session) {
+      if (session && Date.now() - session.lastUsedAt.getTime() > SESSION_IDLE_MS) {
+        await deleteSession(token);
+      } else if (session) {
         req.userId = session.userId;
         // Touch at most once an hour; it's only for spotting stale sessions.
         if (Date.now() - session.lastUsedAt.getTime() > 3600_000) {

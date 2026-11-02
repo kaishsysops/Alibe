@@ -2,7 +2,7 @@ import React, { useCallback, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { LogOut, Archive, Heart, Phone, Palette, HelpCircle, Info, ChevronRight, Pencil, Trash2, MessageSquareText, Package, ShieldCheck, BellRing, Bell, Ban, SunMoon } from "lucide-react-native";
+import { LogOut, Archive, Heart, Phone, Mail, Palette, HelpCircle, Info, ChevronRight, Pencil, Trash2, MessageSquareText, Package, ShieldCheck, BellRing, Bell, Ban, SunMoon, Flag, Store, Megaphone, Wallet, Landmark } from "lucide-react-native";
 import { api, errorMessage } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import { useFavorites } from "../api/FavoritesContext";
@@ -12,7 +12,7 @@ import { Skeleton } from "../components/Skeleton";
 import WebNavBar from "../components/WebNavBar";
 import Tap from "../components/Tap";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
-import { spacing, radius, tabBarClearance, cardShadow, fontSize, fontWeight } from "../theme/theme";
+import { spacing, radius, tabBarClearance, cardShadow, fontSize, fontWeight, controlHeight, contentWidth } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import { formatPhone } from "../utils/phone";
@@ -82,15 +82,25 @@ export default function ProfileScreen() {
       { icon: Heart, label: "Saved items", value: String(favoriteIds.size), onPress: () => navigation.navigate("Favorites") },
       { icon: BellRing, label: "Search alerts", onPress: () => navigation.navigate("SavedSearches") },
       { icon: Bell, label: "Notifications", onPress: () => navigation.navigate("Notifications") },
+      { icon: Wallet, label: "My purchases", onPress: () => navigation.navigate("Purchases") },
+      { icon: Megaphone, label: "Advertise on Alibe", onPress: () => navigation.navigate("BuyAd") },
     ],
     [
-      { icon: Phone, label: "Phone number", value: formatPhone(user?.phone), onPress: () => navigation.navigate("ChangePhone") },
+      { icon: Phone, label: "Phone number", value: formatPhone(user?.phone) || "Add", onPress: () => navigation.navigate("ChangePhone") },
+      { icon: Mail, label: "Email", value: user?.email || "Add", onPress: () => navigation.navigate("ChangeEmail") },
       { icon: MessageSquareText, label: "WhatsApp and Viber", value: contactSummary, onPress: () => navigation.navigate("EditProfile", { section: "contact" }) },
       { icon: Palette, label: "App colour", value: <View style={[styles.colorDot, { backgroundColor: colors.primary }]} />, onPress: () => navigation.navigate("EditProfile", { section: "appearance" }) },
       { icon: SunMoon, label: "Light or dark", value: mode === "system" ? "Automatic" : mode === "dark" ? "Dark" : "Light", onPress: () => navigation.navigate("EditProfile", { section: "appearance" }) },
       { icon: Ban, label: "Blocked people", onPress: () => navigation.navigate("BlockedUsers") },
     ],
     [
+      ...(user?.isAdmin
+        ? [
+            { icon: Flag, label: "Reports to review", onPress: () => navigation.navigate("AdminReports") },
+            { icon: Store, label: "iBay items", onPress: () => navigation.navigate("AdminIbay") },
+            { icon: Landmark, label: "Payments and prices", onPress: () => navigation.navigate("AdminMoney") },
+          ]
+        : []),
       { icon: ShieldCheck, label: "How Alibe keeps you safe", onPress: () => navigation.navigate("Safety") },
       { icon: HelpCircle, label: "Help and support", onPress: () => toast.info("Support chat is coming soon. For now, email help@alibe.mv.") },
       { icon: Info, label: "About Alibe", onPress: () => toast.info("Alibe v0.2. A marketplace for every island in the Maldives.") },
@@ -98,7 +108,7 @@ export default function ProfileScreen() {
   ];
 
   const content = (
-    <View style={{ width: "100%", maxWidth: 560, alignSelf: "center" }}>
+    <View style={{ width: "100%", maxWidth: contentWidth.form, alignSelf: "center" }}>
       <View style={styles.headerCard}>
         <View style={[styles.avatar, { backgroundColor: user?.avatarColor ?? colors.primary }]}>
           <Text style={styles.avatarText}>{(user?.name ?? "?").charAt(0).toUpperCase()}</Text>
@@ -199,8 +209,8 @@ const useStyles = makeStyles((colors) => ({
   menuValue: { fontSize: fontSize.sm, color: colors.textMuted },
   contactIcons: { flexDirection: "row", gap: 6 },
   colorDot: { width: 18, height: 18, borderRadius: 9 },
-  signOutButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginTop: spacing.lg, height: 52, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
-  signOutText: { color: colors.text, fontWeight: fontWeight.bold, fontSize: fontSize.base },
-  deleteButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.xs + 2, marginTop: spacing.sm, height: 48 },
+  signOutButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginTop: spacing.lg, height: controlHeight.secondary, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  signOutText: { color: colors.text, fontWeight: fontWeight.bold, fontSize: fontSize.md },
+  deleteButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.xs + 2, marginTop: spacing.sm, height: controlHeight.secondary },
   deleteText: { color: colors.danger, fontWeight: fontWeight.semibold, fontSize: fontSize.sm },
 }));

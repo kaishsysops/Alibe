@@ -13,7 +13,7 @@ import { useToast } from "../components/Toast";
 import Tap from "../components/Tap";
 import { FadeIn } from "../components/Motion";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
-import { Colors, spacing, radius, fontSize, fontWeight, cardShadow } from "../theme/theme";
+import { Colors, spacing, radius, fontSize, fontWeight, cardShadow, contentWidth } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
 import { timeAgo } from "../utils/time";
 
@@ -196,7 +196,7 @@ export default function OrdersScreen() {
 
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
-  desktopColumn: { maxWidth: 760, width: "100%", alignSelf: "center", flex: 1, paddingTop: spacing.lg, paddingHorizontal: spacing.lg },
+  desktopColumn: { maxWidth: contentWidth.list, width: "100%", alignSelf: "center", flex: 1, paddingTop: spacing.lg, paddingHorizontal: spacing.lg },
   header: { fontSize: fontSize.xxl, fontWeight: fontWeight.extrabold, color: colors.text, marginBottom: spacing.md },
   tabRow: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.sm },
   tab: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.md, height: 38, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },

@@ -7,6 +7,7 @@ import { api, Category, Listing } from "../api/client";
 import { StaticProductGrid } from "../components/ProductGrid";
 import HomeRail from "../components/HomeRail";
 import ContentCard from "../components/ContentCard";
+import AdBanner from "../components/AdBanner";
 import WebNavBar from "../components/WebNavBar";
 import CategorySidebar, { SIDEBAR_WIDTH } from "../components/CategorySidebar";
 import HomeSearchBar from "../components/HomeSearchBar";
@@ -56,7 +57,7 @@ export default function HomeScreen() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [cats, list] = await Promise.all([api.categories(), api.listings({})]);
+      const [cats, list] = await Promise.all([api.categories(), api.listings({ mix: "1" })]);
       setCategories(cats);
       setAllListings(list);
       setFailed(false);
@@ -199,6 +200,7 @@ export default function HomeScreen() {
                   emptyMarket
                 ) : (
                   <>
+                    <AdBanner />
                     {railsByCategory.slice(0, 3).map(({ category, items }) => (
                       <HomeRail
                         key={category.id}
@@ -301,6 +303,7 @@ export default function HomeScreen() {
             {recentlyViewed.length >= 2 && (
               <HomeRail title="Recently viewed" data={recentlyViewed.slice(0, 12)} onPressItem={goToProduct} horizontalPadding={gutter} />
             )}
+            <AdBanner horizontalPadding={gutter} />
             {railsByCategory.map(({ category, items }, i) => (
               <React.Fragment key={category.id}>
                 <HomeRail title={category.name} data={items} onPressItem={goToProduct} onSeeAll={() => seeAllInCategory(category)} horizontalPadding={gutter} />

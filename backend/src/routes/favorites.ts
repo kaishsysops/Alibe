@@ -8,7 +8,7 @@ export const favoritesRouter = safeRouter();
 
 favoritesRouter.get("/:userId", async (req, res) => {
   const favorites = await prisma.favorite.findMany({
-    where: { userId: req.params.userId },
+    where: { userId: req.params.userId, listing: { hiddenAt: null } },
     include: { listing: { include: listingInclude } },
     orderBy: { createdAt: "desc" },
   });

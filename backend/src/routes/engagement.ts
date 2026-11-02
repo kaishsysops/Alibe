@@ -62,6 +62,11 @@ savedSearchesRouter.delete("/:id", async (req, res) => {
 
 // ---- Notifications ---------------------------------------------------------------
 
+notificationsRouter.post("/:userId/price-drops/:listingId/seen", async (req, res) => {
+  await prisma.favorite.updateMany({ where: { userId: req.params.userId, listingId: req.params.listingId }, data: { priceSeenAt: new Date() } });
+  res.status(204).send();
+});
+
 // Everything that wants the user's attention, computed on the fly: unread
 // chats, offers waiting on them, and new saved-search matches. The app polls
 // this to drive tab badges, the bell and in-app message banners.
@@ -145,10 +150,39 @@ notificationsRouter.get("/:userId", async (req, res) => {
     )
   ).filter((x): x is NonNullable<typeof x> => !!x);
 
-  const items = [...chatItems, ...offerItems, ...orderItems, ...searchItems].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+  // Price drops on saved items, until they've been opened.
+  const savedWithDrop = await prisma.favorite.findMany({
+    where: { userId, listing: { status: "ACTIVE", hiddenAt: null, priceDroppedAt: { not: null }, previousPrice: { not: null }, sellerId: hidden.length ? { notIn: hidden } : undefined } },
+    include: { listing: { select: { id: true, title: true, images: true, price: true, previousPrice: true, priceDroppedAt: true } } },
+  });
+  const priceItems = savedWithDrop
+    .filter((f) => f.listing.priceDroppedAt! > f.createdAt && (!f.priceSeenAt || f.listing.priceDroppedAt! > f.priceSeenAt))
+    .map((f) => ({
+      type: "price_drop" as const,
+      id: `price-${f.listingId}-${f.listing.priceDroppedAt!.getTime()}`,
+      listingId: f.listingId,
+      listingTitle: f.listing.title,
+      image: f.listing.images[0] ?? null,
+      price: f.listing.price,
+      previousPrice: f.listing.previousPrice!,
+      createdAt: f.listing.priceDroppedAt!,
+    }));
+
+  // Purchases waiting on this person's payment.
+  const unpaid = await prisma.purchase.findMany({ where: { userId, status: "AWAITING_PAYMENT" }, select: { id: true, kind: true, amount: true, adTitle: true, itemTitle: true, updatedAt: true } });
+  const purchaseItems = unpaid.map((p) => ({
+    type: "purchase" as const,
+    id: `purchase-${p.id}`,
+    purchaseId: p.id,
+    label: p.itemTitle ?? p.adTitle ?? "Your purchase",
+    amount: p.amount,
+    createdAt: p.updatedAt,
+  }));
+
+  const items = [...chatItems, ...offerItems, ...orderItems, ...searchItems, ...priceItems, ...purchaseItems].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
   res.json({
     unreadChats: chatItems.reduce((n, c) => n + c.count, 0),
-    total: chatItems.length + offerItems.length + orderItems.length + searchItems.length,
+    total: chatItems.length + offerItems.length + orderItems.length + searchItems.length + priceItems.length + purchaseItems.length,
     items,
   });
 });

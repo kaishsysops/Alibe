@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -12,10 +12,17 @@ import { ActionSheetProvider } from "./src/components/Sheet";
 import RootNavigator from "./src/navigation/RootNavigator";
 import AnimatedSplash from "./src/components/AnimatedSplash";
 import { useAuth } from "./src/api/AuthContext";
+import { EntranceGate } from "./src/components/Motion";
 
-function Splash() {
+function Screens() {
   const { isLoading } = useAuth();
-  return <AnimatedSplash ready={!isLoading} />;
+  const [splashLifting, setSplashLifting] = useState(false);
+  return (
+    <EntranceGate.Provider value={splashLifting}>
+      <RootNavigator />
+      <AnimatedSplash ready={!isLoading} onExit={() => setSplashLifting(true)} />
+    </EntranceGate.Provider>
+  );
 }
 
 function ThemedStatusBar() {
@@ -38,8 +45,7 @@ export default function App() {
                 <AppAlertProvider>
                   <ActionSheetProvider>
                     <ThemedStatusBar />
-                    <RootNavigator />
-                    <Splash />
+                    <Screens />
                   </ActionSheetProvider>
                 </AppAlertProvider>
               </FavoritesProvider>

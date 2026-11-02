@@ -34,7 +34,7 @@ import { usePersistentState } from "../hooks/usePersistentState";
 import { useResponsive } from "../hooks/useResponsive";
 import { animateLayout, FadeIn, FillLine, Pop, SuccessBurst, useShake } from "../components/Motion";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
-import { spacing, radius, fontSize, fontWeight, cardShadow } from "../theme/theme";
+import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, contentWidth } from "../theme/theme";
 
 const CODE_LENGTH = 4;
 const MAX_CODE_ATTEMPTS = 5;
@@ -853,7 +853,7 @@ function OrderSkeleton() {
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
   content: { paddingTop: spacing.sm, gap: spacing.md },
-  desktopColumn: { maxWidth: 560, width: "100%", alignSelf: "center", paddingTop: spacing.lg },
+  desktopColumn: { maxWidth: contentWidth.form, width: "100%", alignSelf: "center", paddingTop: spacing.lg },
 
   itemCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.card, ...cardShadow },
   itemThumb: { width: 72, height: 72, borderRadius: radius.md, backgroundColor: colors.skeleton },
@@ -877,7 +877,7 @@ const useStyles = makeStyles((colors) => ({
   cardTitle: { flex: 1, fontSize: fontSize.lg, fontWeight: fontWeight.bold, color: colors.text, lineHeight: fontSize.lg * 1.3 },
   cardText: { fontSize: fontSize.md, color: colors.textMuted, lineHeight: fontSize.md * 1.45, marginTop: spacing.sm + 4 },
 
-  bigButton: { height: 56, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", marginTop: spacing.lg },
+  bigButton: { height: controlHeight.primary, borderRadius: radius.pill, alignItems: "center", justifyContent: "center", marginTop: spacing.lg },
   bigButtonText: { color: "#fff", fontSize: fontSize.lg, fontWeight: fontWeight.bold },
 
   method: { flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 64, paddingHorizontal: spacing.md, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border },
@@ -891,7 +891,7 @@ const useStyles = makeStyles((colors) => ({
   stepHeading: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.text, marginTop: spacing.md + 4, marginBottom: spacing.sm + 2 },
   quote: { borderLeftWidth: 3, borderLeftColor: colors.primaryLight, paddingLeft: spacing.sm + 4, paddingVertical: 2 },
   quoteText: { fontSize: fontSize.base, color: colors.text, lineHeight: fontSize.base * 1.45, fontStyle: "italic" },
-  secondaryButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, height: 50, borderRadius: radius.pill, backgroundColor: colors.primaryTint, marginTop: spacing.sm + 4 },
+  secondaryButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, height: controlHeight.secondary, borderRadius: radius.pill, backgroundColor: colors.primaryTint, marginTop: spacing.sm + 4 },
   secondaryButtonText: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.primary },
   doneRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: spacing.xs },
   doneText: { flex: 1, fontSize: fontSize.base, color: colors.text },
@@ -899,7 +899,7 @@ const useStyles = makeStyles((colors) => ({
   callText: { fontSize: fontSize.base, color: colors.textMuted },
   fieldLabel: { fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: colors.text, marginBottom: spacing.sm },
   optional: { fontWeight: fontWeight.regular, color: colors.textMuted },
-  input: { height: 52, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, paddingHorizontal: spacing.md, fontSize: fontSize.md, color: colors.text, outlineStyle: "none" as any },
+  input: { height: controlHeight.input, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, paddingHorizontal: spacing.md, fontSize: fontSize.md, color: colors.text, outlineStyle: "none" as any },
   textArea: { height: 120, paddingTop: spacing.sm + 4, textAlignVertical: "top" },
   hint: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: spacing.sm + 4, lineHeight: fontSize.sm * 1.4 },
 
@@ -926,7 +926,7 @@ const useStyles = makeStyles((colors) => ({
   payment: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 4, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.primaryTint },
   paymentText: { flex: 1, fontSize: fontSize.base, color: colors.text, lineHeight: fontSize.base * 1.4 },
 
-  chatButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, height: 52, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.primary },
+  chatButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, height: controlHeight.secondary, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.primary },
   chatButtonText: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.primary },
   textLink: { alignSelf: "center", paddingVertical: spacing.sm, paddingHorizontal: spacing.md },
   textLinkText: { fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: colors.textMuted, textDecorationLine: "underline" },

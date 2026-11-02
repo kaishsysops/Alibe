@@ -9,7 +9,7 @@ import { FadeIn } from "../components/Motion";
 import Tap from "../components/Tap";
 import { useResponsive } from "../hooks/useResponsive";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
-import { spacing, radius, fontSize, fontWeight, cardShadow } from "../theme/theme";
+import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, contentWidth } from "../theme/theme";
 
 // Plain-language explainer of every scam protection in the app. Linked from
 // chat warnings, listings and the profile menu.
@@ -84,7 +84,7 @@ export default function SafetyScreen() {
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
   content: { paddingTop: spacing.sm, gap: spacing.md },
-  desktop: { maxWidth: 560, width: "100%", alignSelf: "center", paddingTop: spacing.lg },
+  desktop: { maxWidth: contentWidth.form, width: "100%", alignSelf: "center", paddingTop: spacing.lg },
   hero: { alignItems: "center", padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.primaryTint },
   heroIcon: { width: 60, height: 60, borderRadius: 30, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   heroTitle: { fontSize: fontSize.xxl, fontWeight: fontWeight.extrabold, color: colors.text, marginTop: spacing.md, textAlign: "center" },
@@ -98,6 +98,6 @@ const useStyles = makeStyles((colors) => ({
   itemIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primaryTint, alignItems: "center", justifyContent: "center" },
   itemTitle: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.text },
   itemText: { fontSize: fontSize.base, color: colors.textMuted, marginTop: 2, lineHeight: fontSize.base * 1.45 },
-  button: { height: 54, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", marginTop: spacing.sm },
+  button: { height: controlHeight.primary, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", marginTop: spacing.sm },
   buttonText: { color: "#fff", fontSize: fontSize.lg, fontWeight: fontWeight.bold },
 }));

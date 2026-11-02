@@ -51,6 +51,10 @@ export function sendValidationError(res: Response, error: ZodError) {
 
 export const PHONE_REGEX = /^\+?[0-9]{7,15}$/;
 
+export function normalizeEmail(raw: string) {
+  return raw.trim().toLowerCase();
+}
+
 export function normalizePhone(raw: string) {
   return raw.replace(/[\s\-()]/g, "");
 }

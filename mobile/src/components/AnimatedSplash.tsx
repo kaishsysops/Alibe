@@ -6,14 +6,14 @@ import { useReducedMotion } from "../hooks/useReducedMotion";
 
 // Launch animation drawn over the app while it starts. Always the Alibe brand
 // orange (not the user's accent) so it continues seamlessly from the native
-// splash in app.json. It never adds waiting: it plays while sign-in state
-// loads and leaves as soon as both are done (about a second at most).
+// splash in app.json. The intro always plays to its last frame, then holds for
+// a beat; it leaves once that and the sign-in state are both done.
 const useNativeDriver = Platform.OS !== "web";
 const BRAND = DEFAULT_ACCENT;
 const WORD = "Alibe".split("");
-const MIN_MS = 950;
+const HOLD_MS = 180;
 
-export default function AnimatedSplash({ ready }: { ready: boolean }) {
+export default function AnimatedSplash({ ready, onExit }: { ready: boolean; onExit: () => void }) {
   const reduceMotion = useReducedMotion();
   const [gone, setGone] = useState(false);
   const [introDone, setIntroDone] = useState(false);
@@ -23,6 +23,7 @@ export default function AnimatedSplash({ ready }: { ready: boolean }) {
   const exit = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    let hold: ReturnType<typeof setTimeout>;
     if (reduceMotion) {
       logo.setValue(1);
       letters.forEach((l) => l.setValue(1));
@@ -36,13 +37,15 @@ export default function AnimatedSplash({ ready }: { ready: boolean }) {
         55,
         letters.map((l) => Animated.timing(l, { toValue: 1, duration: 320, delay: 220, easing: Easing.out(Easing.back(1.6)), useNativeDriver }))
       ),
-    ]).start();
-    const t = setTimeout(() => setIntroDone(true), MIN_MS);
-    return () => clearTimeout(t);
+    ]).start(() => {
+      hold = setTimeout(() => setIntroDone(true), HOLD_MS);
+    });
+    return () => clearTimeout(hold);
   }, [reduceMotion]);
 
   useEffect(() => {
     if (!ready || !introDone) return;
+    onExit();
     Animated.timing(exit, { toValue: 1, duration: reduceMotion ? 150 : 380, easing: Easing.in(Easing.cubic), useNativeDriver }).start(() => setGone(true));
   }, [ready, introDone]);
 

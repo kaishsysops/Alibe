@@ -43,10 +43,11 @@ enum PaymentMethod {
 
 model User {
   id                     String         @id @default(cuid())
-  phone                  String         @unique
+  // At least one of phone/email is always set: both are verified sign-in methods.
+  phone                  String?        @unique
   name                   String
   username               String?        @unique
-  email                  String?
+  email                  String?        @unique
   bio                    String?
   avatarColor            String?
   islandId               String?
@@ -61,6 +62,14 @@ model User {
   themeColor             String?
   verificationStatus     VerificationStatus @default(NONE)
   verifiedAt             DateTime?
+  // Can review reports. Only set by prisma/make-admin.ts, never through the API.
+  isAdmin                Boolean        @default(false)
+  bannedAt               DateTime?
+  // Not a person (the IBAY catalogue owner): no way to sign in, no public profile.
+  isSystem               Boolean        @default(false)
+  ibayItems              IbayItem[]
+  adminCredential        AdminCredential?
+  purchases              Purchase[]
   // Expo push tokens, one per signed-in device.
   pushTokens             String[]       @default([])
   reviewsWritten         Review[]       @relation("ReviewsWritten")
@@ -127,6 +136,12 @@ model Listing {
   updatedAt     DateTime       @updatedAt
   // Client-generated key so a double-tapped "Publish" can't create two listings.
   clientRequestId String?      @unique
+  // Off the marketplace: auto-hidden by reports, or removed by staff.
+  hiddenAt      DateTime?
+  // Set when the price comes down, for "was MVR X" and price drop alerts.
+  previousPrice Int?
+  priceDroppedAt DateTime?
+  priceRaisedAt DateTime?
   favoritedBy   Favorite[]
   conversations Conversation[]
   reviews       Review[]
@@ -142,6 +157,8 @@ model Favorite {
   listingId String
   listing   Listing  @relation(fields: [listingId], references: [id])
   createdAt DateTime @default(now())
+  // The last price drop this person has already opened.
+  priceSeenAt DateTime?
 
   @@unique([userId, listingId])
 }
@@ -297,6 +314,7 @@ model Report {
   reason         ReportReason
   details        String?
   createdAt      DateTime     @default(now())
+  resolvedAt     DateTime?
 
   // Reporting the same thing twice just updates the first report.
   @@unique([reporterId, listingId])
@@ -327,6 +345,139 @@ model SavedSearch {
   createdAt     DateTime @default(now())
 
   @@unique([userId, paramsKey])
+}
+
+// Password sign-in for staff only (see prisma/set-admin.ts). Separate from User
+// because user rows are sent to the app, and a password hash must never be.
+model AdminCredential {
+  userId       String    @id
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  passwordHash String
+  failures     Int       @default(0)
+  lockedUntil  DateTime?
+}
+
+// Small server-side secrets that aren't tied to a user. Values are hashed.
+model AppSetting {
+  key   String @id
+  value String
+}
+
+enum PurchaseKind {
+  BOOST
+  AD
+  BUY_FOR_YOU
+}
+
+enum PurchaseStatus {
+  REQUESTED        // Buy-for-you only: staff are checking the seller still has it.
+  AWAITING_PAYMENT // Buyer can transfer the money now.
+  SUBMITTED        // Slip uploaded, staff need to check the bank.
+  ACTIVE           // Paid: boost or ad is running, or staff are buying the item.
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+// Something bought from Alibe itself, paid by bank transfer. Alibe is the seller
+// here, so this is separate from Order, which is between two users.
+model Purchase {
+  id              String         @id @default(cuid())
+  kind            PurchaseKind
+  status          PurchaseStatus
+  userId          String
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount          Int
+  // Typed into the transfer so staff can match it to this purchase.
+  reference       String         @unique
+  slipUrl         String?
+  note            String?
+  // Stops a double tap from creating two.
+  clientRequestId String         @unique
+  days            Int?
+  startsAt        DateTime?
+  endsAt          DateTime?
+  listingId       String?
+  adTitle         String?
+  adImage         String?
+  adUrl           String?
+  impressions     Int            @default(0)
+  clicks          Int            @default(0)
+  ibayItemId      String?
+  itemTitle       String?
+  itemUrl         String?
+  itemPrice       Int?
+  deliveryNote    String?
+  contactPhone    String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([status])
+  @@index([kind, status, endsAt])
+}
+
+// An item copied from ibay.com.mv for staff to follow up on by hand (see
+// prisma/import-ibay.ts). A separate table, not Listing, so no public query can
+// ever return one. Only /admin/ibay reads it.
+model IbayItem {
+  id         String   @id
+  title      String
+  url        String
+  imageUrl   String?
+  price      Int?
+  currency   String?
+  condition  String?
+  category   String
+  ownerId    String
+  owner      User     @relation(fields: [ownerId], references: [id])
+  firstSeenAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  // Alibe's category slug and condition for this item (see src/ibayCategories.ts).
+  alibeCategory String?
+  conditionKey Condition?
+  // Read from the item's own page the first time someone opens it.
+  description String?
+  images     String[] @default([])
+  phone      String?
+  whatsapp   String?
+  lastUpdated String?
+  detailsFetchedAt DateTime?
+  // Out of the public showcase: reported, hidden by staff, or removed by its seller.
+  hiddenAt   DateTime?
+  // The seller moved it to their own Alibe listing.
+  claimedListingId String?
+  reports    IbayReport[]
+
+  @@index([lastSeenAt])
+  @@index([alibeCategory])
+}
+
+model IbayReport {
+  itemId    String
+  item      IbayItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@id([itemId, userId])
+}
+
+// A phone or email that can't sign in or be added to any account. Kept apart
+// from User so a ban outlives the account.
+model BannedContact {
+  value     String   @id
+  createdAt DateTime @default(now())
+}
+
+// A one-time sign-in code waiting to be used (see src/otp.ts). `key` says what
+// it's for and who it went to; only a hash of the code is stored.
+model LoginCode {
+  key         String   @id
+  codeHash    String
+  expiresAt   DateTime
+  attempts    Int      @default(0)
+  sentAt      DateTime
+  sendCount   Int      @default(1)
+  windowStart DateTime
 }
 
 // A signed-in device. Only a hash of the token is stored (see src/auth.ts).

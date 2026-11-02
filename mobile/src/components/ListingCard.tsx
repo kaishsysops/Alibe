@@ -1,3 +1,4 @@
+import { useNavigation } from "@react-navigation/native";
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, Image, Animated, Platform } from "react-native";
 import { Heart, CheckCircle2, RotateCcw, ImageOff, MapPin, Pencil } from "lucide-react-native";
@@ -7,6 +8,7 @@ import { spacing, radius, fontSize, fontWeight } from "../theme/theme";
 import { useFavorites } from "../api/FavoritesContext";
 import { useAuth } from "../api/AuthContext";
 import Tap from "./Tap";
+import PhotoBadge from "./PhotoBadge";
 
 // Photo with a graceful fallback: listings created on another device can
 // carry image URIs this device can't load (e.g. a simulator file:// path).
@@ -68,10 +70,17 @@ export default function ListingCard({
   const styles = useStyles();
   const { colors } = useTheme();
   const { user } = useAuth();
+  const navigation = useNavigation<any>();
   const isOwn = user?.id === listing.seller.id;
+  const ibayItemId = listing.ibayItemId;
 
   return (
-    <Tap style={[styles.card, width ? { width } : styles.cardDefaultWidth]} onPress={onPress} scaleTo={0.97}>
+    <Tap
+      style={[styles.card, width ? { width } : styles.cardDefaultWidth]}
+      onPress={ibayItemId ? () => navigation.navigate("IbayItem", { id: ibayItemId }) : onPress}
+      scaleTo={0.97}
+      accessibilityLabel={ibayItemId ? `${listing.title}, from iBay` : undefined}
+    >
       <View style={styles.imageWrap}>
         <ListingImage uri={listing.images[0]} style={styles.image} />
         {(listing.status === "SOLD" || listing.status === "RESERVED") && (
@@ -91,11 +100,17 @@ export default function ListingCard({
             )}
           </>
         ) : (
-          user && !isOwn && <FavoriteHeart listingId={listing.id} />
+          user && !isOwn && !ibayItemId && <FavoriteHeart listingId={listing.id} />
+        )}
+        {(!!ibayItemId || !!listing.boosted) && (
+          <PhotoBadge label={listing.boosted ? "Featured" : "From iBay"} color={listing.boosted ? colors.gold : undefined} />
         )}
       </View>
       <View style={styles.body}>
-        <Text style={styles.price}>MVR {listing.price.toLocaleString()}</Text>
+        <View style={styles.priceRow}>
+          <Text style={styles.price}>{ibayItemId && !listing.price ? "Ask the seller" : `MVR ${listing.price.toLocaleString()}`}</Text>
+          {!!listing.previousPrice && <Text style={styles.wasPrice}>{listing.previousPrice.toLocaleString()}</Text>}
+        </View>
         <Text style={styles.title} numberOfLines={2}>
           {listing.title}
         </Text>
@@ -152,7 +167,9 @@ const useStyles = makeStyles((colors) => ({
     justifyContent: "center",
   },
   body: { paddingTop: spacing.sm, gap: 2 },
+  priceRow: { flexDirection: "row", alignItems: "baseline", flexWrap: "wrap", gap: 6 },
   price: { fontWeight: fontWeight.extrabold, color: colors.text, fontSize: fontSize.md },
+  wasPrice: { color: colors.textMuted, fontSize: fontSize.caption, textDecorationLine: "line-through" },
   title: { color: colors.text, fontSize: fontSize.sm, lineHeight: fontSize.sm * 1.35 },
   locationRow: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
   location: { fontSize: fontSize.caption, color: colors.textMuted, flexShrink: 1 },

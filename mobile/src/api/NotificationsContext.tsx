@@ -26,6 +26,10 @@ const openOrder = (orderId: string) => {
   if (navigationRef.isReady()) (navigationRef as any).navigate("OrderDetail", { id: orderId });
 };
 
+const openListing = (id: string) => {
+  if (navigationRef.isReady()) (navigationRef as any).navigate("ProductDetail", { id });
+};
+
 // Desktop web: browser notification when the Alibe tab is in the background.
 function webNotify(title: string, body: string) {
   if (Platform.OS !== "web" || typeof window === "undefined" || !("Notification" in window)) return;
@@ -53,13 +57,15 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
       // Messages and incoming offers each have a stable id; anything not seen
       // on the previous poll is new and gets announced.
-      const alertable = next.items.filter((i) => i.type !== "saved_search");
+      const alertable = next.items.filter((i) => i.type !== "saved_search" && i.type !== "purchase");
       if (seen.current) {
         for (const item of alertable) {
           if (seen.current.has(item.id)) continue;
-          if (item.conversationId === activeConversation.current) continue;
+          if (item.type !== "price_drop" && item.conversationId === activeConversation.current) continue;
           const title =
-            item.type === "message"
+            item.type === "price_drop"
+              ? `Price drop: ${item.listingTitle}`
+              : item.type === "message"
               ? item.fromName
               : item.type === "offer"
               ? `${item.fromName} made an offer`
@@ -67,7 +73,9 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
               ? `Send ${item.listingTitle} to ${item.fromName}`
               : `${item.listingTitle} is on its way`;
           const body =
-            item.type === "message"
+            item.type === "price_drop"
+              ? `Now MVR ${item.price.toLocaleString()}, was MVR ${item.previousPrice.toLocaleString()}.`
+              : item.type === "message"
               ? item.preview
               : item.type === "offer"
               ? `MVR ${item.amount.toLocaleString()} for ${item.listingTitle}`
@@ -77,11 +85,11 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
           if (AppState.currentState === "active") {
             toast.info(`${title}: ${body}`, {
               label: "Open",
-              onPress: () => (item.type === "order" ? openOrder(item.orderId) : openChat(item.conversationId)),
+              onPress: () => (item.type === "price_drop" ? openListing(item.listingId) : item.type === "order" ? openOrder(item.orderId) : openChat(item.conversationId)),
             });
           } else if (!hasRemotePush.current) {
             // No server push configured: raise a local system notification instead.
-            showLocalNotification(title, body, { conversationId: item.conversationId });
+            showLocalNotification(title, body, item.type === "price_drop" ? { type: "price_drop", listingId: item.listingId } : { conversationId: item.conversationId });
           }
           webNotify(title, body);
         }
@@ -115,8 +123,9 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     const tapSub =
       Platform.OS !== "web"
         ? Notifications.addNotificationResponseReceivedListener((r) => {
-            const { orderId, conversationId } = r.notification.request.content.data ?? {};
-            if (typeof orderId === "string") openOrder(orderId);
+            const { orderId, conversationId, listingId } = r.notification.request.content.data ?? {};
+            if (typeof listingId === "string") openListing(listingId);
+            else if (typeof orderId === "string") openOrder(orderId);
             else if (typeof conversationId === "string") openChat(conversationId);
           })
         : null;

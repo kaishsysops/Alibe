@@ -24,6 +24,9 @@ services:
     environment:
       DATABASE_URL: postgresql://alibe:alibe@postgres:5432/alibe
       PORT: 4000
+      # Leave empty in development: codes then appear in the app and the backend log.
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: ${MAIL_FROM:-Alibe <no-reply@alibe.mv>}
     ports:
       - "4000:4000"
     depends_on:

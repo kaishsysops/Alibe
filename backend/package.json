@@ -9,7 +9,9 @@
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "make-admin": "tsx prisma/make-admin.ts",
+    "import-ibay": "tsx prisma/import-ibay.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",

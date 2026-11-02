@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { View, Text, Image, ScrollView, ActivityIndicator, NativeSyntheticEvent, NativeScrollEvent, useWindowDimensions, Animated, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { MapPin, MessageCircle, Heart, CheckCircle2, RotateCcw, PackageSearch, ChevronRight, ChevronLeft, Clock, Tag, Share2, MoreHorizontal, Pencil, Truck, Ship, Hand, Flag, Ban, ShieldCheck } from "lucide-react-native";
+import { MapPin, MessageCircle, Heart, CheckCircle2, RotateCcw, PackageSearch, ChevronRight, ChevronLeft, Clock, Tag, Share2, MoreHorizontal, Pencil, Truck, Ship, Hand, Flag, Ban, ShieldCheck, Rocket } from "lucide-react-native";
 import { api, errorMessage, Listing, newClientId, DeliveryOption } from "../api/client";
 import { VerifiedBadge } from "../components/Badges";
 import { OfferSheet, useTrustActions } from "../components/TrustSheets";
@@ -22,6 +22,7 @@ import { ContactCard, ContactIconButtons } from "../components/ContactButtons";
 import { ListingImage } from "../components/ListingCard";
 import { Skeleton, SkeletonGroup } from "../components/Skeleton";
 import Tap from "../components/Tap";
+import PhotoViewer from "../components/PhotoViewer";
 import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import { timeAgo } from "../utils/time";
@@ -38,6 +39,7 @@ const conditionLabel = (c: string) => c.replace("_", " ").toLowerCase().replace(
 function Gallery({ images, width, height }: { images: string[]; width: number; height: number }) {
   const styles = useStyles();
   const [index, setIndex] = useState(0);
+  const [viewing, setViewing] = useState<number | null>(null);
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const i = Math.round(e.nativeEvent.contentOffset.x / width);
     if (i !== index) setIndex(i);
@@ -46,9 +48,12 @@ function Gallery({ images, width, height }: { images: string[]; width: number; h
     <View style={{ width, height }}>
       <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={32}>
         {(images.length ? images : [""]).map((uri, i) => (
-          <ListingImage key={i} uri={uri} style={{ width, height }} />
+          <Tap key={i} onPress={() => uri && setViewing(i)} scaleTo={0.99} accessibilityLabel="Zoom photo">
+            <ListingImage uri={uri} style={{ width, height }} />
+          </Tap>
         ))}
       </ScrollView>
+      <PhotoViewer images={images} start={viewing} onClose={() => setViewing(null)} />
       {images.length > 1 && (
         <View style={styles.dotsRow} pointerEvents="none">
           {images.map((_, i) => (
@@ -64,12 +69,16 @@ function DesktopGallery({ images }: { images: string[] }) {
   const styles = useStyles();
   const { colors } = useTheme();
   const [index, setIndex] = useState(0);
+  const [viewing, setViewing] = useState<number | null>(null);
   const list = images.length ? images : [""];
   const step = (d: number) => setIndex((i) => (i + d + list.length) % list.length);
   return (
     <View style={{ flex: 1, minWidth: 0 }}>
       <View style={styles.desktopImageWrap}>
-        <ListingImage uri={list[index]} style={styles.desktopImage} />
+        <Tap onPress={() => list[index] && setViewing(index)} scaleTo={1} accessibilityLabel="Zoom photo">
+          <ListingImage uri={list[index]} style={styles.desktopImage} />
+        </Tap>
+        <PhotoViewer images={images} start={viewing} onClose={() => setViewing(null)} />
         {list.length > 1 && (
           <>
             <Tap style={[styles.galleryArrow, { left: spacing.md }]} onPress={() => step(-1)} accessibilityLabel="Previous photo" scaleTo={0.88}>
@@ -285,6 +294,7 @@ export default function ProductDetailScreen() {
     <>
       <View style={styles.priceRow}>
         <Text style={styles.price}>MVR {listing.price.toLocaleString()}</Text>
+        {!!listing.previousPrice && <Text style={styles.wasPrice}>was {listing.previousPrice.toLocaleString()}</Text>}
         {!available && (
           <View style={[styles.soldBadge, isReserved && { backgroundColor: colors.gold }]}>
             <Text style={styles.soldBadgeText}>{isReserved ? "Reserved" : "Sold"}</Text>
@@ -346,6 +356,16 @@ export default function ProductDetailScreen() {
         <ChevronRight size={16} color={colors.primary} />
       </Tap>
 
+      {isOwner && available && !listing.hiddenAt && (
+        <Tap style={styles.boostRow} onPress={() => navigation.navigate("Boost", { id: listing.id })} scaleTo={0.98}>
+          <Rocket size={18} color={colors.primary} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.boostTitle}>Boost this item</Text>
+            <Text style={styles.boostText}>Show it first, so more buyers see it.</Text>
+          </View>
+          <ChevronRight size={16} color={colors.textMuted} />
+        </Tap>
+      )}
       {!isOwner && available && (
         <View style={{ marginTop: spacing.md }}>
           <ContactCard contact={listing.seller} listingTitle={listing.title} />
@@ -493,6 +513,10 @@ const useStyles = makeStyles((colors) => ({
   },
   body: { paddingTop: spacing.lg },
   priceRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  boostRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 2, padding: spacing.md, marginTop: spacing.md, borderRadius: radius.lg, backgroundColor: colors.primaryTint },
+  boostTitle: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.text },
+  boostText: { fontSize: fontSize.caption, color: colors.textMuted, marginTop: 1 },
+  wasPrice: { fontSize: fontSize.md, color: colors.textMuted, textDecorationLine: "line-through" },
   price: { fontSize: fontSize.display, fontWeight: fontWeight.extrabold, color: colors.text, letterSpacing: -0.5 },
   soldBadge: { paddingHorizontal: spacing.sm + 2, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: colors.danger },
   soldBadgeText: { color: "#fff", fontSize: fontSize.caption, fontWeight: fontWeight.bold },

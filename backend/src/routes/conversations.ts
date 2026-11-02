@@ -6,6 +6,7 @@ import { listingInclude, serializeConversation, serializeListing } from "../seri
 import { notifyUser } from "../push.js";
 import { createOrder } from "./orders.js";
 import { scanMessage } from "../safety.js";
+import { chatLimitReached } from "../moderation.js";
 
 export const conversationsRouter = safeRouter();
 
@@ -76,11 +77,15 @@ conversationsRouter.post("/", async (req, res) => {
   const { listingId, buyerId } = parsed.data;
 
   const listing = await prisma.listing.findUnique({ where: { id: listingId } });
-  if (!listing) return res.status(404).json({ error: "This listing is no longer available." });
+  if (!listing || listing.hiddenAt) return res.status(404).json({ error: "This listing is no longer available." });
   if (listing.sellerId === buyerId) return res.status(400).json({ error: "You can't message yourself about your own listing." });
   if (await isBlockedBetween(buyerId, listing.sellerId)) return res.status(403).json({ error: "You can't message this seller." });
 
   const where = { listingId_buyerId: { listingId, buyerId } };
+  const alreadyOpen = await prisma.conversation.findUnique({ where, select: { id: true } });
+  if (!alreadyOpen && (await chatLimitReached(buyerId))) {
+    return res.status(429).json({ error: "New accounts can start 20 chats a day. Please try again tomorrow." });
+  }
   try {
     const conversation = await prisma.conversation.upsert({
       where,

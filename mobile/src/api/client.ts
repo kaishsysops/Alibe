@@ -144,11 +144,20 @@ export type Listing = {
   island: Island & { atoll?: Atoll };
   seller: PublicSeller;
   createdAt: string;
+  // Set after a real price drop: shown as "was MVR X".
+  previousPrice?: number | null;
+  hiddenAt?: string | null;
+  // Set on items from iBay mixed into a feed. These open the iBay item page.
+  ibayItemId?: string;
+  // Paid placement, always shown to buyers as "Featured".
+  boosted?: boolean;
 };
 export type PaymentMethod = "CASH" | "BANK_TRANSFER";
 export type User = {
   id: string;
-  phone: string;
+  // Sign-in methods. An account always has at least one of them.
+  phone: string | null;
+  email?: string | null;
   name: string;
   createdAt?: string;
   username?: string | null;
@@ -160,10 +169,10 @@ export type User = {
   viberEnabled?: boolean;
   viberNumber?: string | null;
   verificationStatus?: "NONE" | "VERIFIED";
+  isAdmin?: boolean;
 };
 export type FullUser = Required<Omit<User, "createdAt">> & {
   createdAt: string;
-  email: string | null;
   bio: string | null;
   islandId: string | null;
   island: (Island & { atoll: Atoll }) | null;
@@ -252,6 +261,8 @@ export type NotificationItem =
   | { type: "message"; id: string; messageId: string; conversationId: string; fromName: string; listingTitle: string; image: string | null; preview: string; count: number; createdAt: string }
   | { type: "offer"; id: string; offerId: string; conversationId: string; fromName: string; listingTitle: string; image: string | null; amount: number; createdAt: string }
   | { type: "order"; id: string; orderId: string; conversationId: string; role: "BUYER" | "SELLER"; status: OrderStatus; fromName: string; listingTitle: string; image: string | null; createdAt: string }
+  | { type: "purchase"; id: string; purchaseId: string; label: string; amount: number; createdAt: string }
+  | { type: "price_drop"; id: string; listingId: string; listingTitle: string; image: string | null; price: number; previousPrice: number; createdAt: string }
   | { type: "saved_search"; id: string; savedSearchId: string; label: string; params: ListingFilters; newCount: number; createdAt: string };
 export type Notifications = { unreadChats: number; total: number; items: NotificationItem[] };
 export type Conversation = {
@@ -269,7 +280,6 @@ export type Conversation = {
 export type ProfileUpdate = Partial<{
   name: string;
   username: string | null;
-  email: string | null;
   bio: string | null;
   avatarColor: string | null;
   themeColor: string | null;
@@ -282,6 +292,64 @@ export type ProfileUpdate = Partial<{
   viberEnabled: boolean;
   viberNumber: string | null;
 }>;
+export type PurchaseKind = "BOOST" | "AD" | "BUY_FOR_YOU";
+export type PurchaseStatus = "REQUESTED" | "AWAITING_PAYMENT" | "SUBMITTED" | "ACTIVE" | "COMPLETED" | "REJECTED" | "CANCELLED";
+export type Purchase = {
+  id: string;
+  kind: PurchaseKind;
+  status: PurchaseStatus;
+  amount: number;
+  reference: string;
+  slipUrl: string | null;
+  note: string | null;
+  days: number | null;
+  endsAt: string | null;
+  listingId: string | null;
+  adTitle: string | null;
+  adImage: string | null;
+  adUrl: string | null;
+  impressions: number;
+  clicks: number;
+  itemTitle: string | null;
+  itemUrl: string | null;
+  // Staff screens only.
+  itemPrice?: number | null;
+  deliveryNote: string | null;
+  contactPhone: string | null;
+  createdAt: string;
+  user?: { id: string; name: string; phone: string | null; email: string | null };
+};
+export type PlanPrices = { "3": number; "7": number; "30": number };
+export type MoneySettings = { bankName: string; accountName: string; accountNumber: string; feePercent: number; feeMinimum: number; boostPrices: PlanPrices; adPrices: PlanPrices };
+export type MoneyConfig = Pick<MoneySettings, "boostPrices" | "adPrices"> & { ready: boolean };
+export type BankDetails = Pick<MoneySettings, "bankName" | "accountName" | "accountNumber">;
+export type RunningAd = { id: string; adTitle: string; adImage: string; adUrl: string | null; listingId: string | null };
+export type NewPurchase =
+  | { kind: "BOOST"; listingId: string; days: number }
+  | { kind: "AD"; days: number; adTitle: string; adImage: string; listingId?: string; adUrl?: string }
+  | { kind: "BUY_FOR_YOU"; ibayItemId: string; deliveryNote: string; contactPhone: string };
+export type ReportAction = "DISMISS" | "REMOVE_LISTING" | "BAN";
+export type ReportGroup = {
+  key: string;
+  listing: { id: string; title: string; images: string[]; price: number; hiddenAt: string | null } | null;
+  user: { id: string; name: string; createdAt: string } | null;
+  reports: { id: string; reason: ReportReason; details: string | null; createdAt: string }[];
+};
+export type IbayFilters = { q?: string; categorySlug?: string; condition?: Listing["condition"]; minPrice?: string; maxPrice?: string };
+export type IbayItemSummary = { id: string; categorySlug: string | null; title: string; imageUrl: string | null; price: number | null; currency: string | null; condition: string | null; category: string };
+export type IbayItemDetail = IbayItemSummary & {
+  url: string;
+  description: string | null;
+  images: string[];
+  lastUpdated: string | null;
+  contact: { phone: string | null; whatsapp: string | null; viber: string | null };
+  isMine: boolean;
+  myPhoneMissing: boolean;
+};
+export type IbayItem = { id: string; title: string; url: string; imageUrl: string | null; price: number | null; currency: string | null; condition: string | null; category: string; firstSeenAt: string; hiddenAt: string | null };
+// `devCode` only comes back in development, where nothing is really sent.
+export type CodeRequest = { sent: boolean; retryIn: number; devCode?: string };
+export type SignedIn = { token: string; user: User; needsName: boolean };
 export type ListingSort = "newest" | "price_asc" | "price_desc";
 export type ListingInput = {
   title: string;
@@ -315,11 +383,19 @@ export const api = {
   updateListingStatus: (id: string, sellerId: string, status: Listing["status"]) =>
     request<Listing>(`/listings/${id}`, { method: "PATCH", body: JSON.stringify({ status, sellerId }) }),
   deleteListing: (id: string, sellerId: string) => request<void>(`/listings/${id}?sellerId=${encodeURIComponent(sellerId)}`, { method: "DELETE" }),
-  requestOtp: (phone: string) => request<{ sent: boolean }>("/auth/otp/request", { method: "POST", body: JSON.stringify({ phone }) }),
+  requestOtp: (phone: string) => request<CodeRequest & { staffEntry?: boolean }>("/auth/otp/request", { method: "POST", body: JSON.stringify({ phone }) }),
   verifyOtp: (phone: string, code: string, themeColor?: string) =>
-    request<{ token: string; user: User }>("/auth/otp/verify", {
+    request<SignedIn>("/auth/otp/verify", {
       method: "POST",
       body: JSON.stringify({ phone, code, themeColor }),
+    }),
+  staffSignIn: (entryCode: string, username: string, password: string) =>
+    request<SignedIn>("/auth/staff", { method: "POST", body: JSON.stringify({ entryCode, username, password }) }),
+  requestEmailCode: (email: string) => request<CodeRequest>("/auth/email/request", { method: "POST", body: JSON.stringify({ email }) }),
+  verifyEmailCode: (email: string, code: string, themeColor?: string) =>
+    request<SignedIn>("/auth/email/verify", {
+      method: "POST",
+      body: JSON.stringify({ email, code, themeColor }),
     }),
 
   user: (id: string) => request<PublicUser>(`/users/${id}`),
@@ -330,9 +406,40 @@ export const api = {
   updateProfile: (id: string, data: ProfileUpdate) =>
     request<FullUser>(`/users/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   requestPhoneChange: (id: string, phone: string) =>
-    request<{ sent: boolean }>(`/users/${id}/phone/request`, { method: "POST", body: JSON.stringify({ phone }) }),
+    request<CodeRequest>(`/users/${id}/phone/request`, { method: "POST", body: JSON.stringify({ phone }) }),
   verifyPhoneChange: (id: string, phone: string, code: string) =>
     request<FullUser>(`/users/${id}/phone/verify`, { method: "POST", body: JSON.stringify({ phone, code }) }),
+  requestEmailChange: (id: string, email: string) =>
+    request<CodeRequest>(`/users/${id}/email/request`, { method: "POST", body: JSON.stringify({ email }) }),
+  verifyEmailChange: (id: string, email: string, code: string) =>
+    request<FullUser>(`/users/${id}/email/verify`, { method: "POST", body: JSON.stringify({ email, code }) }),
+  moneyConfig: () => request<MoneyConfig>("/purchases/config"),
+  myPurchases: () => request<{ purchases: Purchase[]; bank: BankDetails }>("/purchases/mine"),
+  createPurchase: (data: NewPurchase, clientRequestId: string) => request<Purchase>("/purchases", { method: "POST", body: JSON.stringify({ ...data, clientRequestId }) }),
+  submitSlip: (id: string, slipUrl: string) => request<void>(`/purchases/${id}/slip`, { method: "POST", body: JSON.stringify({ slipUrl }) }),
+  cancelPurchase: (id: string) => request<void>(`/purchases/${id}/cancel`, { method: "POST", body: "{}" }),
+  ads: () => request<RunningAd[]>("/ads"),
+  adClicked: (id: string) => request<void>(`/ads/${id}/click`, { method: "POST", body: "{}" }),
+  adminMoney: () => request<{ settings: MoneySettings; purchases: Purchase[] }>("/admin/money"),
+  saveMoneySettings: (settings: MoneySettings) => request<MoneySettings>("/admin/money/settings", { method: "PUT", body: JSON.stringify(settings) }),
+  purchaseAction: (id: string, body: { action: "QUOTE"; amount: number } | { action: "APPROVE" } | { action: "COMPLETE" } | { action: "REJECT"; note: string }) =>
+    request<void>(`/admin/purchases/${id}`, { method: "POST", body: JSON.stringify(body) }),
+  adminReports: () => request<ReportGroup[]>("/admin/reports"),
+  resolveReports: (target: { listingId: string } | { reportedUserId: string }, action: ReportAction) =>
+    request<void>("/admin/reports/resolve", { method: "POST", body: JSON.stringify({ ...target, action }) }),
+  adminIbay: (q: string, page: number) =>
+    request<{ items: IbayItem[]; total: number; hasMore: boolean; showcaseOn: boolean }>(`/admin/ibay?q=${encodeURIComponent(q)}&page=${page}`),
+  setIbayShowcase: (on: boolean) => request<{ showcaseOn: boolean }>("/admin/ibay/showcase", { method: "POST", body: JSON.stringify({ on }) }),
+  hideIbayItem: (id: string, hidden: boolean) => request<void>(`/admin/ibay/${id}/hide`, { method: "POST", body: JSON.stringify({ hidden }) }),
+  ibayItems: (filters: IbayFilters, page: number, limit?: number) => {
+    const qs = new URLSearchParams(Object.entries({ ...filters, page: String(page), limit: limit ? String(limit) : undefined }).filter(([, v]) => !!v) as [string, string][]).toString();
+    return request<{ items: IbayItemSummary[]; hasMore: boolean }>(`/ibay/items?${qs}`);
+  },
+  ibayItem: (id: string) => request<IbayItemDetail>(`/ibay/items/${id}`),
+  claimIbayItem: (id: string) => request<Listing>(`/ibay/items/${id}/claim`, { method: "POST", body: "{}" }),
+  removeIbayItem: (id: string) => request<void>(`/ibay/items/${id}/remove`, { method: "POST", body: "{}" }),
+  reportIbayItem: (id: string) => request<void>(`/ibay/items/${id}/report`, { method: "POST", body: "{}" }),
+  markPriceDropSeen: (userId: string, listingId: string) => request<void>(`/notifications/${userId}/price-drops/${listingId}/seen`, { method: "POST", body: "{}" }),
   deleteAccount: (id: string) => request<void>(`/users/${id}`, { method: "DELETE" }),
   verification: (id: string) => request<VerificationProgress>(`/users/${id}/verification`),
 

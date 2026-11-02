@@ -1,10 +1,13 @@
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
-import { safeRouter, sendValidationError, PHONE_REGEX, normalizePhone } from "../http.js";
+import { safeRouter, sendValidationError, PHONE_REGEX, normalizePhone, normalizeEmail } from "../http.js";
+import { checkCode, respondToCheck, sendCode } from "../otp.js";
+import { sendEmailCode, sendSmsCode } from "../messaging.js";
 import { publicUser, ratingsFor } from "../serializers.js";
 import { deliveredCount, DELIVERIES_TO_VERIFY } from "./orders.js";
 import { trustFor } from "../trust.js";
+import { CLOSED_ACCOUNT_ERROR, isBannedContact } from "../moderation.js";
 
 export const usersRouter = safeRouter();
 
@@ -13,7 +16,7 @@ usersRouter.get("/:id", async (req, res) => {
     where: { id: req.params.id },
     include: { _count: { select: { listings: { where: { status: "ACTIVE" } } } } },
   });
-  if (!user) return res.status(404).json({ error: "We couldn't find that seller." });
+  if (!user || user.isSystem) return res.status(404).json({ error: "We couldn't find that seller." });
   const rating = (await ratingsFor([user.id])).get(user.id) ?? { average: 0, count: 0 };
   res.json({ ...publicUser(user), bio: user.bio, activeListingsCount: user._count.listings, rating, deliveredCount: await deliveredCount(user.id) });
 });
@@ -42,7 +45,6 @@ const phoneField = z
 const updateSchema = z.object({
   name: z.string().trim().min(2).max(40).optional(),
   username: z.string().trim().min(3).max(24).regex(/^[a-zA-Z0-9_]+$/).nullable().optional(),
-  email: z.string().trim().email().nullable().optional(),
   bio: z.string().trim().max(160).nullable().optional(),
   avatarColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).nullable().optional(),
   themeColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).nullable().optional(),
@@ -66,6 +68,7 @@ usersRouter.patch("/:id", async (req, res) => {
     return sendValidationError(res, parsed.error);
   }
   const data = { ...parsed.data };
+  if (data.username?.toLowerCase() === "ibay") return res.status(409).json({ error: "That username is already taken." });
   if (data.whatsappNumber === "") data.whatsappNumber = null;
   if (data.viberNumber === "") data.viberNumber = null;
   try {
@@ -79,24 +82,24 @@ usersRouter.patch("/:id", async (req, res) => {
   }
 });
 
-// Changing the account phone number re-uses the (mock) OTP flow: request a
-// code for the new number, then verify it.
+// Adding or changing a sign-in method: request a code for the new phone/email,
+// then verify it. The code only works for this account and this exact value.
 const phoneSchema = z.object({ phone: z.string().transform(normalizePhone) });
+const emailSchema = z.object({ email: z.string().transform(normalizeEmail).pipe(z.string().email()) });
+const phoneTaken = "That number is already linked to another Alibe account.";
+const emailTaken = "That email is already linked to another Alibe account.";
 
 usersRouter.post("/:id/phone/request", async (req, res) => {
   const parsed = phoneSchema.safeParse(req.body);
   if (!parsed.success || !PHONE_REGEX.test(parsed.data.phone)) {
     return res.status(400).json({ error: "Please enter a valid phone number, e.g. +960 7771234." });
   }
-  const owner = await prisma.user.findUnique({ where: { phone: parsed.data.phone } });
-  if (owner && owner.id !== req.params.id) {
-    return res.status(409).json({ error: "That number is already linked to another Alibe account." });
-  }
-  if (owner?.id === req.params.id) {
-    return res.status(400).json({ error: "That's already your current number." });
-  }
-  console.log(`[mock-sms] Phone-change OTP for ${parsed.data.phone}: 1234`);
-  res.json({ sent: true });
+  const { phone } = parsed.data;
+  const owner = await prisma.user.findUnique({ where: { phone } });
+  if (owner && owner.id !== req.params.id) return res.status(409).json({ error: phoneTaken });
+  if (owner?.id === req.params.id) return res.status(400).json({ error: "That's already your current number." });
+  if (await isBannedContact(phone)) return res.status(403).json({ error: CLOSED_ACCOUNT_ERROR });
+  await sendCode(res, `change:${req.params.id}:phone:${phone}`, (code) => sendSmsCode(phone, code));
 });
 
 const verifyPhoneSchema = z.object({ phone: z.string().transform(normalizePhone), code: z.string() });
@@ -104,18 +107,38 @@ const verifyPhoneSchema = z.object({ phone: z.string().transform(normalizePhone)
 usersRouter.post("/:id/phone/verify", async (req, res) => {
   const parsed = verifyPhoneSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Please enter the code we sent you." });
-  if (parsed.data.code !== "1234") return res.status(401).json({ error: "That code isn't right. Please try again." });
+  const { phone, code } = parsed.data;
+  if (!respondToCheck(res, await checkCode(`change:${req.params.id}:phone:${phone}`, code))) return;
   try {
-    const user = await prisma.user.update({
-      where: { id: req.params.id },
-      data: { phone: parsed.data.phone },
-      include: fullInclude,
-    });
-    res.json(user);
+    res.json(await prisma.user.update({ where: { id: req.params.id }, data: { phone }, include: fullInclude }));
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      return res.status(409).json({ error: "That number is already linked to another Alibe account." });
-    }
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return res.status(409).json({ error: phoneTaken });
+    throw e;
+  }
+});
+
+usersRouter.post("/:id/email/request", async (req, res) => {
+  const parsed = emailSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Please enter a valid email address." });
+  const { email } = parsed.data;
+  const owner = await prisma.user.findUnique({ where: { email } });
+  if (owner && owner.id !== req.params.id) return res.status(409).json({ error: emailTaken });
+  if (owner?.id === req.params.id) return res.status(400).json({ error: "That's already your current email." });
+  if (await isBannedContact(email)) return res.status(403).json({ error: CLOSED_ACCOUNT_ERROR });
+  await sendCode(res, `change:${req.params.id}:email:${email}`, (code) => sendEmailCode(email, code));
+});
+
+const verifyEmailSchema = z.object({ email: z.string().transform(normalizeEmail), code: z.string() });
+
+usersRouter.post("/:id/email/verify", async (req, res) => {
+  const parsed = verifyEmailSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Please enter the code we sent you." });
+  const { email, code } = parsed.data;
+  if (!respondToCheck(res, await checkCode(`change:${req.params.id}:email:${email}`, code))) return;
+  try {
+    res.json(await prisma.user.update({ where: { id: req.params.id }, data: { email }, include: fullInclude }));
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return res.status(409).json({ error: emailTaken });
     throw e;
   }
 });

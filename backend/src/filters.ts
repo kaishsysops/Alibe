@@ -40,6 +40,7 @@ export async function hiddenSellerIds(viewerId?: string) {
 export function listingWhere(f: ListingFilters, hidden: string[] = []): Prisma.ListingWhereInput {
   return {
     status: "ACTIVE",
+    hiddenAt: null,
     sellerId: hidden.length ? { notIn: hidden } : undefined,
     category: f.categorySlug ? { slug: f.categorySlug } : undefined,
     islandId: f.islandId ?? undefined,

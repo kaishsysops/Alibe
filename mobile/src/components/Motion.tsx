@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef } from "react";
 import { Animated, Easing, LayoutAnimation, Platform, StyleProp, UIManager, View, ViewStyle } from "react-native";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 
@@ -7,6 +7,10 @@ import { useReducedMotion } from "../hooks/useReducedMotion";
 const useNativeDriver = Platform.OS !== "web";
 
 if (Platform.OS === "android") UIManager.setLayoutAnimationEnabledExperimental?.(true);
+
+// Closed while the launch splash covers the screen: entrances wait for it to
+// lift, so they're seen instead of playing out underneath it.
+export const EntranceGate = createContext(true);
 
 // Smoothly animates the next layout change (sections appearing, growing or
 // collapsing). Call right before the state update that changes layout.
@@ -23,11 +27,13 @@ export function animateLayout() {
 // Fades and rises content into place on mount. Stagger siblings with `delay`.
 export function FadeIn({ delay = 0, distance = 14, style, children }: { delay?: number; distance?: number; style?: StyleProp<ViewStyle>; children: React.ReactNode }) {
   const reduceMotion = useReducedMotion();
+  const open = useContext(EntranceGate);
   const v = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (reduceMotion) return v.setValue(1);
+    if (!open) return;
     Animated.timing(v, { toValue: 1, duration: 380, delay, easing: Easing.out(Easing.cubic), useNativeDriver }).start();
-  }, [reduceMotion]);
+  }, [reduceMotion, open]);
   return (
     <Animated.View style={[style, { opacity: v, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [distance, 0] }) }] }]}>
       {children}
@@ -38,11 +44,13 @@ export function FadeIn({ delay = 0, distance = 14, style, children }: { delay?: 
 // Springs content from small to full size on mount: checkmarks, digits, dots.
 export function Pop({ delay = 0, from = 0.4, style, children }: { delay?: number; from?: number; style?: StyleProp<ViewStyle>; children: React.ReactNode }) {
   const reduceMotion = useReducedMotion();
+  const open = useContext(EntranceGate);
   const v = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (reduceMotion) return v.setValue(1);
+    if (!open) return;
     Animated.spring(v, { toValue: 1, delay, friction: 5, tension: 160, useNativeDriver }).start();
-  }, [reduceMotion]);
+  }, [reduceMotion, open]);
   return (
     <Animated.View style={[style, { opacity: v.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 1, 1] }), transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [from, 1] }) }] }]}>
       {children}
