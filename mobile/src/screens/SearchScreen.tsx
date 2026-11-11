@@ -20,6 +20,7 @@ import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, conditionColors, cardShadow, fontSize, fontWeight, controlHeight } from "../theme/theme";
 import { categoryIcons, AllCategoriesIcon } from "../theme/categoryIcons";
 import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
+import AvatarPhoto from "../components/AvatarPhoto";
 
 const CONDITIONS: Array<Listing["condition"]> = ["NEW", "LIKE_NEW", "GOOD", "FAIR"];
 const SORTS: Array<{ key: ListingSort; label: string }> = [
@@ -426,6 +427,7 @@ export default function SearchScreen() {
           <Tap key={s.id} style={styles.sellerCard} onPress={() => goToSeller(s)} scaleTo={0.96} accessibilityLabel={`Open ${s.name}'s profile`}>
             <View style={[styles.sellerAvatar, { backgroundColor: s.avatarColor ?? colors.primary }]}>
               <Text style={styles.sellerAvatarText}>{s.name.charAt(0).toUpperCase()}</Text>
+              <AvatarPhoto uri={s.avatarUrl} />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={styles.sellerNameRow}>

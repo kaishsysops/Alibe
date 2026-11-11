@@ -2,8 +2,10 @@ import React, { useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, ScrollView, ActivityIndicator, Switch, KeyboardAvoidingView, Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Check, ChevronRight, Mail, Phone, Sun, Moon, SunMoon } from "lucide-react-native";
-import { api, Atoll, FullUser, PaymentMethod, errorMessage } from "../api/client";
+import * as ImagePicker from "expo-image-picker";
+import { Camera, Check, ChevronRight, Mail, Phone, Sun, Moon, SunMoon } from "lucide-react-native";
+import { api, Atoll, FullUser, PaymentMethod, errorMessage, uploadMedia } from "../api/client";
+import AvatarPhoto from "../components/AvatarPhoto";
 import { useAuth } from "../api/AuthContext";
 import { useToast } from "../components/Toast";
 import ScreenHeader from "../components/ScreenHeader";
@@ -60,6 +62,7 @@ export default function EditProfileScreen() {
     username: "",
     bio: "",
     avatarColor: AVATAR_COLORS[0],
+    avatarUrl: null as string | null,
     islandId: undefined as string | undefined,
     paymentMethod: undefined as PaymentMethod | undefined,
     promoOptIn: true,
@@ -82,6 +85,7 @@ export default function EditProfileScreen() {
           username: p.username ?? "",
           bio: p.bio ?? "",
           avatarColor: p.avatarColor ?? AVATAR_COLORS[0],
+          avatarUrl: p.avatarUrl ?? null,
           islandId: p.islandId ?? undefined,
           paymentMethod: p.paymentMethod ?? undefined,
           promoOptIn: p.promoOptIn,
@@ -118,6 +122,7 @@ export default function EditProfileScreen() {
         username: form.username.trim() || null,
         bio: form.bio.trim() || null,
         avatarColor: form.avatarColor,
+        avatarUrl: form.avatarUrl,
         islandId: form.islandId ?? null,
         paymentMethod: form.paymentMethod ?? null,
         promoOptIn: form.promoOptIn,
@@ -132,6 +137,22 @@ export default function EditProfileScreen() {
       navigation.goBack();
     } catch (e) {
       toast.error(errorMessage(e, "Couldn't save your changes. Please try again."));
+    }
+  });
+
+  // The photo uploads as soon as it's picked; the profile only points at it
+  // once Save is tapped.
+  const [pickPhoto, uploadingPhoto] = useSingleFlight(async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return toast.error("Please allow photo access to add a profile photo.");
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    try {
+      const { url } = await uploadMedia(asset.uri, asset.mimeType ?? "image/jpeg");
+      set({ avatarUrl: url });
+    } catch (e) {
+      toast.error(errorMessage(e, "Couldn't upload that photo. Please try again."));
     }
   });
 
@@ -258,15 +279,39 @@ export default function EditProfileScreen() {
 
           <Section title="Public profile">
             <View style={styles.avatarRow}>
-              <View style={[styles.avatarPreview, { backgroundColor: form.avatarColor }]}>
+              <Tap style={[styles.avatarPreview, { backgroundColor: form.avatarColor }]} onPress={pickPhoto} disabled={uploadingPhoto} scaleTo={0.92} accessibilityLabel={form.avatarUrl ? "Change profile photo" : "Add profile photo"}>
                 <Text style={styles.avatarPreviewText}>{(form.name || "?").charAt(0).toUpperCase()}</Text>
-              </View>
-              <View style={styles.colorRow}>
-                {AVATAR_COLORS.map((c) => (
-                  <Tap key={c} style={[styles.colorSwatch, { backgroundColor: c }]} onPress={() => set({ avatarColor: c })} scaleTo={0.85} accessibilityLabel="Avatar colour">
-                    {form.avatarColor === c && <Check size={14} color="#fff" strokeWidth={3} />}
+                <AvatarPhoto uri={form.avatarUrl} />
+                {uploadingPhoto ? (
+                  <View style={styles.avatarBusy}>
+                    <ActivityIndicator color="#fff" />
+                  </View>
+                ) : (
+                  <View style={styles.cameraBadge}>
+                    <Camera size={12} color="#fff" strokeWidth={2.6} />
+                  </View>
+                )}
+              </Tap>
+              <View style={{ flex: 1, gap: spacing.sm }}>
+                <View style={styles.photoActions}>
+                  <Tap style={styles.photoButton} onPress={pickPhoto} disabled={uploadingPhoto} scaleTo={0.95}>
+                    <Text style={styles.photoButtonText}>{uploadingPhoto ? "Uploading..." : form.avatarUrl ? "Change photo" : "Add photo"}</Text>
                   </Tap>
-                ))}
+                  {!!form.avatarUrl && !uploadingPhoto && (
+                    <Tap style={styles.photoRemove} onPress={() => set({ avatarUrl: null })} scaleTo={0.95}>
+                      <Text style={styles.photoRemoveText}>Remove</Text>
+                    </Tap>
+                  )}
+                </View>
+                {!form.avatarUrl && (
+                  <View style={styles.colorRow}>
+                    {AVATAR_COLORS.map((c) => (
+                      <Tap key={c} style={[styles.colorSwatch, { backgroundColor: c }]} onPress={() => set({ avatarColor: c })} scaleTo={0.85} accessibilityLabel="Avatar colour">
+                        {form.avatarColor === c && <Check size={14} color="#fff" strokeWidth={3} />}
+                      </Tap>
+                    ))}
+                  </View>
+                )}
               </View>
             </View>
             <Field label="Name">
@@ -343,7 +388,14 @@ const useStyles = makeStyles((colors) => ({
   avatarRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.md, paddingTop: spacing.md },
   avatarPreview: { width: 56, height: 56, borderRadius: 28, alignItems: "center", justifyContent: "center" },
   avatarPreviewText: { color: "#fff", fontWeight: fontWeight.extrabold, fontSize: fontSize.xl },
-  colorRow: { flex: 1, flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  colorRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  avatarBusy: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center" },
+  cameraBadge: { position: "absolute", right: -2, bottom: -2, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.text, borderWidth: 2, borderColor: colors.card, alignItems: "center", justifyContent: "center" },
+  photoActions: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  photoButton: { paddingHorizontal: spacing.md, height: 34, justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors.primaryTint },
+  photoButtonText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.primary },
+  photoRemove: { paddingHorizontal: spacing.sm, height: 34, justifyContent: "center" },
+  photoRemoveText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.textMuted },
   colorSwatch: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
   channel: { paddingBottom: spacing.md },
   channelIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" },

@@ -74,6 +74,8 @@ const updateSchema = z.object({
   username: z.string().trim().min(3).max(24).regex(/^[a-zA-Z0-9_]+$/).nullable().optional(),
   bio: z.string().trim().max(160).nullable().optional(),
   avatarColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).nullable().optional(),
+  // Only photos uploaded to this server, never outside links.
+  avatarUrl: z.string().regex(/^\/uploads\/[0-9a-f-]+\.(jpg|png|webp|heic|gif)$/).nullable().optional(),
   themeColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).nullable().optional(),
   islandId: z.string().nullable().optional(),
   paymentMethod: z.enum(["CASH", "BANK_TRANSFER"]).nullable().optional(),

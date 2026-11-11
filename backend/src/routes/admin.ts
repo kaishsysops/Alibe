@@ -287,6 +287,7 @@ adminRouter.get("/sellers", async (req, res) => {
       phone: u.phone,
       email: u.email,
       avatarColor: u.avatarColor,
+      avatarUrl: u.avatarUrl,
       verified: u.verificationStatus === "VERIFIED",
       isAdmin: u.isAdmin,
       createdAt: u.createdAt,

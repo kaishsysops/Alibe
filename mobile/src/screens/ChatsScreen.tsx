@@ -18,6 +18,7 @@ import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, tabBarClearance, cardShadow, fontSize, fontWeight } from "../theme/theme";
 import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
 import { timeAgo } from "../utils/time";
+import AvatarPhoto from "../components/AvatarPhoto";
 
 const LIST_PANE_WIDTH = 360;
 type Filter = "ALL" | "UNREAD" | "BUYING" | "SELLING";
@@ -43,6 +44,7 @@ function ConversationRow({ item, selected, onPress }: { item: Conversation; sele
         <ListingImage uri={item.listing.images[0]} style={styles.thumb} />
         <View style={[styles.avatarBadge, { backgroundColor: other.avatarColor ?? colors.primary }]}>
           <Text style={styles.avatarBadgeText}>{other.name.charAt(0).toUpperCase()}</Text>
+          <AvatarPhoto uri={other.avatarUrl} />
         </View>
       </View>
       <View style={styles.rowBody}>

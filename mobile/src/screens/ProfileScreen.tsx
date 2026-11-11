@@ -17,6 +17,7 @@ import { useResponsive } from "../hooks/useResponsive";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import { formatPhone } from "../utils/phone";
 import { WhatsAppIcon, ViberIcon } from "../components/BrandIcons";
+import AvatarPhoto from "../components/AvatarPhoto";
 
 export default function ProfileScreen() {
   const styles = useStyles();
@@ -113,6 +114,7 @@ export default function ProfileScreen() {
       <View style={styles.headerCard}>
         <View style={[styles.avatar, { backgroundColor: user?.avatarColor ?? colors.primary }]}>
           <Text style={styles.avatarText}>{(user?.name ?? "?").charAt(0).toUpperCase()}</Text>
+          <AvatarPhoto uri={user?.avatarUrl} />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.name} numberOfLines={1}>

@@ -50,6 +50,8 @@ model User {
   email                  String?        @unique
   bio                    String?
   avatarColor            String?
+  // Profile photo: a server path from /uploads. Initials on avatarColor when null.
+  avatarUrl              String?
   islandId               String?
   island                 Island?        @relation(fields: [islandId], references: [id])
   paymentMethod          PaymentMethod?

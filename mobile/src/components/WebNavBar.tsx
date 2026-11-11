@@ -9,6 +9,7 @@ import { spacing, radius, fontSize, fontWeight } from "../theme/theme";
 import { MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
 import { useAuth } from "../api/AuthContext";
 import Tap from "./Tap";
+import AvatarPhoto from "./AvatarPhoto";
 
 const LINKS = [
   { key: "home", label: "Home", route: "HomeTab" },
@@ -95,6 +96,7 @@ export default function WebNavBar({ active, onSearch }: { active?: string; onSea
             scaleTo={0.9}
           >
             <Text style={styles.avatarText}>{(user?.name ?? "?").charAt(0).toUpperCase()}</Text>
+            <AvatarPhoto uri={user?.avatarUrl} />
           </Tap>
         </View>
       </View>

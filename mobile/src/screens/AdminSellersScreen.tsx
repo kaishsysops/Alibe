@@ -14,6 +14,7 @@ import Tap from "../components/Tap";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, contentWidth } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
+import AvatarPhoto from "../components/AvatarPhoto";
 
 const joined = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
@@ -120,6 +121,7 @@ export default function AdminSellersScreen() {
       <Tap style={[styles.row, banned && styles.rowBanned]} onPress={() => navigation.navigate("SellerProfile", { id: s.id })} scaleTo={0.98} accessibilityLabel={`Open ${s.name}'s profile`}>
         <View style={[styles.avatar, { backgroundColor: banned ? colors.textMuted : s.avatarColor ?? colors.primary }]}>
           <Text style={styles.avatarText}>{s.name.charAt(0).toUpperCase()}</Text>
+          <AvatarPhoto uri={s.avatarUrl} />
         </View>
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
           <View style={styles.nameRow}>

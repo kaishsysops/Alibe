@@ -9,6 +9,7 @@ export function publicUser(u: User) {
     name: u.name,
     username: u.username,
     avatarColor: u.avatarColor,
+    avatarUrl: u.avatarUrl,
     createdAt: u.createdAt,
     verified: u.verificationStatus === "VERIFIED",
     phone: u.showPhone ? u.phone : null,

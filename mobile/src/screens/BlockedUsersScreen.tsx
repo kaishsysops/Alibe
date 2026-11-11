@@ -13,6 +13,7 @@ import Tap from "../components/Tap";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow, contentWidth } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
+import AvatarPhoto from "../components/AvatarPhoto";
 
 export default function BlockedUsersScreen() {
   const styles = useStyles();
@@ -60,6 +61,7 @@ export default function BlockedUsersScreen() {
         <View style={styles.row}>
           <View style={[styles.avatar, { backgroundColor: item.user.avatarColor ?? colors.primary }]}>
             <Text style={styles.avatarText}>{item.user.name.charAt(0).toUpperCase()}</Text>
+            <AvatarPhoto uri={item.user.avatarUrl} />
           </View>
           <Text style={styles.name} numberOfLines={1}>
             {item.user.name}

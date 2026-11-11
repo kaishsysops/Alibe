@@ -26,6 +26,7 @@ import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, tabBarClearance, fontSize, fontWeight } from "../theme/theme";
 import { categoryIcons, AllCategoriesIcon } from "../theme/categoryIcons";
 import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
+import AvatarPhoto from "../components/AvatarPhoto";
 
 const HERO_IMAGE = "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=1200&h=800&fit=crop&auto=format&q=75";
 const SELL_IMAGE = "https://images.unsplash.com/photo-1556745757-8d76bdb6984b?w=1000&h=600&fit=crop&auto=format&q=75";
@@ -260,6 +261,7 @@ export default function HomeScreen() {
               scaleTo={0.9}
             >
               <Text style={styles.avatarText}>{(user?.name ?? "?").charAt(0).toUpperCase()}</Text>
+              <AvatarPhoto uri={user?.avatarUrl} />
             </Tap>
             </View>
           </View>

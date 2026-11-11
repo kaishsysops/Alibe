@@ -17,6 +17,7 @@ import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, cardShadow, fontSize, fontWeight } from "../theme/theme";
 import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
 import TrustBadge from "../components/TrustBadge";
+import AvatarPhoto from "../components/AvatarPhoto";
 
 export default function SellerProfileScreen() {
   const styles = useStyles();
@@ -64,6 +65,7 @@ export default function SellerProfileScreen() {
       <View style={styles.card}>
         <View style={[styles.avatar, { backgroundColor: seller.avatarColor ?? colors.primary }]}>
           <Text style={styles.avatarText}>{seller.name.charAt(0).toUpperCase()}</Text>
+          <AvatarPhoto uri={seller.avatarUrl} />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.name}>{seller.name}</Text>

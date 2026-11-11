@@ -27,6 +27,7 @@ import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import { timeAgo } from "../utils/time";
 import TrustBadge from "../components/TrustBadge";
+import AvatarPhoto from "../components/AvatarPhoto";
 
 const DELIVERY_META: Record<DeliveryOption, { label: string; icon: any }> = {
   PICKUP: { label: "Pickup", icon: Hand },
@@ -343,6 +344,7 @@ export default function ProductDetailScreen() {
       <Tap style={styles.sellerCard} onPress={() => navigation.navigate("SellerProfile", { id: listing.seller.id })} scaleTo={0.98}>
         <View style={[styles.avatar, { backgroundColor: listing.seller.avatarColor ?? colors.primary }]}>
           <Text style={styles.avatarText}>{listing.seller.name.charAt(0).toUpperCase()}</Text>
+          <AvatarPhoto uri={listing.seller.avatarUrl} />
         </View>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>

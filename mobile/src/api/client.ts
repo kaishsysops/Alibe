@@ -124,6 +124,7 @@ export type PublicSeller = {
   rating?: SellerRating;
   username?: string | null;
   avatarColor?: string | null;
+  avatarUrl?: string | null;
   createdAt?: string;
   // Each contact channel is null unless the seller has switched it on.
   phone: string | null;
@@ -162,6 +163,7 @@ export type User = {
   createdAt?: string;
   username?: string | null;
   avatarColor?: string | null;
+  avatarUrl?: string | null;
   themeColor?: string | null;
   showPhone?: boolean;
   whatsappEnabled?: boolean;
@@ -187,6 +189,7 @@ export type AdminSeller = {
   phone: string | null;
   email: string | null;
   avatarColor: string | null;
+  avatarUrl: string | null;
   verified: boolean;
   isAdmin: boolean;
   createdAt: string;
@@ -299,6 +302,7 @@ export type ProfileUpdate = Partial<{
   username: string | null;
   bio: string | null;
   avatarColor: string | null;
+  avatarUrl: string | null;
   themeColor: string | null;
   islandId: string | null;
   paymentMethod: PaymentMethod | null;
