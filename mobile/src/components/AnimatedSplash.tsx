@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Platform, StyleSheet, View } from "react-native";
-import { ShoppingBag } from "lucide-react-native";
+import AlibeMark from "./AlibeMark";
 import { DEFAULT_ACCENT, fontWeight } from "../theme/theme";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 
@@ -73,7 +73,7 @@ export default function AnimatedSplash({ ready, onExit }: { ready: boolean; onEx
               },
             ]}
           >
-            <ShoppingBag size={40} color={BRAND} strokeWidth={2.4} />
+            <AlibeMark size={58} color={BRAND} />
           </Animated.View>
         </View>
         <View style={styles.word}>

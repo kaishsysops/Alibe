@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="512" height="512">
+<title>Alibe mark</title>
+<rect width="240" height="240" fill="#FFFFFF"/>
+<g transform="translate(120 120) scale(1.12) translate(-120 -128)"><g fill="none" stroke="#FF6A00" stroke-linecap="round" stroke-linejoin="round"><g stroke-width="12"><path d="M74 100 L64 162 Q62 192 92 192 H101 Q120 206 139 192 H148 Q178 192 176 162 L166 100"/><path d="M54 100 H186"/><path d="M87 100 Q87 50 120 50 Q153 50 153 100"/></g><g stroke-width="8.5"><path d="M89 82 Q120 92 151 82"/><path d="M103 154 Q120 170 137 154"/></g><path d="M101 134 h0 M139 134 h0" stroke-width="11"/></g></g>
+</svg>

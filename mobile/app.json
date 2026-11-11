@@ -6,6 +6,8 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
       "backgroundColor": "#FF6A00"
     },
     "assetBundlePatterns": [
@@ -16,10 +18,15 @@
       "bundleIdentifier": "com.alibe.app"
     },
     "android": {
-      "package": "com.alibe.app"
+      "package": "com.alibe.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FF6A00"
+      }
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       [
@@ -31,6 +38,7 @@
       "expo-status-bar",
       "expo-video",
       "expo-image"
-    ]
+    ],
+    "icon": "./assets/icon.png"
   }
 }

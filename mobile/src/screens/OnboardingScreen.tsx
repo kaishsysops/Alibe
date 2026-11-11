@@ -15,6 +15,7 @@ import { ACCENTS, spacing, radius, fontSize, fontWeight, controlHeight } from ".
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 import { formatPhone } from "../utils/phone";
+import AlibeMark from "../components/AlibeMark";
 
 const useNativeDriver = Platform.OS !== "web";
 
@@ -450,7 +451,7 @@ export default function OnboardingScreen() {
       <View style={[styles.brand, { paddingTop: insets.top + spacing.md }]}>
         <Pop from={0.5}>
           <View style={styles.logo}>
-            <ShoppingBag size={24} color={colors.primary} strokeWidth={2.4} />
+            <AlibeMark size={28} color={colors.primary} />
           </View>
         </Pop>
         <FadeIn delay={120} distance={6}>

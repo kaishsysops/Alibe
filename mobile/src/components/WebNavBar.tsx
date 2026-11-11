@@ -10,6 +10,7 @@ import { MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
 import { useAuth } from "../api/AuthContext";
 import Tap from "./Tap";
 import AvatarPhoto from "./AvatarPhoto";
+import AlibeMark from "./AlibeMark";
 
 const LINKS = [
   { key: "home", label: "Home", route: "HomeTab" },
@@ -41,7 +42,10 @@ export default function WebNavBar({ active, onSearch }: { active?: string; onSea
     <View style={styles.wrapper}>
       <View style={styles.bar}>
         <Tap onPress={() => go("HomeTab")} scaleTo={0.95} accessibilityLabel="Alibe home">
-          <Text style={styles.logo}>Alibe</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <AlibeMark size={30} color={colors.primary} />
+            <Text style={styles.logo}>Alibe</Text>
+          </View>
         </Tap>
 
         <View style={styles.links}>
