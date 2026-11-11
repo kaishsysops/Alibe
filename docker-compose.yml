@@ -7,8 +7,10 @@ services:
       POSTGRES_USER: alibe
       POSTGRES_PASSWORD: alibe
       POSTGRES_DB: alibe
+    # Bound to 127.0.0.1 so the database is never reachable from the internet
+    # (Docker-published ports bypass ufw). Use `docker compose exec postgres psql`.
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - alibe-pg-data:/var/lib/postgresql/data
     healthcheck:
@@ -41,6 +43,8 @@ services:
     build: ./mobile
     container_name: alibe-mobile
     restart: unless-stopped
+    # LAN_IP is the address phones/browsers use to reach this machine:
+    # your Mac's LAN IP locally, or the VPS's public IP when hosted (see README).
     environment:
       REACT_NATIVE_PACKAGER_HOSTNAME: ${LAN_IP:-localhost}
       EXPO_PUBLIC_API_BASE_URL: http://${LAN_IP:-localhost}:4000
