@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { View, Text, TextInput, ScrollView, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { Search as SearchIcon, X, SlidersHorizontal, SearchX, BellPlus, BellRing, Clock, TrendingUp, ArrowUpDown } from "lucide-react-native";
-import { api, Atoll, Category, DeliveryOption, errorMessage, Listing, ListingSort } from "../api/client";
+import { Search as SearchIcon, X, SlidersHorizontal, SearchX, BellPlus, BellRing, Clock, TrendingUp, ArrowUpDown, Star } from "lucide-react-native";
+import { api, Atoll, Category, DeliveryOption, errorMessage, Listing, ListingSort, SellerSearchResult } from "../api/client";
+import { VerifiedBadge } from "../components/Badges";
 import { useAuth } from "../api/AuthContext";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import CategoryTile from "../components/CategoryTile";
@@ -85,6 +86,9 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const requestId = useRef(0);
+  // Sellers whose name or @username matches what's typed, shown above the items.
+  const [sellers, setSellers] = useState<SellerSearchResult[]>([]);
+  const sellerRequestId = useRef(0);
 
   const activeFilterCount = (atollId ? 1 : 0) + (condition ? 1 : 0) + (minPrice ? 1 : 0) + (maxPrice ? 1 : 0) + (delivery ? 1 : 0);
   const isBrowsing = !query.trim() && !categorySlug && activeFilterCount === 0;
@@ -148,6 +152,27 @@ export default function SearchScreen() {
     return () => clearTimeout(t);
   }, [runSearch, query]);
 
+  useEffect(() => {
+    const q = query.trim();
+    const id = ++sellerRequestId.current;
+    if (q.replace(/^@/, "").length < 2) {
+      setSellers([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      api
+        .searchSellers(q)
+        .then((list) => id === sellerRequestId.current && setSellers(list))
+        .catch(() => id === sellerRequestId.current && setSellers([]));
+    }, DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const goToSeller = (s: SellerSearchResult) => {
+    remember(query);
+    navigation.navigate("SellerProfile", { id: s.id });
+  };
+
   const clearAll = () => {
     setQuery("");
     setCategorySlug(undefined);
@@ -197,7 +222,7 @@ export default function SearchScreen() {
       <SearchIcon size={20} color={focused ? colors.primary : colors.textMuted} />
       <TextInput
         style={styles.input}
-        placeholder="What are you looking for?"
+        placeholder="Search items or sellers"
         placeholderTextColor={colors.textMuted}
         value={query}
         onChangeText={setQuery}
@@ -206,7 +231,7 @@ export default function SearchScreen() {
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         autoCorrect={false}
-        accessibilityLabel="Search listings"
+        accessibilityLabel="Search items and sellers"
       />
       {query.length > 0 && (
         <Tap style={styles.clearInput} onPress={() => setQuery("")} hitSlop={10} scaleTo={0.85} accessibilityLabel="Clear search">
@@ -387,9 +412,57 @@ export default function SearchScreen() {
     </View>
   );
 
+  const sellersBlock = sellers.length > 0 && (
+    <FadeIn style={{ marginBottom: spacing.lg }}>
+      <Text style={styles.sectionTitle}>Sellers</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={[styles.hRow, !isDesktopWeb && { marginHorizontal: -gutter }]}
+        contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: isDesktopWeb ? 0 : gutter, paddingBottom: 4 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        {sellers.map((s) => (
+          <Tap key={s.id} style={styles.sellerCard} onPress={() => goToSeller(s)} scaleTo={0.96} accessibilityLabel={`Open ${s.name}'s profile`}>
+            <View style={[styles.sellerAvatar, { backgroundColor: s.avatarColor ?? colors.primary }]}>
+              <Text style={styles.sellerAvatarText}>{s.name.charAt(0).toUpperCase()}</Text>
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <View style={styles.sellerNameRow}>
+                <Text style={styles.sellerName} numberOfLines={1}>
+                  {s.name}
+                </Text>
+                {s.verified && <VerifiedBadge size={14} />}
+              </View>
+              {!!s.username && (
+                <Text style={styles.sellerMeta} numberOfLines={1}>
+                  @{s.username}
+                </Text>
+              )}
+              <View style={styles.sellerStats}>
+                {s.rating.count > 0 ? (
+                  <>
+                    <Star size={12} color={colors.gold} fill={colors.gold} />
+                    <Text style={styles.sellerStatText}>
+                      {s.rating.average.toFixed(1)} ({s.rating.count})
+                    </Text>
+                  </>
+                ) : (
+                  <Text style={styles.sellerMeta}>No reviews yet</Text>
+                )}
+                <Text style={styles.sellerMeta}> · {s.activeListingsCount} for sale</Text>
+              </View>
+            </View>
+          </Tap>
+        ))}
+      </ScrollView>
+    </FadeIn>
+  );
+
   const resultsHeader = (
     <View style={{ paddingHorizontal: isDesktopWeb ? 0 : gutter }}>
       {isBrowsing && startBlock}
+      {sellersBlock}
       {isBrowsing && categories.length > 0 && categoryTiles}
       <View style={styles.resultsRow}>
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -412,7 +485,7 @@ export default function SearchScreen() {
   const empty = (
     <EmptyState
       icon={SearchX}
-      title="No matches"
+      title={sellers.length > 0 ? "No items match" : "No matches"}
       message={query.trim() ? `Nothing for "${query.trim()}" yet. Try another word or widen your filters.` : "Nothing matches these filters. Try widening them."}
       actionLabel="Clear search and filters"
       onAction={clearAll}
@@ -557,5 +630,13 @@ const useStyles = makeStyles((colors) => ({
   blockHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   clearText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.textMuted, marginBottom: spacing.sm + 2 },
   suggestion: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.sm + 6, height: 38, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  sellerCard: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 2, width: 248, padding: spacing.sm + 4, borderRadius: radius.lg, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  sellerAvatar: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
+  sellerAvatarText: { color: "#fff", fontWeight: fontWeight.extrabold, fontSize: fontSize.lg },
+  sellerNameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  sellerName: { flexShrink: 1, fontSize: fontSize.base, fontWeight: fontWeight.bold, color: colors.text },
+  sellerMeta: { fontSize: fontSize.sm, color: colors.textMuted },
+  sellerStats: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
+  sellerStatText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text },
   suggestionText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text },
 }));

@@ -180,6 +180,7 @@ export type FullUser = Required<Omit<User, "createdAt">> & {
   promoOptIn: boolean;
 };
 export type PublicUser = PublicSeller & { bio: string | null; createdAt: string; activeListingsCount: number; rating: SellerRating; deliveredCount: number };
+export type SellerSearchResult = PublicSeller & { createdAt: string; activeListingsCount: number; rating: SellerRating };
 export type TrustLevel = "CAUTION" | "NEW" | "MEMBER" | "ESTABLISHED" | "TRUSTED";
 export type TrustSummary = {
   level: TrustLevel;
@@ -399,6 +400,7 @@ export const api = {
     }),
 
   user: (id: string) => request<PublicUser>(`/users/${id}`),
+  searchSellers: (q: string) => request<SellerSearchResult[]>(`/users?q=${encodeURIComponent(q)}`),
   // Someone else's items for sale (seller profile). Active only.
   sellerListings: (sellerId: string) => request<Listing[]>(`/listings?seller=${encodeURIComponent(sellerId)}`),
   trust: (id: string) => request<TrustSummary>(`/users/${id}/trust`),

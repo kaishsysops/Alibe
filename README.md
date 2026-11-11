@@ -69,20 +69,18 @@ changing `package.json` dependencies.
 
 ## Running it on a VPS for testers
 
-Lets anyone test from anywhere (browser or Expo Go), using the VPS's public IP.
+Lets anyone test from anywhere in a browser, using the VPS's public IP.
 Still the development setup: sign-in codes appear on screen, so treat it as a
 test server only.
 
 ```bash
-# on the VPS, in the project folder
-echo "LAN_IP=$(curl -4s ifconfig.me)" > .env
-docker compose up -d --build
-docker compose logs -f backend   # wait for "Alibe backend listening..."
-docker compose logs mobile       # QR code for Expo Go
+# on the VPS, in the project folder: pulls, sets LAN_IP, rebuilds, waits until healthy
+./deploy.sh
 ```
 
-Testers open `http://<VPS_IP>:8081` in a browser, or in Expo Go enter
-`exp://<VPS_IP>:8081`. Ports 4000 and 8081 are public (Docker bypasses ufw);
+Testers open `http://<VPS_IP>:8081` in a phone or desktop browser. Expo Go
+doesn't work from a public server unless both the CLI and the phone are signed
+in to Expo, so it's only practical on the same Wi-Fi. Ports 4000 and 8081 are public (Docker bypasses ufw);
 Postgres stays on 127.0.0.1. If the hosting provider has its own firewall
 panel, allow TCP 4000 and 8081 there too.
 

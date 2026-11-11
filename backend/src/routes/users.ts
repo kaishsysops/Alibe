@@ -11,6 +11,33 @@ import { CLOSED_ACCOUNT_ERROR, isBannedContact } from "../moderation.js";
 
 export const usersRouter = safeRouter();
 
+// Seller search for the global Search screen: matches name or @username only
+// (never phone or email). Banned and system accounts are left out; sellers with
+// more for sale come first.
+const SELLER_SEARCH_LIMIT = 12;
+usersRouter.get("/", async (req, res) => {
+  const q = String(req.query.q ?? "").trim().replace(/^@/, "").slice(0, 40);
+  if (q.length < 2) return res.json([]);
+  const users = await prisma.user.findMany({
+    where: {
+      isSystem: false,
+      bannedAt: null,
+      OR: [{ name: { contains: q, mode: "insensitive" } }, { username: { contains: q, mode: "insensitive" } }],
+    },
+    include: { _count: { select: { listings: { where: { status: "ACTIVE" } } } } },
+    orderBy: [{ listings: { _count: "desc" } }, { createdAt: "asc" }],
+    take: SELLER_SEARCH_LIMIT,
+  });
+  const ratings = await ratingsFor(users.map((u) => u.id));
+  res.json(
+    users.map((u) => ({
+      ...publicUser(u),
+      activeListingsCount: u._count.listings,
+      rating: ratings.get(u.id) ?? { average: 0, count: 0 },
+    })),
+  );
+});
+
 usersRouter.get("/:id", async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.params.id },

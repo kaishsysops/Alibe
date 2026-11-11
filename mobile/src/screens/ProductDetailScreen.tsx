@@ -389,7 +389,7 @@ export default function ProductDetailScreen() {
 
   const primaryAction = isOwner ? (
     <View style={{ flexDirection: "row", gap: spacing.sm }}>
-      <Tap style={[styles.secondaryButton, styles.primaryButton, { paddingHorizontal: spacing.md }]} onPress={() => navigation.navigate("EditListing", { id: listing.id })} accessibilityLabel="Edit listing">
+      <Tap style={[styles.primaryButton, styles.secondaryButton, { paddingHorizontal: spacing.md }]} onPress={() => navigation.navigate("EditListing", { id: listing.id })} accessibilityLabel="Edit listing">
         <Pencil size={17} color={colors.primary} />
         <Text style={[styles.primaryButtonText, { color: colors.primary }]}>Edit</Text>
       </Tap>
