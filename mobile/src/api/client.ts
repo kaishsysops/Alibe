@@ -180,6 +180,22 @@ export type FullUser = Required<Omit<User, "createdAt">> & {
   promoOptIn: boolean;
 };
 export type PublicUser = PublicSeller & { bio: string | null; createdAt: string; activeListingsCount: number; rating: SellerRating; deliveredCount: number };
+export type AdminSeller = {
+  id: string;
+  name: string;
+  username: string | null;
+  phone: string | null;
+  email: string | null;
+  avatarColor: string | null;
+  verified: boolean;
+  isAdmin: boolean;
+  createdAt: string;
+  bannedAt: string | null;
+  totalListings: number;
+  activeListings: number;
+  openReports: number;
+  rating: SellerRating;
+};
 export type SellerSearchResult = PublicSeller & { createdAt: string; activeListingsCount: number; rating: SellerRating };
 export type TrustLevel = "CAUTION" | "NEW" | "MEMBER" | "ESTABLISHED" | "TRUSTED";
 export type TrustSummary = {
@@ -429,6 +445,10 @@ export const api = {
   adminReports: () => request<ReportGroup[]>("/admin/reports"),
   resolveReports: (target: { listingId: string } | { reportedUserId: string }, action: ReportAction) =>
     request<void>("/admin/reports/resolve", { method: "POST", body: JSON.stringify({ ...target, action }) }),
+  adminSellers: (q: string, page: number, bannedOnly: boolean) =>
+    request<{ sellers: AdminSeller[]; total: number; hasMore: boolean }>(`/admin/sellers?q=${encodeURIComponent(q)}&page=${page}${bannedOnly ? "&banned=1" : ""}`),
+  banUser: (id: string) => request<void>(`/admin/users/${id}/ban`, { method: "POST" }),
+  unbanUser: (id: string) => request<void>(`/admin/users/${id}/unban`, { method: "POST" }),
   adminIbay: (q: string, page: number) =>
     request<{ items: IbayItem[]; total: number; hasMore: boolean; showcaseOn: boolean }>(`/admin/ibay?q=${encodeURIComponent(q)}&page=${page}`),
   setIbayShowcase: (on: boolean) => request<{ showcaseOn: boolean }>("/admin/ibay/showcase", { method: "POST", body: JSON.stringify({ on }) }),

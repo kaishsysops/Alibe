@@ -5,6 +5,7 @@ import { safeRouter } from "../http.js";
 import { notifyUser } from "../push.js";
 import { SHOWCASE_KEY, isShowcaseOn } from "./ibay.js";
 import { MONEY_KEY, moneySettings } from "../money.js";
+import { ratingsFor } from "../serializers.js";
 
 // The report queue: what people have flagged, and what staff did about it.
 export const adminRouter = safeRouter();
@@ -186,9 +187,20 @@ adminRouter.post("/reports/resolve", async (req, res) => {
   }
 
   const userId = listing ? listing.sellerId : reportedUserId!;
+  const error = await banUser(userId);
+  if (error) return res.status(error.status).json({ error: error.message });
+  res.status(204).send();
+});
+
+// Closes an account: listings come down, sessions end, unsent orders are
+// cancelled and the phone/email can't sign up again. Returns an error to send,
+// or null on success.
+async function banUser(userId: string): Promise<{ status: number; message: string } | null> {
   const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) return res.status(404).json({ error: "We couldn't find that account." });
-  if (user.isAdmin) return res.status(400).json({ error: "Staff accounts can't be banned here." });
+  if (!user || user.isSystem) return { status: 404, message: "We couldn't find that account." };
+  if (user.isAdmin) return { status: 400, message: "Staff accounts can't be banned here." };
+  if (user.bannedAt) return null;
+  const now = new Date();
   const contacts = [user.phone, user.email].filter((c): c is string => !!c);
   // Orders not sent yet can't happen now. One already on its way stays open so
   // the buyer can still confirm it or report a problem.
@@ -208,5 +220,92 @@ adminRouter.post("/reports/resolve", async (req, res) => {
     const other = o.sellerId === userId ? o.buyerId : o.sellerId;
     notifyUser(other, "Your order was cancelled", "The other person's account was closed for breaking Alibe's rules. Please don't send them any money.", { type: "order", orderId: o.id });
   }
+  return null;
+}
+
+// Reopens a banned account. Only listings that came down with the ban go back
+// up; ones removed earlier for breaking the rules stay down.
+async function unbanUser(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user?.bannedAt) return;
+  const contacts = [user.phone, user.email].filter((c): c is string => !!c);
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: userId }, data: { bannedAt: null } }),
+    prisma.bannedContact.deleteMany({ where: { value: { in: contacts } } }),
+    prisma.listing.updateMany({ where: { sellerId: userId, hiddenAt: user.bannedAt }, data: { hiddenAt: null } }),
+  ]);
+}
+
+// Every account that has ever listed something, for the staff Sellers screen.
+const SELLERS_PAGE_SIZE = 40;
+
+adminRouter.get("/sellers", async (req, res) => {
+  const q = String(req.query.q ?? "").trim().replace(/^@/, "").slice(0, 60);
+  const page = Math.max(0, Number(req.query.page) || 0);
+  const banned = req.query.banned === "1";
+  const match = q
+    ? {
+        OR: [
+          { name: { contains: q, mode: "insensitive" as const } },
+          { username: { contains: q, mode: "insensitive" as const } },
+          { email: { contains: q, mode: "insensitive" as const } },
+          { phone: { contains: q.replace(/[\s-]/g, "") } },
+        ],
+      }
+    : {};
+  const where = { isSystem: false, listings: { some: {} }, ...(banned ? { bannedAt: { not: null } } : {}), ...match };
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      include: {
+        _count: {
+          select: {
+            listings: true,
+            reportsAgainst: { where: { resolvedAt: null } },
+          },
+        },
+      },
+      orderBy: [{ listings: { _count: "desc" } }, { createdAt: "desc" }],
+      skip: page * SELLERS_PAGE_SIZE,
+      take: SELLERS_PAGE_SIZE,
+    }),
+    prisma.user.count({ where }),
+  ]);
+  const ids = users.map((u) => u.id);
+  const [active, ratings] = await Promise.all([
+    prisma.listing.groupBy({ by: ["sellerId"], where: { sellerId: { in: ids }, status: "ACTIVE", hiddenAt: null }, _count: { _all: true } }),
+    ratingsFor(ids),
+  ]);
+  const activeBy = new Map(active.map((a) => [a.sellerId, a._count._all]));
+  res.json({
+    total,
+    hasMore: (page + 1) * SELLERS_PAGE_SIZE < total,
+    sellers: users.map((u) => ({
+      id: u.id,
+      name: u.name,
+      username: u.username,
+      phone: u.phone,
+      email: u.email,
+      avatarColor: u.avatarColor,
+      verified: u.verificationStatus === "VERIFIED",
+      isAdmin: u.isAdmin,
+      createdAt: u.createdAt,
+      bannedAt: u.bannedAt,
+      totalListings: u._count.listings,
+      activeListings: activeBy.get(u.id) ?? 0,
+      openReports: u._count.reportsAgainst,
+      rating: ratings.get(u.id) ?? { average: 0, count: 0 },
+    })),
+  });
+});
+
+adminRouter.post("/users/:id/ban", async (req, res) => {
+  const error = await banUser(req.params.id);
+  if (error) return res.status(error.status).json({ error: error.message });
+  res.status(204).send();
+});
+
+adminRouter.post("/users/:id/unban", async (req, res) => {
+  await unbanUser(req.params.id);
   res.status(204).send();
 });

@@ -50,6 +50,7 @@ const PUBLIC: Array<[string, RegExp]> = [
   ["GET", /^\/atolls\/?$/],
   ["GET", /^\/listings\/?$/],
   ["GET", /^\/listings\/(?!mine\/)[^/]+$/],
+  ["GET", /^\/users\/?$/],
   ["GET", /^\/users\/[^/]+$/],
   ["GET", /^\/users\/[^/]+\/trust$/],
   ["GET", /^\/reviews\/seller\/[^/]+$/],
