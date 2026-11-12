@@ -1,7 +1,13 @@
 // Delivers one-time codes. Without a provider, development falls back to the
 // backend log and the app shows the code on screen; production refuses to
 // pretend, so a missing provider can never mean a code anyone can read.
-const isProduction = process.env.NODE_ENV === "production";
+// SHOW_CODES_IN_APP=true is the one exception: a production build used as a
+// test server before SMS/email exist. Anyone can sign in as anyone while it's
+// on, so it must be off once real people use the app.
+const isProduction = process.env.NODE_ENV === "production" && process.env.SHOW_CODES_IN_APP !== "true";
+if (process.env.NODE_ENV === "production" && !isProduction) {
+  console.warn("WARNING: SHOW_CODES_IN_APP=true. Sign-in codes are shown in the app. Test server only.");
+}
 
 // `shownInApp` tells the sign-in route to hand the code back to the app.
 export type Delivery = { shownInApp: boolean };

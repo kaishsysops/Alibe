@@ -6,6 +6,7 @@ import { notifyUser } from "../push.js";
 import { SHOWCASE_KEY, isShowcaseOn } from "./ibay.js";
 import { MONEY_KEY, moneySettings } from "../money.js";
 import { ratingsFor } from "../serializers.js";
+import { signedSlipUrl } from "./slips.js";
 
 // The report queue: what people have flagged, and what staff did about it.
 export const adminRouter = safeRouter();
@@ -96,7 +97,8 @@ adminRouter.get("/money", async (_req, res) => {
     include: { user: { select: { id: true, name: true, phone: true, email: true } } },
     orderBy: { updatedAt: "desc" },
   });
-  res.json({ settings: await moneySettings(), purchases });
+  // Slips are private: staff get links that work for an hour.
+  res.json({ settings: await moneySettings(), purchases: purchases.map((p) => ({ ...p, slipUrl: signedSlipUrl(p.slipUrl) })) });
 });
 
 adminRouter.put("/money/settings", async (req, res) => {

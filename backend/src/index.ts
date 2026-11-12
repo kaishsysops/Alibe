@@ -16,10 +16,19 @@ import { uploadsRouter, UPLOAD_DIR } from "./routes/uploads.js";
 import { ordersRouter } from "./routes/orders.js";
 import { startReminders } from "./reminders.js";
 import { authenticate } from "./auth.js";
+import { rateLimit } from "./rateLimit.js";
+import { slipsRouter, moveSlipsOutOfPublicUploads } from "./routes/slips.js";
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+// Behind nginx (TRUST_PROXY=1) the visitor's IP comes from X-Forwarded-For.
+if (process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
+app.disable("x-powered-by");
+// CORS_ORIGINS (or WEB_ORIGIN, the app's own web address) limits which websites
+// may call the API from a browser. Native apps send no Origin and aren't affected.
+const allowedOrigins = (process.env.CORS_ORIGINS || process.env.WEB_ORIGIN)?.split(",").map((o) => o.trim()).filter(Boolean);
+app.use(cors(allowedOrigins?.length ? { origin: allowedOrigins } : undefined));
+app.use(rateLimit);
+app.use(express.json({ limit: "1mb" }));
 app.use(authenticate);
 
 app.get("/health", (_req, res) => res.json({ ok: true, service: "alibe-backend" }));
@@ -40,6 +49,7 @@ app.use("/blocks", blocksRouter);
 app.use("/saved-searches", savedSearchesRouter);
 app.use("/notifications", notificationsRouter);
 app.use("/orders", ordersRouter);
+app.use("/slips", slipsRouter);
 app.use("/uploads", uploadsRouter, express.static(UPLOAD_DIR, { maxAge: "30d", immutable: true }));
 
 app.use((_req, res) => res.status(404).json({ error: "We couldn't find what you were looking for." }));
@@ -54,5 +64,6 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 const port =process.env.PORT ? Number(process.env.PORT) : 4000;
 app.listen(port, "0.0.0.0", () => {
   startReminders();
+  moveSlipsOutOfPublicUploads().catch((e) => console.error("Couldn't move payment slips:", e));
   console.log(`Alibe backend listening on http://0.0.0.0:${port}`);
 });

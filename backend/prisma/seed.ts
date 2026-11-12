@@ -54,6 +54,12 @@ async function main() {
     }
   }
 
+  // Categories and atolls above are needed everywhere; the rest is demo data.
+  if (process.env.SEED_DEMO === "false") {
+    console.log("SEED_DEMO=false: skipping demo users and listings.");
+    return;
+  }
+
   console.log("Seeding demo user...");
   const demoUser = await prisma.user.upsert({
     where: { phone: "+9607777777" },

@@ -6,6 +6,7 @@ import { prohibitedReason } from "../moderation.js";
 import { notifyUser } from "../push.js";
 import { isShowcaseOn } from "./ibay.js";
 import { alibePrice, isReady, moneySettings } from "../money.js";
+import { makeSlipPrivate } from "./slips.js";
 
 // Boosts, ads and buy-for-you: what people buy from Alibe. Payment is a bank
 // transfer with a reference and a slip; staff check the bank and approve, and only
@@ -129,10 +130,12 @@ const slipSchema = z.object({ slipUrl: uploadPath });
 purchasesRouter.post("/:id/slip", async (req, res) => {
   const parsed = slipSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Please add a photo of your payment slip." });
-  const { count } = await prisma.purchase.updateMany({
-    where: { id: req.params.id, userId: req.userId, status: { in: ["AWAITING_PAYMENT", "SUBMITTED"] } },
-    data: { slipUrl: parsed.data.slipUrl, status: "SUBMITTED" },
-  });
+  const where = { id: req.params.id, userId: req.userId, status: { in: ["AWAITING_PAYMENT" as const, "SUBMITTED" as const] } };
+  if (!(await prisma.purchase.count({ where }))) return res.status(409).json({ error: "This purchase can't take a slip right now." });
+  // Slips show bank details: move the photo out of the public uploads folder.
+  const slipUrl = await makeSlipPrivate(parsed.data.slipUrl);
+  if (!slipUrl) return res.status(400).json({ error: "Please add the photo of your slip again." });
+  const { count } = await prisma.purchase.updateMany({ where, data: { slipUrl, status: "SUBMITTED" } });
   if (!count) return res.status(409).json({ error: "This purchase can't take a slip right now." });
   res.status(204).send();
 });

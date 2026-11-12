@@ -1,0 +1,90 @@
+# Production / test server. Used by ./deploy.sh; settings come from .env, which
+# deploy.sh creates. Local development uses docker-compose.yml instead.
+name: alibe
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: alibe-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: alibe
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?missing - run ./deploy.sh to create it}"
+      POSTGRES_DB: alibe
+    # Only reachable from this machine (Docker-published ports bypass ufw).
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - alibe-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alibe"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      target: prod
+    container_name: alibe-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://alibe:${POSTGRES_PASSWORD}@postgres:5432/alibe
+      WEB_ORIGIN: "http://${LAN_IP:?missing - run ./deploy.sh to set it}:8081"
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      TRUST_PROXY: ${TRUST_PROXY:-}
+      # true = sign-in codes appear in the app (no SMS/email yet). Test only.
+      SHOW_CODES_IN_APP: ${SHOW_CODES_IN_APP:-false}
+      SEED_DEMO: ${SEED_DEMO:-true}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      MAIL_FROM: "${MAIL_FROM:-Alibe <no-reply@alibe.mv>}"
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - alibe-uploads:/app/uploads
+      - alibe-private:/app/private
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      start_period: 120s
+      retries: 3
+
+  web:
+    build:
+      context: ./mobile
+      dockerfile: Dockerfile.web
+      args:
+        API_URL: http://${LAN_IP}:4000
+    container_name: alibe-web
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+
+  backup:
+    image: postgres:16-alpine
+    container_name: alibe-backup
+    restart: unless-stopped
+    entrypoint: ["sh", "/backup.sh"]
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./scripts/backup.sh:/backup.sh:ro
+      - ./backups:/backups
+      - alibe-uploads:/uploads:ro
+      - alibe-private:/private:ro
+
+volumes:
+  alibe-pg-data:
+  alibe-uploads:
+  alibe-private:

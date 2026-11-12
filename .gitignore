@@ -5,3 +5,5 @@ dist
 web-build
 *.log
 uploads
+backups
+private

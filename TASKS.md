@@ -16,11 +16,14 @@ Built 2026-11-02: email sign-in, real one-time codes, new onboarding, report que
 - [ ] Re-run the taste-skill checklist on the new screens (copy has no em-dashes, labels above inputs, contrast in dark mode).
 
 ### Housekeeping
-- [ ] Production deploy: Dockerfile still runs `prisma db push --accept-data-loss` + `tsx watch`; switch to build + `node dist/index.js` and proper migrations. Add Caddy + HTTPS for a VPS.
+- [x] Production stack (2026-11-12): `docker-compose.prod.yml` + `./deploy.sh`. Compiled backend, Prisma migrations, static web app on nginx, generated DB password, CORS, daily backups, rate limits, photo compression, private payment slips. See README.
+- [ ] Domain + HTTPS: host nginx (already serving other sites on the VPS) + certbot in front of ports 4000/8081, then bind those to 127.0.0.1, set `TRUST_PROXY=1`, and rebuild the web app with the https API URL.
+- [ ] Turn off `SHOW_CODES_IN_APP` in the VPS `.env` once SMS or email sending works. Until then anyone can sign in as anyone.
 - [ ] Uploaded files live in the `alibe-uploads` Docker volume on one machine. Move to object storage (e.g. Cloudflare R2) before hosting.
 - [ ] SMS gateway (Dhiraagu/Ooredoo aggregator) in `backend/src/messaging.ts`. Codes are real now, but in production phone sign-in refuses to send until this exists.
 - [ ] Email sending: set `RESEND_API_KEY` and verify the `MAIL_FROM` domain. Never exercised against the real service yet.
-- [ ] Per-IP limit on `/auth/*/request` (each address is capped, but one IP can still try many addresses). Needs the real proxy setup to read client IPs.
+- [x] Per-IP limits (`backend/src/rateLimit.ts`): 10 code requests / 15 min, uploads, new listings, all writes. Set `TRUST_PROXY=1` once behind nginx.
+- [ ] Copy `./backups` off the VPS regularly (another machine or object storage).
 
 ## Launch blockers
 - [ ] SMS gateway, email provider, hosting and photo storage (see Housekeeping). Nobody outside the network can use the app without them.
@@ -39,7 +42,7 @@ Built 2026-11-02: email sign-in, real one-time codes, new onboarding, report que
 - Money: boosts, ads and buy-for-you are paid by bank transfer plus slip, approved in Profile > Payments and prices. Nothing is live until staff approve.
 - [ ] Enter real bank details and prices in the admin screen. Prices are placeholders; payments stay off until the bank details are in.
 - [ ] Before taking real money: business registration, tax and advice on reselling. Add a card/BML gateway later if volume justifies it.
-- [ ] Payment slips sit in the public uploads folder under random names. Move them behind admin-only access before real use.
+- [x] Payment slips move to private storage on submit; staff open them via signed links that expire in an hour.
 - [ ] Item pages are read live from iBay the first time someone opens them (cached 6 hours). Watch this once there's real traffic.
 - [ ] Decide whether phone numbers sellers typed into titles should be stripped.
 - Refresh: `docker exec -d alibe-backend sh -c 'npx tsx prisma/import-ibay.ts > /tmp/ibay.log 2>&1'`

@@ -68,7 +68,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 // them against whichever API host this device talks to.
 export function mediaUrl(uri: string | null | undefined) {
   if (!uri) return undefined;
-  return uri.startsWith("/uploads/") ? `${BASE_URL}${uri}` : uri;
+  return uri.startsWith("/uploads/") || uri.startsWith("/slips/") ? `${BASE_URL}${uri}` : uri;
 }
 
 export type UploadedMedia = { url: string; type: "IMAGE" | "VIDEO"; size: number };

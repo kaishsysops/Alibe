@@ -67,22 +67,62 @@ Refresh / backend restart automatically — no rebuild needed for code changes.
 A rebuild (`docker compose up -d --build <service>`) is only needed after
 changing `package.json` dependencies.
 
-## Running it on a VPS for testers
+## Running it on the VPS (production stack)
 
-Lets anyone test from anywhere in a browser, using the VPS's public IP.
-Still the development setup: sign-in codes appear on screen, so treat it as a
-test server only.
+`./deploy.sh` runs `docker-compose.prod.yml`: compiled backend, static web
+app behind nginx, database migrations, rate limits and daily backups. Local
+development keeps using `docker-compose.yml`.
 
 ```bash
-# on the VPS, in the project folder: pulls, sets LAN_IP, rebuilds, waits until healthy
+# on the VPS, in the project folder: pulls, configures, builds, waits until healthy
 ./deploy.sh
 ```
 
-Testers open `http://<VPS_IP>:8081` in a phone or desktop browser. Expo Go
-doesn't work from a public server unless both the CLI and the phone are signed
-in to Expo, so it's only practical on the same Wi-Fi. Ports 4000 and 8081 are public (Docker bypasses ufw);
-Postgres stays on 127.0.0.1. If the hosting provider has its own firewall
-panel, allow TCP 4000 and 8081 there too.
+| Container        | What it is                                             | Port              |
+|------------------|--------------------------------------------------------|-------------------|
+| `alibe-web`      | The app as a static website (nginx)                    | 8081 (public)     |
+| `alibe-backend`  | API, `NODE_ENV=production`, compiled with `tsc`        | 4000 (public)     |
+| `alibe-postgres` | Database                                               | 127.0.0.1:5432    |
+| `alibe-backup`   | Daily `pg_dump` + photo archive into `./backups`       | none              |
+
+Testers open `http://<VPS_IP>:8081`. If the hosting provider has its own
+firewall panel, allow TCP 4000 and 8081 there.
+
+**Settings live in `.env`** (created by the first deploy, `chmod 600`, never committed):
+
+| Setting              | Meaning                                                              |
+|----------------------|----------------------------------------------------------------------|
+| `LAN_IP`             | The server's public IPv4; the web app is built to call `http://LAN_IP:4000` |
+| `POSTGRES_PASSWORD`  | Generated on first deploy. The database password is set to match on every deploy |
+| `SHOW_CODES_IN_APP`  | `true` = sign-in codes show in the app (no SMS/email yet). **Anyone can sign in as anyone.** Set to `false` once sending works |
+| `SEED_DEMO`          | `false` stops adding the demo users and listings (categories and atolls are always seeded) |
+| `RESEND_API_KEY`, `MAIL_FROM` | Email codes through Resend                                  |
+| `CORS_ORIGINS`       | Extra websites allowed to call the API (defaults to the web app's own address) |
+| `TRUST_PROXY`        | Set to `1` once nginx/HTTPS sits in front, so rate limits see real visitor IPs |
+
+Change a setting, then run `./deploy.sh` again.
+
+**Database changes now use migrations.** After editing `backend/prisma/schema.prisma`:
+
+```bash
+docker compose exec backend npx prisma migrate dev --name what-changed
+```
+
+commit the new folder under `backend/prisma/migrations/`, and the next deploy
+applies it. (Databases made before migrations existed are caught up and
+marked automatically on their first production start.)
+
+**Backups** run once when the container starts and then every 24 hours:
+database dumps kept 14 days, photo archives 3 days, in `./backups` on the VPS.
+Copy them off the server now and then. To restore a database dump:
+
+```bash
+./scripts/restore.sh backups/db-YYYYMMDD-HHMM.dump
+```
+
+**What's still missing for a public launch:** a domain with HTTPS (nginx +
+certbot in front, then close ports 4000/8081), an SMS gateway and/or email
+sending (then `SHOW_CODES_IN_APP=false`), and photo storage off the server.
 
 ## Useful commands
 

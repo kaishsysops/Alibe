@@ -1,3 +1,6 @@
+# Local development (hot reload). The VPS uses docker-compose.prod.yml via ./deploy.sh.
+name: alibe
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -5,7 +8,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: alibe
-      POSTGRES_PASSWORD: alibe
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-alibe}
       POSTGRES_DB: alibe
     # Bound to 127.0.0.1 so the database is never reachable from the internet
     # (Docker-published ports bypass ufw). Use `docker compose exec postgres psql`.
@@ -20,11 +23,13 @@ services:
       retries: 10
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      target: dev
     container_name: alibe-backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql://alibe:alibe@postgres:5432/alibe
+      DATABASE_URL: postgresql://alibe:${POSTGRES_PASSWORD:-alibe}@postgres:5432/alibe
       PORT: 4000
       # Leave empty in development: codes then appear in the app and the backend log.
       RESEND_API_KEY: ${RESEND_API_KEY:-}
@@ -38,6 +43,7 @@ services:
       - ./backend/src:/app/src
       - ./backend/prisma:/app/prisma
       - alibe-uploads:/app/uploads
+      - alibe-private:/app/private
 
   mobile:
     build: ./mobile
@@ -66,4 +72,5 @@ services:
 volumes:
   alibe-pg-data:
   alibe-uploads:
+  alibe-private:
   mobile-node-modules:
