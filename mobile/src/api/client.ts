@@ -205,6 +205,8 @@ export type User = {
   avatarUrl?: string | null;
   // The island they said they live on (onboarding / profile).
   islandId?: string | null;
+  // Category slugs they follow; those rows come first on Home.
+  interests?: string[];
   themeColor?: string | null;
   showPhone?: boolean;
   whatsappEnabled?: boolean;
@@ -344,6 +346,7 @@ export type ProfileUpdate = Partial<{
   bio: string | null;
   avatarColor: string | null;
   avatarUrl: string | null;
+  interests: string[];
   themeColor: string | null;
   islandId: string | null;
   paymentMethod: PaymentMethod | null;
@@ -432,6 +435,11 @@ export const api = {
   // One page of listings (40 by default). `page` counts from 0.
   listingsPage: (params: Record<string, string | undefined> = {}, page = 0, limit?: number) =>
     requestPage<Listing>(`/listings?${query({ ...params, page, limit })}`),
+  // How many listings match (e.g. everything for sale in one atoll).
+  countListings: async (params: Record<string, string | undefined>) => {
+    const res = await send(`/listings?${query({ ...params, limit: 1, count: "1" })}`);
+    return Number(res.headers.get("X-Total") ?? 0);
+  },
   listingsByIds: (ids: string[]) => (ids.length ? request<Listing[]>(`/listings?${query({ ids: ids.join(",") })}`) : Promise.resolve([])),
   // Home's newest items and one row per category, built by the server.
   home: () => request<HomeFeed>("/listings/home"),

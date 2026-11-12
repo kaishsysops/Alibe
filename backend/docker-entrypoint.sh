@@ -5,6 +5,12 @@
 #   MIGRATE_ON_START=false: skip it (API replicas in production).
 set -e
 
+# Local development mounts prisma/ from the host, so the schema can be newer
+# than the image: refresh the database client to match (a couple of seconds).
+if [ "${NODE_ENV:-}" != "production" ]; then
+  npx prisma generate >/dev/null
+fi
+
 if [ "$1" = "migrate" ] || [ "${MIGRATE_ON_START:-true}" = "true" ]; then
   # Databases made before migrations existed (with `prisma db push`) get caught
   # up to the schema without losing data, then marked as being at the first migration.

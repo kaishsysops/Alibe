@@ -27,7 +27,7 @@ app.disable("x-powered-by");
 // may call the API from a browser. Native apps send no Origin and aren't affected.
 const allowedOrigins = (process.env.CORS_ORIGINS || process.env.WEB_ORIGIN)?.split(",").map((o) => o.trim()).filter(Boolean);
 // X-Has-More tells paged lists (listings) whether to ask for another page.
-app.use(cors({ ...(allowedOrigins?.length ? { origin: allowedOrigins } : {}), exposedHeaders: ["X-Has-More"] }));
+app.use(cors({ ...(allowedOrigins?.length ? { origin: allowedOrigins } : {}), exposedHeaders: ["X-Has-More", "X-Total"] }));
 app.use(ipCeiling);
 app.use(express.json({ limit: "1mb" }));
 app.use(authenticate);

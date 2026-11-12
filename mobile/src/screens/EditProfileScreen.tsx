@@ -4,7 +4,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { Camera, Check, ChevronRight, Mail, Phone, Sun, Moon, SunMoon } from "lucide-react-native";
-import { api, Atoll, FullUser, PaymentMethod, errorMessage, uploadMedia } from "../api/client";
+import { api, Atoll, Category, FullUser, PaymentMethod, errorMessage, uploadMedia } from "../api/client";
 import AvatarPhoto from "../components/AvatarPhoto";
 import { useAuth } from "../api/AuthContext";
 import { useToast } from "../components/Toast";
@@ -15,13 +15,12 @@ import { Skeleton, SkeletonGroup } from "../components/Skeleton";
 import { WhatsAppIcon, ViberIcon } from "../components/BrandIcons";
 import { AccentPicker } from "./OnboardingScreen";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
-import { spacing, radius, cardShadow, fontSize, fontWeight, controlHeight, contentWidth } from "../theme/theme";
+import { spacing, radius, cardShadow, fontSize, fontWeight, controlHeight, contentWidth, AVATAR_COLORS } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import { formatPhone } from "../utils/phone";
 import { IslandField, defaultIslandId } from "../components/IslandPicker";
 
-const AVATAR_COLORS = ["#FF6A00", "#1E7BE0", "#E0336E", "#16A34A", "#7347E6", "#E39A1F", "#00A3A3", "#8E5A3D"];
 const PAYMENT_OPTIONS: Array<{ value: PaymentMethod; label: string }> = [
   { value: "CASH", label: "Cash on pickup" },
   { value: "BANK_TRANSFER", label: "Bank transfer" },
@@ -58,6 +57,7 @@ export default function EditProfileScreen() {
   const { isDesktopWeb } = useResponsive();
   const [profile, setProfile] = useState<FullUser | null>(null);
   const [atolls, setAtolls] = useState<Atoll[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [form, setForm] = useState({
     name: "",
     username: "",
@@ -65,6 +65,7 @@ export default function EditProfileScreen() {
     avatarColor: AVATAR_COLORS[0],
     avatarUrl: null as string | null,
     islandId: undefined as string | undefined,
+    interests: [] as string[],
     paymentMethod: undefined as PaymentMethod | undefined,
     promoOptIn: true,
     showPhone: true,
@@ -88,6 +89,7 @@ export default function EditProfileScreen() {
           avatarColor: p.avatarColor ?? AVATAR_COLORS[0],
           avatarUrl: p.avatarUrl ?? null,
           islandId: p.islandId ?? undefined,
+          interests: p.interests ?? [],
           paymentMethod: p.paymentMethod ?? undefined,
           promoOptIn: p.promoOptIn,
           showPhone: p.showPhone,
@@ -99,6 +101,7 @@ export default function EditProfileScreen() {
       })
       .catch((e) => toast.error(errorMessage(e, "Couldn't load your profile.")));
     api.atolls().then(setAtolls).catch(() => {});
+    api.categories().then(setCategories).catch(() => {});
   }, [user, toast]);
 
   // The app colour applies the moment it's tapped and is saved in the
@@ -126,6 +129,7 @@ export default function EditProfileScreen() {
         avatarUrl: form.avatarUrl,
         // Nobody picked one yet: save the default the field shows (Malé).
         islandId: form.islandId ?? defaultIslandId(atolls) ?? null,
+        interests: form.interests,
         paymentMethod: form.paymentMethod ?? null,
         promoOptIn: form.promoOptIn,
         showPhone: form.showPhone,
@@ -332,6 +336,27 @@ export default function EditProfileScreen() {
             </Field>
             <Field label="Bio" helper={`${form.bio.length}/160`}>
               <TextInput style={[styles.input, styles.textArea]} value={form.bio} onChangeText={(t) => set({ bio: t })} placeholder="What do you usually sell?" placeholderTextColor={colors.textMuted} multiline maxLength={160} />
+            </Field>
+          </Section>
+
+          <Section title="Interests">
+            <Field label="Categories you follow" helper="Their rows come first on your Home.">
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+                {categories.map((c) => {
+                  const on = form.interests.includes(c.slug);
+                  return (
+                    <Tap
+                      key={c.id}
+                      style={[styles.chip, on && styles.chipActive]}
+                      onPress={() => set({ interests: on ? form.interests.filter((s) => s !== c.slug) : [...form.interests, c.slug] })}
+                      scaleTo={0.92}
+                      accessibilityLabel={`${c.name}${on ? ", following" : ""}`}
+                    >
+                      <Text style={[styles.chipText, on && styles.chipTextActive]}>{c.name}</Text>
+                    </Tap>
+                  );
+                })}
+              </View>
             </Field>
           </Section>
 

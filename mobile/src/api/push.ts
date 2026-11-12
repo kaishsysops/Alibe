@@ -20,6 +20,29 @@ if (Platform.OS !== "web") {
   });
 }
 
+// Where this device stands on notifications, without asking. "undecided"
+// means the system prompt can still be shown (onboarding offers it then).
+export async function notificationPermissionState(): Promise<"undecided" | "granted" | "denied" | "unsupported"> {
+  if (Platform.OS === "web") {
+    const N = typeof window !== "undefined" ? (window as any).Notification : undefined;
+    if (!N) return "unsupported";
+    return N.permission === "granted" ? "granted" : N.permission === "denied" ? "denied" : "undecided";
+  }
+  const current = await Notifications.getPermissionsAsync();
+  if (current.granted) return "granted";
+  return current.canAskAgain ? "undecided" : "denied";
+}
+
+// Shows the system prompt (phones and browsers). True if allowed.
+export async function askNotificationPermission() {
+  if (Platform.OS === "web") {
+    const N = typeof window !== "undefined" ? (window as any).Notification : undefined;
+    if (!N) return false;
+    return (await N.requestPermission().catch(() => "denied")) === "granted";
+  }
+  return ensureNotificationPermission();
+}
+
 export async function ensureNotificationPermission() {
   if (Platform.OS === "web") return false;
   if (Platform.OS === "android") {

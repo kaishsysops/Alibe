@@ -30,6 +30,8 @@ const listQuerySchema = listingFiltersSchema.extend({
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
   // Specific listings by id (recently viewed), in the order given.
   ids: z.string().max(2000).optional(),
+  // count=1 adds X-Total: how many match (onboarding's "N for sale near you").
+  count: z.literal("1").optional(),
 });
 
 // Alibe and iBay take turns, so neither crowds the other out; a price sort
@@ -63,7 +65,7 @@ const ibayFor = (filters: object, sort?: string) => cached(`ibay:${JSON.stringif
 listingsRouter.get("/", async (req, res) => {
   const parsed = listQuerySchema.safeParse(req.query);
   if (!parsed.success) return sendValidationError(res, parsed.error);
-  const { sort, viewerId, seller, mix, page, limit, ids, ...filters } = parsed.data;
+  const { sort, viewerId, seller, mix, page, limit, ids, count, ...filters } = parsed.data;
   const hidden = await hiddenSellerIds(viewerId);
 
   if (ids) {
@@ -76,6 +78,7 @@ listingsRouter.get("/", async (req, res) => {
 
   const where = listingWhere(filters, hidden);
   const scoped: Prisma.ListingWhereInput = seller ? { AND: [where, { sellerId: seller }] } : where;
+  if (count) res.setHeader("X-Total", String(await prisma.listing.count({ where: scoped })));
   const order = sort ?? "newest";
   const withIbay = !!mix && !seller && !!req.userId;
   // A price sort mixed with iBay has to merge both lists before cutting a page,

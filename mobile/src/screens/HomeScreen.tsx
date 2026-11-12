@@ -93,7 +93,9 @@ export default function HomeScreen() {
   const goToSearch = (params: Record<string, string | undefined>) => navigation.navigate("SearchTab", params);
   const seeAllInCategory = (c: Category) => goToSearch({ categorySlug: c.slug, categoryName: c.name });
 
-  const railsByCategory = rails;
+  // Categories the person follows lead, in the order the server ranked them.
+  const followed = user?.interests ?? [];
+  const railsByCategory = followed.length ? [...rails.filter((r) => followed.includes(r.category.slug)), ...rails.filter((r) => !followed.includes(r.category.slug))] : rails;
 
   // Mobile category grid: 4 square tiles per row, two rows max.
   const categoryTile = Math.floor((width - gutter * 2 - spacing.sm * 3) / 4);

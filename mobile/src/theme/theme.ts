@@ -118,3 +118,6 @@ export const cardShadow = {
 // Extra bottom padding for scroll content on tab screens so it doesn't sit
 // behind the floating pill tab bar.
 export const tabBarClearance = 100;
+
+// Background colours for avatars without a photo (onboarding and profile).
+export const AVATAR_COLORS = ["#FF6A00", "#1E7BE0", "#E0336E", "#16A34A", "#7347E6", "#E39A1F", "#00A3A3", "#8E5A3D"];

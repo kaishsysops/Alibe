@@ -3,8 +3,8 @@ import { View, Text, TextInput, ActivityIndicator, KeyboardAvoidingView, Keyboar
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
-import { ShoppingBag, ArrowRight, Check, ShieldCheck, ChevronLeft, Mail, Phone, MapPin, Tag, MessageCircle, BadgePercent, KeyRound, PackageCheck, LucideIcon } from "lucide-react-native";
-import { api, Atoll, errorMessage, setAuthToken, SignedIn, User } from "../api/client";
+import { ShoppingBag, ArrowRight, Check, ShieldCheck, ChevronLeft, Mail, Phone, MapPin, Tag, MessageCircle, BadgePercent, KeyRound, PackageCheck, LucideIcon, Camera, Bell, MessageCircleMore, TrendingDown, Truck, Sparkles } from "lucide-react-native";
+import { api, Atoll, Category, errorMessage, ProfileUpdate, setAuthToken, SignedIn, uploadMedia, User } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import { useToast } from "../components/Toast";
 import Tap from "../components/Tap";
@@ -17,6 +17,14 @@ import { useReducedMotion } from "../hooks/useReducedMotion";
 import { formatPhone } from "../utils/phone";
 import AlibeMark from "../components/AlibeMark";
 import IslandPicker, { defaultIslandId, islandLabel } from "../components/IslandPicker";
+import * as ImagePicker from "expo-image-picker";
+import AvatarPhoto from "../components/AvatarPhoto";
+import MaldivesMap from "../components/MaldivesMap";
+import { findIsland } from "../components/IslandPicker";
+import { askNotificationPermission, notificationPermissionState } from "../api/push";
+import { categoryIcons, AllCategoriesIcon } from "../theme/categoryIcons";
+import { ATOLL_GEO, ISLAND_GEO } from "../data/maldives";
+import { AVATAR_COLORS } from "../theme/theme";
 
 const useNativeDriver = Platform.OS !== "web";
 
@@ -251,7 +259,8 @@ function MethodSwitch({ method, onChange }: { method: Method; onChange: (m: Meth
 }
 
 type Method = "phone" | "email";
-type Step = "welcome" | "enter" | "code" | "name" | "island" | "staff" | "done";
+// First-time setup runs name -> photo -> island -> interests -> notify -> ready.
+type Step = "welcome" | "enter" | "code" | "name" | "photo" | "island" | "interests" | "notify" | "ready" | "staff" | "done";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const haptic = (run: () => Promise<void>) => {
@@ -262,6 +271,31 @@ const haptic = (run: () => Promise<void>) => {
 const DIGIT_SETTLE_MS = 420;
 // Long enough for SuccessBurst's two ripples to finish and the words to be read.
 const SUCCESS_MS = 1900;
+
+// "Step 2 of 5" with a bar per step; the current one fills as it arrives.
+function SetupProgress({ index, total }: { index: number; total: number }) {
+  const styles = useStyles();
+  const fill = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    fill.setValue(0);
+    Animated.timing(fill, { toValue: 1, duration: 450, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [index, fill]);
+  return (
+    <View style={styles.progressWrap} accessibilityLabel={`Step ${index + 1} of ${total}`}>
+      <View style={styles.progressBars}>
+        {Array.from({ length: total }, (_, i) => (
+          <View key={i} style={styles.progressTrack}>
+            {i < index && <View style={[styles.progressFill, { width: "100%" }]} />}
+            {i === index && <Animated.View style={[styles.progressFill, { width: fill.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) }]} />}
+          </View>
+        ))}
+      </View>
+      <Text style={styles.progressText}>
+        Step {index + 1} of {total}
+      </Text>
+    </View>
+  );
+}
 
 export default function OnboardingScreen() {
   const styles = useStyles();
@@ -283,6 +317,14 @@ export default function OnboardingScreen() {
   // New accounts say where they live; Malé is chosen until they pick.
   const [atolls, setAtolls] = useState<Atoll[]>([]);
   const [islandId, setIslandId] = useState<string>();
+  // The rest of first-time setup. Every step after the name is optional.
+  const [setupSteps, setSetupSteps] = useState<Step[]>(["name", "photo", "island", "interests"]);
+  const [avatarColor, setAvatarColor] = useState<string>(accent);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [interests, setInterests] = useState<string[]>([]);
+  const [notificationsOn, setNotificationsOn] = useState(false);
+  const [nearby, setNearby] = useState<number | null>(null);
   const [greeting, setGreeting] = useState("");
   const [staffEntryCode, setStaffEntryCode] = useState("");
   const [staffUsername, setStaffUsername] = useState("");
@@ -407,27 +449,87 @@ export default function OnboardingScreen() {
       const updated = await api.updateProfile(session.user.id, { name: trimmedName });
       setSession({ ...session, user: updated });
       Keyboard.dismiss();
-      const list = await api.atolls().catch(() => [] as Atoll[]);
-      // No island data (offline, odd server): don't block sign-up on it.
-      if (!list.length) return finish(updated, session.token, trimmedName.split(" ")[0], true);
+      const [list, cats, permission] = await Promise.all([
+        api.atolls().catch(() => [] as Atoll[]),
+        api.categories().catch(() => [] as Category[]),
+        notificationPermissionState().catch(() => "unsupported" as const),
+      ]);
       setAtolls(list);
       setIslandId(updated.islandId ?? defaultIslandId(list));
-      moveTo("island");
+      setCategories(cats);
+      setNotificationsOn(permission === "granted");
+      // Steps with nothing to show (offline, already decided) are left out.
+      const steps: Step[] = ["name", "photo", ...(list.length ? (["island"] as Step[]) : []), ...(cats.length ? (["interests"] as Step[]) : []), ...(permission === "undecided" ? (["notify"] as Step[]) : [])];
+      setSetupSteps(steps);
+      moveTo(steps[1]);
     } catch (e) {
       toast.error(errorMessage(e));
     }
   });
 
-  const [saveIsland, savingIsland] = useSingleFlight(async () => {
-    if (!session || !islandId) return;
+  const setupIndex = setupSteps.indexOf(step);
+  const inSetup = setupIndex >= 0;
+  const firstName = (session?.user.name ?? name).trim().split(" ")[0];
+
+  const saveProfile = async (patch: ProfileUpdate) => {
+    if (!session) return;
+    const updated = await api.updateProfile(session.user.id, patch);
+    setSession((prev) => (prev ? { ...prev, user: updated } : prev));
+  };
+
+  // Forward through setup; after the last step, the summary.
+  const nextStep = () => {
+    const next = setupSteps[setupIndex + 1];
+    if (next) return moveTo(next);
+    haptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
+    moveTo("ready");
+    const atoll = findIsland(atolls, islandId)?.atoll;
+    setNearby(null);
+    if (atoll) api.countListings({ atollId: atoll.id }).then(setNearby).catch(() => {});
+  };
+  const useSaveStep = (patch: () => ProfileUpdate) =>
+    useSingleFlight(async () => {
+      try {
+        await saveProfile(patch());
+        nextStep();
+      } catch (e) {
+        toast.error(errorMessage(e));
+      }
+    });
+
+  const [pickPhoto, uploadingPhoto] = useSingleFlight(async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return toast.error("Please allow photo access to add a profile photo.");
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.7 });
+    if (result.canceled) return;
     try {
-      const updated = await api.updateProfile(session.user.id, { islandId });
-      await finish(updated, session.token, updated.name.split(" ")[0], true);
+      const { url } = await uploadMedia(result.assets[0].uri, result.assets[0].mimeType ?? "image/jpeg");
+      setAvatarUrl(url);
+      haptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
     } catch (e) {
-      toast.error(errorMessage(e));
+      toast.error(errorMessage(e, "Couldn't upload that photo. Please try again."));
     }
   });
+  const [savePhoto, savingPhoto] = useSaveStep(() => ({ avatarColor, avatarUrl }));
+  const [saveIsland, savingIsland] = useSaveStep(() => ({ islandId: islandId ?? null }));
+  const [saveInterests, savingInterests] = useSaveStep(() => ({ interests }));
+  const toggleInterest = (slug: string) => {
+    haptic(() => Haptics.selectionAsync());
+    setInterests((list) => (list.includes(slug) ? list.filter((s) => s !== slug) : [...list, slug]));
+  };
+  const [enableNotifications, enablingNotifications] = useSingleFlight(async () => {
+    const granted = await askNotificationPermission().catch(() => false);
+    setNotificationsOn(granted);
+    if (!granted) toast.info("No problem. You can turn them on later in your phone's settings.");
+    nextStep();
+  });
+  const startExploring = async () => {
+    if (!session) return;
+    await signIn(session.user, session.token);
+  };
   const chosen = islandLabel(atolls, islandId);
+  const chosenIsland = findIsland(atolls, islandId);
+  const chosenPin = chosenIsland ? ISLAND_GEO[`${chosenIsland.atoll.code}/${chosenIsland.island.name}`] ?? ATOLL_GEO[chosenIsland.atoll.code] ?? null : null;
 
   const staffReady = !!staffUsername.trim() && !!staffPassword;
   const [staffSignIn, signingInStaff] = useSingleFlight(async () => {
@@ -444,7 +546,9 @@ export default function OnboardingScreen() {
   });
 
   const back = () => {
-    if (step === "staff") {
+    if (inSetup && setupIndex > 0) {
+      moveTo(setupSteps[setupIndex - 1]);
+    } else if (step === "staff") {
       setStaffPassword("");
       setStaffEntryCode("");
       moveTo("enter");
@@ -501,7 +605,9 @@ export default function OnboardingScreen() {
           pointerEvents={cardUp ? "auto" : "none"}
           style={[styles.card, { paddingBottom: insets.bottom + spacing.lg, transform: [{ translateY: sheet.interpolate({ inputRange: [0, 1], outputRange: [height * 0.8, 0] }) }] }]}
         >
-          {(step === "enter" || step === "code" || step === "staff" || step === "welcome") && (
+          {inSetup && <SetupProgress index={setupIndex} total={setupSteps.length} />}
+
+          {(step === "enter" || step === "code" || step === "staff" || step === "welcome" || (inSetup && setupIndex > 0)) && (
             <Tap style={styles.back} onPress={back} hitSlop={10} scaleTo={0.88} accessibilityLabel="Go back">
               <ChevronLeft size={22} color={colors.text} strokeWidth={2.4} />
             </Tap>
@@ -658,6 +764,177 @@ export default function OnboardingScreen() {
             </FadeIn>
           )}
 
+          {step === "photo" && (
+            <FadeIn key="photo">
+              <Text style={styles.cardTitle}>Put a face to the name</Text>
+              <Text style={styles.cardText}>People reply faster to a seller with a photo. Or pick a colour for now.</Text>
+              <View style={styles.photoStage}>
+                <Tap onPress={pickPhoto} disabled={uploadingPhoto} scaleTo={0.94} accessibilityLabel={avatarUrl ? "Change photo" : "Add a photo"}>
+                  <Pop from={0.7}>
+                    <View style={[styles.bigAvatar, { backgroundColor: avatarColor }]}>
+                      <Text style={styles.bigAvatarText}>{(firstName || "?").charAt(0).toUpperCase()}</Text>
+                      <AvatarPhoto uri={avatarUrl} />
+                      {uploadingPhoto && (
+                        <View style={styles.avatarBusy}>
+                          <ActivityIndicator color="#fff" />
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.cameraBadge}>
+                      <Camera size={16} color="#fff" strokeWidth={2.4} />
+                    </View>
+                  </Pop>
+                </Tap>
+                <Text style={styles.photoName}>{session?.user.name ?? name}</Text>
+                {avatarUrl ? (
+                  <Tap onPress={() => setAvatarUrl(null)} hitSlop={8} scaleTo={0.95}>
+                    <Text style={styles.linkText}>Use a colour instead</Text>
+                  </Tap>
+                ) : (
+                  <View style={styles.swatches}>
+                    {AVATAR_COLORS.map((c) => (
+                      <Tap key={c} style={[styles.avatarSwatch, { backgroundColor: c }, avatarColor === c && styles.avatarSwatchOn]} onPress={() => (haptic(() => Haptics.selectionAsync()), setAvatarColor(c))} scaleTo={0.85} accessibilityLabel="Avatar colour">
+                        {avatarColor === c && <Check size={14} color="#fff" strokeWidth={3} />}
+                      </Tap>
+                    ))}
+                  </View>
+                )}
+              </View>
+              <Tap style={styles.button} onPress={avatarUrl ? () => savePhoto() : () => pickPhoto()} disabled={savingPhoto || uploadingPhoto} scaleTo={0.97}>
+                {savingPhoto ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>{avatarUrl ? "Looks good" : "Add a photo"}</Text>}
+              </Tap>
+              {!avatarUrl && (
+                <Tap style={styles.skip} onPress={() => savePhoto()} disabled={savingPhoto} scaleTo={0.97}>
+                  <Text style={styles.skipText}>Keep the colour for now</Text>
+                </Tap>
+              )}
+            </FadeIn>
+          )}
+
+          {step === "interests" && (
+            <FadeIn key="interests">
+              <Text style={styles.cardTitle}>What are you into?</Text>
+              <Text style={styles.cardText}>Pick a few. They'll lead your Home, and you can change them any time.</Text>
+              <ScrollView style={{ maxHeight: height * 0.46 }} contentContainerStyle={styles.interestGrid} showsVerticalScrollIndicator={false}>
+                {categories.map((c, i) => {
+                  const meta = categoryIcons[c.slug];
+                  const Icon = meta?.Icon ?? AllCategoriesIcon;
+                  const tint = meta?.color ?? colors.primary;
+                  const on = interests.includes(c.slug);
+                  return (
+                    <FadeIn key={c.id} delay={Math.min(i, 10) * 30} style={styles.interestCell}>
+                      <Tap style={[styles.interest, on && { borderColor: tint, backgroundColor: `${tint}14` }]} onPress={() => toggleInterest(c.slug)} scaleTo={0.93} accessibilityLabel={`${c.name}${on ? ", picked" : ""}`}>
+                        <View style={[styles.interestIcon, { backgroundColor: on ? tint : `${tint}1F` }]}>
+                          <Icon size={20} color={on ? "#fff" : tint} strokeWidth={2.2} />
+                        </View>
+                        <Text style={[styles.interestText, on && { color: colors.text }]} numberOfLines={2}>
+                          {c.name}
+                        </Text>
+                        {on && (
+                          <View style={[styles.interestCheck, { backgroundColor: tint }]}>
+                            <Check size={11} color="#fff" strokeWidth={3.5} />
+                          </View>
+                        )}
+                      </Tap>
+                    </FadeIn>
+                  );
+                })}
+              </ScrollView>
+              <Tap style={styles.button} onPress={() => saveInterests()} disabled={savingInterests} scaleTo={0.97}>
+                {savingInterests ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>{interests.length ? `Follow ${interests.length} ${interests.length === 1 ? "category" : "categories"}` : "Skip for now"}</Text>}
+              </Tap>
+            </FadeIn>
+          )}
+
+          {step === "notify" && (
+            <FadeIn key="notify">
+              <View style={styles.notifyHero}>
+                <Float distance={5}>
+                  <View style={styles.bellCircle}>
+                    <Bell size={34} color={colors.primary} strokeWidth={2.2} />
+                  </View>
+                </Float>
+              </View>
+              <Text style={[styles.cardTitle, { textAlign: "center" }]}>Don't miss a buyer</Text>
+              <Text style={[styles.cardText, { textAlign: "center" }]}>We only tell you about things that need you.</Text>
+              {[
+                { Icon: MessageCircleMore, text: "New messages and offers" },
+                { Icon: TrendingDown, text: "Price drops on things you saved" },
+                { Icon: Truck, text: "When your order is on its way" },
+              ].map(({ Icon, text }, i) => (
+                <FadeIn key={text} delay={120 + i * 80}>
+                  <View style={styles.notifyRow}>
+                    <View style={styles.notifyIcon}>
+                      <Icon size={18} color={colors.primary} />
+                    </View>
+                    <Text style={styles.notifyText}>{text}</Text>
+                  </View>
+                </FadeIn>
+              ))}
+              <Tap style={styles.button} onPress={() => enableNotifications()} disabled={enablingNotifications} scaleTo={0.97}>
+                {enablingNotifications ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Turn on notifications</Text>}
+              </Tap>
+              <Tap style={styles.skip} onPress={nextStep} scaleTo={0.97}>
+                <Text style={styles.skipText}>Not now</Text>
+              </Tap>
+            </FadeIn>
+          )}
+
+          {step === "ready" && session && (
+            <View style={styles.ready} accessibilityLiveRegion="polite">
+              <SuccessBurst color={avatarColor} size={92}>
+                <View style={[styles.readyAvatar, { backgroundColor: avatarColor }]}>
+                  <Text style={styles.readyAvatarText}>{(firstName || "?").charAt(0).toUpperCase()}</Text>
+                  <AvatarPhoto uri={avatarUrl} />
+                </View>
+              </SuccessBurst>
+              <FadeIn delay={220}>
+                <Text style={styles.doneTitle}>You're all set, {firstName}!</Text>
+                <Text style={styles.doneText}>Here's your Alibe.</Text>
+              </FadeIn>
+              <FadeIn delay={380} style={{ alignSelf: "stretch" }}>
+                <View style={styles.summary}>
+                  {chosenIsland && (
+                    <View style={styles.summaryRow}>
+                      <MaldivesMap width={40} height={66} thumbnail selected={chosenIsland.atoll.code} pin={chosenPin} />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={styles.summaryTitle}>{chosenIsland.island.name}</Text>
+                        <Text style={styles.summaryMeta} numberOfLines={1}>
+                          {nearby === null ? "Looking around..." : nearby > 0 ? `${nearby.toLocaleString()} ${nearby === 1 ? "thing" : "things"} for sale in ${ATOLL_GEO[chosenIsland.atoll.code]?.short ?? chosenIsland.atoll.name}` : `Be the first to sell in ${ATOLL_GEO[chosenIsland.atoll.code]?.short ?? chosenIsland.atoll.name}`}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                  <View style={[styles.summaryRow, styles.summaryDivider]}>
+                    <View style={styles.summaryIcon}>
+                      <Sparkles size={18} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={styles.summaryTitle}>{interests.length ? "Your Home leads with" : "A bit of everything"}</Text>
+                      <Text style={styles.summaryMeta} numberOfLines={2}>
+                        {interests.length ? categories.filter((c) => interests.includes(c.slug)).map((c) => c.name).join(", ") : "Follow categories any time from your profile."}
+                      </Text>
+                    </View>
+                  </View>
+                  {notificationsOn && (
+                    <View style={[styles.summaryRow, styles.summaryDivider]}>
+                      <View style={styles.summaryIcon}>
+                        <Bell size={18} color={colors.primary} />
+                      </View>
+                      <Text style={[styles.summaryTitle, { flex: 1 }]}>Notifications on</Text>
+                    </View>
+                  )}
+                </View>
+              </FadeIn>
+              <FadeIn delay={520} style={{ alignSelf: "stretch" }}>
+                <Tap style={[styles.button, styles.exploreButton]} onPress={startExploring} scaleTo={0.97}>
+                  <Text style={styles.buttonText}>Start exploring</Text>
+                  <ArrowRight size={20} color="#fff" strokeWidth={2.6} />
+                </Tap>
+              </FadeIn>
+            </View>
+          )}
+
           {step === "done" && (
             <View style={styles.done} accessibilityLiveRegion="polite">
               <SuccessBurst color={colors.primary} size={84}>
@@ -726,6 +1003,44 @@ const useStyles = makeStyles((colors) => ({
   resendText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.textMuted },
   spamHint: { fontSize: fontSize.caption, color: colors.textMuted, textAlign: "center", marginTop: spacing.sm },
 
+  progressWrap: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.xs, marginBottom: spacing.sm },
+  progressBars: { flex: 1, flexDirection: "row", gap: 5 },
+  progressTrack: { flex: 1, height: 5, borderRadius: 3, backgroundColor: colors.border, overflow: "hidden" },
+  progressFill: { height: "100%", borderRadius: 3, backgroundColor: colors.primary },
+  progressText: { fontSize: fontSize.caption, fontWeight: fontWeight.bold, color: colors.textMuted },
+  skip: { height: 44, alignItems: "center", justifyContent: "center", marginTop: spacing.xs },
+  skipText: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.textMuted },
+  linkText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.primary },
+  photoStage: { alignItems: "center", gap: spacing.sm + 2, paddingVertical: spacing.sm },
+  bigAvatar: { width: 116, height: 116, borderRadius: 58, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  bigAvatarText: { color: "#fff", fontSize: 48, fontWeight: fontWeight.extrabold },
+  avatarBusy: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" },
+  cameraBadge: { position: "absolute", right: 0, bottom: 2, width: 36, height: 36, borderRadius: 18, backgroundColor: colors.text, borderWidth: 3, borderColor: colors.card, alignItems: "center", justifyContent: "center" },
+  photoName: { fontSize: fontSize.lg, fontWeight: fontWeight.extrabold, color: colors.text },
+  swatches: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: spacing.sm },
+  avatarSwatch: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  avatarSwatchOn: { transform: [{ scale: 1.15 }] },
+  interestGrid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4 },
+  interestCell: { width: "33.333%", padding: 4 },
+  interest: { alignItems: "center", gap: 6, paddingVertical: spacing.sm + 4, paddingHorizontal: 4, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.card },
+  interestIcon: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },
+  interestText: { fontSize: fontSize.caption, fontWeight: fontWeight.bold, color: colors.textMuted, textAlign: "center" },
+  interestCheck: { position: "absolute", top: 6, right: 6, width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  notifyHero: { alignItems: "center", marginTop: spacing.md },
+  bellCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: colors.primaryTint, alignItems: "center", justifyContent: "center" },
+  notifyRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 4, paddingVertical: spacing.sm },
+  notifyIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primaryTint, alignItems: "center", justifyContent: "center" },
+  notifyText: { flex: 1, fontSize: fontSize.md, fontWeight: fontWeight.semibold, color: colors.text },
+  ready: { alignItems: "center", paddingTop: spacing.lg, paddingBottom: spacing.sm },
+  readyAvatar: { width: 92, height: 92, borderRadius: 46, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  readyAvatarText: { color: "#fff", fontSize: 38, fontWeight: fontWeight.extrabold },
+  summary: { marginTop: spacing.lg, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, paddingHorizontal: spacing.md },
+  summaryRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 4, paddingVertical: spacing.sm + 4 },
+  summaryDivider: { borderTopWidth: 1, borderTopColor: colors.border },
+  summaryIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primaryTint, alignItems: "center", justifyContent: "center" },
+  summaryTitle: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.text },
+  summaryMeta: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
+  exploreButton: { flexDirection: "row", gap: spacing.sm },
   done: { alignItems: "center", paddingTop: spacing.xl + spacing.md, paddingBottom: spacing.lg },
   doneTitle: { fontSize: fontSize.xxl, fontWeight: fontWeight.extrabold, color: colors.text, marginTop: spacing.xl, textAlign: "center" },
   doneText: { fontSize: fontSize.md, color: colors.textMuted, marginTop: spacing.xs, textAlign: "center" },
