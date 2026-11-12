@@ -8,7 +8,7 @@ function webBase() {
   if (process.env.EXPO_PUBLIC_WEB_URL) return process.env.EXPO_PUBLIC_WEB_URL.replace(/\/$/, "");
   if (Platform.OS === "web" && typeof window !== "undefined") return window.location.origin;
   const api = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:4000";
-  return api.replace(/:4000\/?$/, ":8081");
+  return api.replace(/\/api\/?$/, "").replace(/:4000\/?$/, ":8081");
 }
 
 export function listingUrl(id: string) {

@@ -11,6 +11,7 @@ import { NotificationsProvider } from "./src/api/NotificationsContext";
 import { ActionSheetProvider } from "./src/components/Sheet";
 import RootNavigator from "./src/navigation/RootNavigator";
 import AnimatedSplash from "./src/components/AnimatedSplash";
+import MaintenanceOverlay from "./src/components/MaintenanceOverlay";
 import { useAuth } from "./src/api/AuthContext";
 import { EntranceGate } from "./src/components/Motion";
 
@@ -21,6 +22,7 @@ function Screens() {
     <EntranceGate.Provider value={splashLifting}>
       <RootNavigator />
       <AnimatedSplash ready={!isLoading} onExit={() => setSplashLifting(true)} />
+      <MaintenanceOverlay />
     </EntranceGate.Provider>
   );
 }

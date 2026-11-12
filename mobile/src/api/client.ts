@@ -13,6 +13,25 @@ export class ApiError extends Error {
   }
 }
 
+// While a deploy restarts the backend, the web server answers 503 with
+// code MAINTENANCE. MaintenanceOverlay listens and covers the app until
+// /health answers again.
+type MaintenanceListener = () => void;
+const maintenanceListeners = new Set<MaintenanceListener>();
+export function onMaintenance(listener: MaintenanceListener) {
+  maintenanceListeners.add(listener);
+  return () => {
+    maintenanceListeners.delete(listener);
+  };
+}
+export async function apiIsUp() {
+  try {
+    return (await fetch(`${BASE_URL}/health`, { cache: "no-store" })).ok;
+  } catch {
+    return false;
+  }
+}
+
 const OFFLINE_MESSAGE = "Can't reach Alibe right now. Check your connection and try again.";
 
 function fallbackMessage(status: number) {
@@ -53,6 +72,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     try {
       const body = await res.json();
       if (typeof body?.error === "string") message = body.error;
+      if (res.status === 503 && body?.code === "MAINTENANCE") maintenanceListeners.forEach((l) => l());
       // The session expired or was revoked: drop back to the sign-in screen.
       if (res.status === 401 && body?.code === "SIGNED_OUT" && authToken) onSignedOut?.();
     } catch {

@@ -80,13 +80,20 @@ development keeps using `docker-compose.yml`.
 
 | Container        | What it is                                             | Port              |
 |------------------|--------------------------------------------------------|-------------------|
-| `alibe-web`      | The app as a static website (nginx)                    | 8081 (public)     |
-| `alibe-backend`  | API, `NODE_ENV=production`, compiled with `tsc`        | 4000 (public)     |
+| `alibe-web`      | The app as a static website (nginx), and the API at `/api` | 8081 (public) |
+| `alibe-backend`  | API, `NODE_ENV=production`, compiled with `tsc`        | 127.0.0.1:4000    |
 | `alibe-postgres` | Database                                               | 127.0.0.1:5432    |
 | `alibe-backup`   | Daily `pg_dump` + photo archive into `./backups`       | none              |
 
-Testers open `http://<VPS_IP>:8081`. If the hosting provider has its own
-firewall panel, allow TCP 4000 and 8081 there.
+Testers open `http://<VPS_IP>:8081`; the app calls the API at
+`http://<VPS_IP>:8081/api`. Only port 8081 needs to be open (in the hosting
+provider's firewall panel too, if it has one).
+
+**Deploys without downtime for visitors.** Images build while the old version
+keeps serving. Then only the API restarts: for those few seconds nginx answers
+API calls with `503 {"code":"MAINTENANCE"}` and the app shows an "Alibe is
+updating" screen that checks every 4 seconds and reloads itself when the API is
+back. The web container only restarts when the app itself changed.
 
 **Settings live in `.env`** (created by the first deploy, `chmod 600`, never committed):
 
@@ -98,7 +105,7 @@ firewall panel, allow TCP 4000 and 8081 there.
 | `SEED_DEMO`          | `false` stops adding the demo users and listings (categories and atolls are always seeded) |
 | `RESEND_API_KEY`, `MAIL_FROM` | Email codes through Resend                                  |
 | `CORS_ORIGINS`       | Extra websites allowed to call the API (defaults to the web app's own address) |
-| `TRUST_PROXY`        | Set to `1` once nginx/HTTPS sits in front, so rate limits see real visitor IPs |
+| `TRUST_PROXY`        | Defaults to `1` (the web container's nginx is in front). Use `2` once host nginx/HTTPS is added in front of that |
 
 Change a setting, then run `./deploy.sh` again.
 
@@ -120,8 +127,8 @@ Copy them off the server now and then. To restore a database dump:
 ./scripts/restore.sh backups/db-YYYYMMDD-HHMM.dump
 ```
 
-**What's still missing for a public launch:** a domain with HTTPS (nginx +
-certbot in front, then close ports 4000/8081), an SMS gateway and/or email
+**What's still missing for a public launch:** a domain with HTTPS (host nginx +
+certbot proxying to port 8081, then bind 8081 to 127.0.0.1), an SMS gateway and/or email
 sending (then `SHOW_CODES_IN_APP=false`), and photo storage off the server.
 
 ## Useful commands

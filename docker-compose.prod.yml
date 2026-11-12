@@ -34,14 +34,17 @@ services:
       DATABASE_URL: postgresql://alibe:${POSTGRES_PASSWORD}@postgres:5432/alibe
       WEB_ORIGIN: "http://${LAN_IP:?missing - run ./deploy.sh to set it}:8081"
       CORS_ORIGINS: ${CORS_ORIGINS:-}
-      TRUST_PROXY: ${TRUST_PROXY:-}
+      # The web container's nginx sits in front and adds X-Forwarded-For.
+      TRUST_PROXY: ${TRUST_PROXY:-1}
       # true = sign-in codes appear in the app (no SMS/email yet). Test only.
       SHOW_CODES_IN_APP: ${SHOW_CODES_IN_APP:-false}
       SEED_DEMO: ${SEED_DEMO:-true}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       MAIL_FROM: "${MAIL_FROM:-Alibe <no-reply@alibe.mv>}"
+    # Public traffic reaches the API through the web container at /api.
+    # Published on this machine only, for deploy.sh's health check.
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,13 +63,13 @@ services:
       context: ./mobile
       dockerfile: Dockerfile.web
       args:
-        API_URL: http://${LAN_IP}:4000
+        API_URL: http://${LAN_IP}:8081/api
     container_name: alibe-web
     restart: unless-stopped
+    # No depends_on: nginx finds the backend by name when needed, so restarting
+    # the backend never restarts the web server (no gap for visitors).
     ports:
       - "8081:80"
-    depends_on:
-      - backend
 
   backup:
     image: postgres:16-alpine

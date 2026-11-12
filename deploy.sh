@@ -89,6 +89,9 @@ wait_healthy() { for _ in $(seq 1 40); do [ "$(docker inspect -f '{{.State.Healt
 # Runs the production stack in docker-compose.prod.yml. To try this script
 # without git: ALIBE_SKIP_PULL=1 ./deploy.sh
 C="docker compose -f docker-compose.prod.yml"
+# Without this, newer Docker stamps every build with a fresh attestation, so
+# unchanged images get new IDs and their containers restart for nothing.
+export BUILDX_NO_DEFAULT_ATTESTATIONS=1
 banner
 command -v docker >/dev/null || fail "Docker isn't installed. Run: curl -fsSL https://get.docker.com | sh"
 
@@ -147,10 +150,16 @@ set_db_password() { docker exec alibe-postgres psql -q -U alibe -d alibe -c "ALT
 
 step "Starting the database" start_db
 step "Securing the database password" set_db_password
+# The old version keeps serving while everything builds.
 step "Building images (the web app takes a few minutes)" $C build
-step "Starting containers" $C up -d --remove-orphans
-step "Waiting for the API (migrations run first)" wait_for http://localhost:4000/health
-step "Waiting for the web app" wait_for http://localhost:8081
+# Only now is anything restarted. While the new API starts and migrates, the
+# running web server answers for it and visitors see "Alibe is updating".
+restart_api() { $C up -d --no-deps backend && wait_for http://localhost:4000/health; }
+# The old dev-server container (pre-production setup) holds port 8081: clear it first.
+swap_web() { docker rm -f alibe-mobile >/dev/null 2>&1 || true; $C up -d --remove-orphans; }
+step "Restarting the API (visitors see 'Alibe is updating')" restart_api
+step "Switching to the new web app" swap_web
+step "Checking the app reaches the API" wait_for http://localhost:8081/api/health
 
 # ---------- summary --------------------------------------------------------
 echo
@@ -164,7 +173,7 @@ cat <<EOF
   ${ORANGE}${B}│${R}  ${GREEN}${B}Alibe is live${R}  ${GREY}($(git rev-parse --short HEAD 2>/dev/null || echo local))${R}
   ${ORANGE}${B}│${R}
   ${ORANGE}${B}│${R}  App      ${CYAN}http://$ip:8081${R}
-  ${ORANGE}${B}│${R}  API      ${CYAN}http://$ip:4000/health${R}
+  ${ORANGE}${B}│${R}  API      ${CYAN}http://$ip:8081/api/health${R}
   ${ORANGE}${B}│${R}  Backups  ${GREY}daily into ./backups ($dumps so far)${R}
   ${ORANGE}${B}│${R}
   ${ORANGE}${B}│${R}  ${GREY}Logs: docker compose -f docker-compose.prod.yml logs -f backend${R}
