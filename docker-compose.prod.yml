@@ -2,6 +2,24 @@
 # deploy.sh creates. Local development uses docker-compose.yml instead.
 name: alibe
 
+# Settings shared by the API replicas and the migrate step.
+x-backend-env: &backend-env
+  NODE_ENV: production
+  PORT: 4000
+  DATABASE_URL: postgresql://alibe:${POSTGRES_PASSWORD}@postgres:5432/alibe
+  WEB_ORIGIN: "http://${LAN_IP:?missing - run ./deploy.sh to set it}:8081"
+  CORS_ORIGINS: ${CORS_ORIGINS:-}
+  # The web container's nginx sits in front and adds X-Forwarded-For.
+  TRUST_PROXY: ${TRUST_PROXY:-1}
+  # true = sign-in codes appear in the app (no SMS/email yet). Test only.
+  SHOW_CODES_IN_APP: ${SHOW_CODES_IN_APP:-false}
+  SEED_DEMO: ${SEED_DEMO:-true}
+  RESEND_API_KEY: ${RESEND_API_KEY:-}
+  MAIL_FROM: "${MAIL_FROM:-Alibe <no-reply@alibe.mv>}"
+  # Shared by all replicas so a slip link made by one opens on another.
+  SLIP_LINK_SECRET: "${SLIP_LINK_SECRET:?missing - run ./deploy.sh to create it}"
+  RATE_LIMITS: ${RATE_LIMITS:-on}
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -22,40 +40,49 @@ services:
       timeout: 5s
       retries: 10
 
-  backend:
+  # Runs once per deploy: database migrations and seed data, then exits.
+  migrate:
     build:
       context: ./backend
       target: prod
-    container_name: alibe-backend
-    restart: unless-stopped
-    environment:
-      NODE_ENV: production
-      PORT: 4000
-      DATABASE_URL: postgresql://alibe:${POSTGRES_PASSWORD}@postgres:5432/alibe
-      WEB_ORIGIN: "http://${LAN_IP:?missing - run ./deploy.sh to set it}:8081"
-      CORS_ORIGINS: ${CORS_ORIGINS:-}
-      # The web container's nginx sits in front and adds X-Forwarded-For.
-      TRUST_PROXY: ${TRUST_PROXY:-1}
-      # true = sign-in codes appear in the app (no SMS/email yet). Test only.
-      SHOW_CODES_IN_APP: ${SHOW_CODES_IN_APP:-false}
-      SEED_DEMO: ${SEED_DEMO:-true}
-      RESEND_API_KEY: ${RESEND_API_KEY:-}
-      MAIL_FROM: "${MAIL_FROM:-Alibe <no-reply@alibe.mv>}"
-    # Public traffic reaches the API through the web container at /api.
-    # Published on this machine only, for deploy.sh's health check.
-    ports:
-      - "127.0.0.1:4000:4000"
+    image: alibe-backend:prod
+    command: ["migrate"]
+    restart: "no"
+    environment: *backend-env
     depends_on:
       postgres:
         condition: service_healthy
     volumes:
       - alibe-uploads:/app/uploads
       - alibe-private:/app/private
+
+  # The API, as several identical replicas behind the web container's nginx
+  # (round robin, failover). BACKEND_REPLICAS in .env sets how many; about one
+  # per CPU core the VPS can spare. Admin commands: ./scripts/admin.sh ...
+  backend:
+    build:
+      context: ./backend
+      target: prod
+    image: alibe-backend:prod
+    restart: unless-stopped
+    deploy:
+      replicas: ${BACKEND_REPLICAS:-2}
+    environment:
+      <<: *backend-env
+      MIGRATE_ON_START: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - alibe-uploads:/app/uploads
+      - alibe-private:/app/private
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health >/dev/null || exit 1"]
-      interval: 15s
-      timeout: 5s
-      start_period: 120s
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:4000/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      start_period: 60s
       retries: 3
 
   web:

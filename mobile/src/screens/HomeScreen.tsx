@@ -3,7 +3,7 @@ import { View, Text, ScrollView, RefreshControl, Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { WifiOff, X, PackageOpen, Bell } from "lucide-react-native";
-import { api, Category, Listing } from "../api/client";
+import { api, Category, HomeFeed, Listing } from "../api/client";
 import { StaticProductGrid } from "../components/ProductGrid";
 import HomeRail from "../components/HomeRail";
 import ContentCard from "../components/ContentCard";
@@ -40,7 +40,13 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const { isDesktopWeb, width, gutter, contentWidth } = useResponsive();
   const [categories, setCategories] = useState<Category[]>([]);
-  const [allListings, setAllListings] = useState<Listing[]>([]);
+  // Built by the server: newest items plus a short row per category. Home never
+  // downloads the whole marketplace.
+  const [latest, setLatest] = useState<Listing[]>([]);
+  const [rails, setRails] = useState<HomeFeed["rails"]>([]);
+  const [recentListings, setRecentListings] = useState<Listing[]>([]);
+  // Desktop sidebar: one category's first page.
+  const [categoryItems, setCategoryItems] = useState<Listing[]>([]);
   const [activeSlug, setActiveSlug] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -59,13 +65,16 @@ export default function HomeScreen() {
   const loadAll = useCallback(async () => {
     try {
       // Loaded independently: if listings fail, the categories still show.
-      const [cats, list] = await Promise.allSettled([api.categories(), api.listings({ mix: "1" })]);
+      const [cats, home] = await Promise.allSettled([api.categories(), api.home()]);
       if (cats.status === "fulfilled") setCategories(cats.value);
-      if (list.status === "fulfilled") setAllListings(list.value);
-      setFailed(list.status === "rejected");
-      if (cats.status === "rejected" || list.status === "rejected") {
+      if (home.status === "fulfilled") {
+        setLatest(home.value.latest);
+        setRails(home.value.rails);
+      }
+      setFailed(home.status === "rejected");
+      if (cats.status === "rejected" || home.status === "rejected") {
         // Content already on screen stays; say so rather than blanking it.
-        setAllListings((prev) => {
+        setLatest((prev) => {
           if (prev.length) toast.error("Couldn't refresh. Showing what we had.");
           return prev;
         });
@@ -84,38 +93,39 @@ export default function HomeScreen() {
   const goToSearch = (params: Record<string, string | undefined>) => navigation.navigate("SearchTab", params);
   const seeAllInCategory = (c: Category) => goToSearch({ categorySlug: c.slug, categoryName: c.name });
 
-  const railsByCategory = useMemo(
-    () =>
-      categories
-        .map((c) => ({ category: c, items: allListings.filter((l) => l.category.slug === c.slug).slice(0, 12) }))
-        .filter((r) => r.items.length > 0)
-        .sort((a, b) => b.items.length - a.items.length),
-    [categories, allListings]
-  );
+  const railsByCategory = rails;
 
   // Mobile category grid: 4 square tiles per row, two rows max.
   const categoryTile = Math.floor((width - gutter * 2 - spacing.sm * 3) / 4);
-  // Newest photo in each category (listings arrive newest first).
+  // Newest photo in each category: sent with the categories, else from its row.
   const categoryPhoto = useMemo(() => {
     const map = new Map<string, string>();
-    for (const l of allListings) if (l.images[0] && !map.has(l.category.slug)) map.set(l.category.slug, l.images[0]);
+    for (const c of categories) if (c.photo) map.set(c.slug, c.photo);
+    for (const r of rails) if (!map.has(r.category.slug) && r.items[0]?.images[0]) map.set(r.category.slug, r.items[0].images[0]);
     return map;
-  }, [allListings]);
+  }, [categories, rails]);
   const hasMoreCategories = categories.length > 8;
   const gridCategories = hasMoreCategories ? categories.slice(0, 7) : categories;
 
-  // Use the live listing (current price/status) and drop anything sold or removed.
-  const recentlyViewed = useMemo(() => {
-    const byId = new Map(allListings.map((l) => [l.id, l]));
-    return recentIds.map((id) => byId.get(id)).filter((l): l is Listing => !!l && l.status === "ACTIVE");
-  }, [recentIds, allListings]);
+  // Fetch the live listings (current price/status) and drop anything sold or removed.
+  useEffect(() => {
+    api.listingsByIds(recentIds.slice(0, 12)).then(setRecentListings).catch(() => {});
+  }, [recentIds]);
+  const recentlyViewed = recentListings.filter((l) => l.status === "ACTIVE");
 
-  const filtered = activeSlug ? allListings.filter((l) => l.category.slug === activeSlug) : [];
+  useEffect(() => {
+    if (!activeSlug) return setCategoryItems([]);
+    api
+      .listingsPage({ categorySlug: activeSlug, mix: "1" }, 0, 60)
+      .then((p) => setCategoryItems(p.items))
+      .catch(() => toast.error("Couldn't load this category. Please try again."));
+  }, [activeSlug, toast]);
+  const filtered = categoryItems;
   const activeCategory = categories.find((c) => c.slug === activeSlug);
   const firstName = user?.name?.split(" ")[0];
 
   // Full-page error only when nothing at all could load (really offline).
-  if (!loading && failed && !allListings.length && !categories.length) {
+  if (!loading && failed && !latest.length && !categories.length) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         {isDesktopWeb && <WebNavBar active="home" />}
@@ -134,7 +144,8 @@ export default function HomeScreen() {
     );
   }
 
-  const noListings = !loading && !allListings.length;
+  const noListings = !loading && !latest.length && !rails.length;
+  const totalListings = categories.reduce((n, c) => n + (c.listingCount ?? 0), 0);
   // Categories loaded but listings didn't: say so in the listings area.
   const listingsError = (
     <EmptyState
@@ -231,7 +242,7 @@ export default function HomeScreen() {
                       />
                     ))}
                     <Text style={[styles.sectionTitle, { marginTop: spacing.md }]}>Fresh listings</Text>
-                    <StaticProductGrid data={allListings.slice(0, 24)} onPressItem={goToProduct} containerWidth={gridWidth} horizontalPadding={0} />
+                    <StaticProductGrid data={latest.slice(0, 24)} onPressItem={goToProduct} containerWidth={gridWidth} horizontalPadding={0} />
                   </>
                 )}
               </View>
@@ -349,9 +360,9 @@ export default function HomeScreen() {
               </React.Fragment>
             ))}
             <Text style={[styles.sectionTitle, { paddingHorizontal: gutter, marginTop: spacing.sm }]}>Fresh listings</Text>
-            <StaticProductGrid data={allListings.slice(0, 20)} onPressItem={goToProduct} containerWidth={width} horizontalPadding={gutter} />
+            <StaticProductGrid data={latest.slice(0, 20)} onPressItem={goToProduct} containerWidth={width} horizontalPadding={gutter} />
             <Tap style={[styles.moreButton, { marginHorizontal: gutter }]} onPress={() => goToSearch({})}>
-              <Text style={styles.moreButtonText}>See all {allListings.length} listings</Text>
+              <Text style={styles.moreButtonText}>{totalListings > 0 ? `See all ${totalListings.toLocaleString()} listings` : "See all listings"}</Text>
             </Tap>
           </>
         )}

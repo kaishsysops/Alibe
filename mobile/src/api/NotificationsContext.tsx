@@ -6,6 +6,7 @@ import { useAuth } from "./AuthContext";
 import { useToast } from "../components/Toast";
 import { navigationRef } from "../navigation/navigationRef";
 import { ensureNotificationPermission, registerForPush, setActivePushConversation, setAppBadge, showLocalNotification } from "./push";
+import { appIsVisible } from "../utils/visibility";
 
 type NotificationsState = {
   data: NotificationsData;
@@ -15,7 +16,10 @@ type NotificationsState = {
 };
 
 const EMPTY: NotificationsData = { unreadChats: 0, total: 0, items: [] };
-const POLL_MS = 6000;
+// Polled by every signed-in app, so it's the biggest steady load on the
+// server: every 15 seconds while visible, never while hidden. Opening the app
+// (or the tab) refreshes at once, and push notifications cover the gaps.
+const POLL_MS = 15000;
 const NotificationsContext = createContext<NotificationsState | undefined>(undefined);
 
 const openChat = (conversationId: string) => {
@@ -105,7 +109,9 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     setData(EMPTY);
     if (!user) return;
     refresh();
-    const interval = setInterval(refresh, POLL_MS);
+    // A little randomness per device so thousands of phones don't all ask at
+    // the same instant (e.g. right after a deploy reloads everyone together).
+    const interval = setInterval(() => appIsVisible() && refresh(), POLL_MS + Math.floor(Math.random() * 4000));
     const sub = AppState.addEventListener("change", (s) => s === "active" && refresh());
 
     let pushToken: string | null = null;

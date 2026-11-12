@@ -57,7 +57,9 @@ function authHeaders(): Record<string, string> {
   return authToken ? { Authorization: `Bearer ${authToken}` } : {};
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+// Sends a request and turns any failure into an ApiError; returns the raw
+// response so callers can read headers (paging) as well as the body.
+async function send(path: string, options?: RequestInit): Promise<Response> {
   let res: Response;
   try {
     res = await fetch(`${BASE_URL}${path}`, {
@@ -80,9 +82,25 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     }
     throw new ApiError(res.status, message);
   }
+  return res;
+}
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await send(path, options);
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
+
+export type Page<T> = { items: T[]; hasMore: boolean };
+
+// Lists the server sends a page at a time (X-Has-More says if there's more).
+async function requestPage<T>(path: string): Promise<Page<T>> {
+  const res = await send(path);
+  return { items: (await res.json()) as T[], hasMore: res.headers.get("X-Has-More") === "1" };
+}
+
+const query = (params: Record<string, string | number | undefined>) =>
+  new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== "").map(([k, v]) => [k, String(v)])).toString();
 
 // Uploaded files come back as server-relative paths (/uploads/…); resolve
 // them against whichever API host this device talks to.
@@ -132,7 +150,8 @@ export function newClientId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export type Category = { id: string; name: string; slug: string; icon: string | null; listingCount?: number };
+export type Category = { id: string; name: string; slug: string; icon: string | null; listingCount?: number; photo?: string | null };
+export type HomeFeed = { latest: Listing[]; rails: Array<{ category: Category; items: Listing[] }> };
 export type Island = { id: string; name: string; atollId: string };
 export type Atoll = { id: string; name: string; code: string; islands: Island[] };
 export type SellerRating = { average: number; count: number };
@@ -408,12 +427,12 @@ export const api = {
   health: () => request<{ ok: boolean }>("/health"),
   categories: () => request<Category[]>("/categories"),
   atolls: () => request<Atoll[]>("/atolls"),
-  listings: (params: Record<string, string | undefined> = {}) => {
-    const qs = new URLSearchParams(
-      Object.entries(params).filter(([, v]) => v !== undefined && v !== "") as [string, string][]
-    ).toString();
-    return request<Listing[]>(`/listings${qs ? `?${qs}` : ""}`);
-  },
+  // One page of listings (40 by default). `page` counts from 0.
+  listingsPage: (params: Record<string, string | undefined> = {}, page = 0, limit?: number) =>
+    requestPage<Listing>(`/listings?${query({ ...params, page, limit })}`),
+  listingsByIds: (ids: string[]) => (ids.length ? request<Listing[]>(`/listings?${query({ ids: ids.join(",") })}`) : Promise.resolve([])),
+  // Home's newest items and one row per category, built by the server.
+  home: () => request<HomeFeed>("/listings/home"),
   listing: (id: string) => request<Listing>(`/listings/${id}`),
   myListings: (sellerId: string, status?: Listing["status"]) =>
     request<Listing[]>(`/listings/mine/${sellerId}${status ? `?status=${status}` : ""}`),
@@ -442,7 +461,7 @@ export const api = {
   user: (id: string) => request<PublicUser>(`/users/${id}`),
   searchSellers: (q: string) => request<SellerSearchResult[]>(`/users?q=${encodeURIComponent(q)}`),
   // Someone else's items for sale (seller profile). Active only.
-  sellerListings: (sellerId: string) => request<Listing[]>(`/listings?seller=${encodeURIComponent(sellerId)}`),
+  sellerListings: (sellerId: string, page = 0) => requestPage<Listing>(`/listings?${query({ seller: sellerId, page, limit: 40 })}`),
   trust: (id: string) => request<TrustSummary>(`/users/${id}/trust`),
   myProfile: (id: string) => request<FullUser>(`/users/${id}/me`),
   updateProfile: (id: string, data: ProfileUpdate) =>

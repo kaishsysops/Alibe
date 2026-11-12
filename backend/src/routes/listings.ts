@@ -8,6 +8,11 @@ import { listingBlock, prohibitedReason } from "../moderation.js";
 import { notifyUser } from "../push.js";
 import { mixedIbayListings } from "./ibay.js";
 import { boostedListingIds } from "./purchases.js";
+import { cached } from "../cache.js";
+
+const DEFAULT_LIMIT = 40;
+const MAX_LIMIT = 60;
+const MAX_PAGE = 50;
 
 export const listingsRouter = safeRouter();
 
@@ -19,6 +24,12 @@ const listQuerySchema = listingFiltersSchema.extend({
   seller: z.string().optional(),
   // Home and search ask for iBay items mixed in with Alibe's own.
   mix: z.literal("1").optional(),
+  // Paging. Lists are never sent whole: a big marketplace would mean
+  // megabytes per screen. X-Has-More says whether another page exists.
+  page: z.coerce.number().int().min(0).max(MAX_PAGE).default(0),
+  limit: z.coerce.number().int().min(1).max(MAX_LIMIT).default(DEFAULT_LIMIT),
+  // Specific listings by id (recently viewed), in the order given.
+  ids: z.string().max(2000).optional(),
 });
 
 // Alibe and iBay take turns, so neither crowds the other out; a price sort
@@ -34,30 +45,112 @@ function mergeFeeds<T extends { price: number }>(own: T[], ibay: T[], sort?: str
   return mixed;
 }
 
-const SORTS: Record<string, Prisma.ListingOrderByWithRelationInput> = {
-  newest: { createdAt: "desc" },
-  price_asc: { price: "asc" },
-  price_desc: { price: "desc" },
+const SORTS: Record<string, Prisma.ListingOrderByWithRelationInput[]> = {
+  // id breaks ties so pages never repeat or skip an item.
+  newest: [{ createdAt: "desc" }, { id: "desc" }],
+  price_asc: [{ price: "asc" }, { id: "asc" }],
+  price_desc: [{ price: "desc" }, { id: "desc" }],
 };
+
+// Feed items leave out the description (often the biggest field): lists only
+// draw cards, and the listing page loads the full listing itself.
+
+// Short-lived shared copies of things every feed request needs.
+// Ids of listings with an active boost (purchases without a listing ignored).
+const boostedIds = () => cached("boosted", 30_000, async () => new Set([...(await boostedListingIds())].filter((id): id is string => !!id)));
+const ibayFor = (filters: object, sort?: string) => cached(`ibay:${JSON.stringify(filters)}:${sort ?? ""}`, 60_000, () => mixedIbayListings(filters, sort));
 
 listingsRouter.get("/", async (req, res) => {
   const parsed = listQuerySchema.safeParse(req.query);
   if (!parsed.success) return sendValidationError(res, parsed.error);
-  const { sort, viewerId, seller, mix, ...filters } = parsed.data;
-  const where = listingWhere(filters, await hiddenSellerIds(viewerId));
-  const listings = await prisma.listing.findMany({
-    where: seller ? { AND: [where, { sellerId: seller }] } : where,
+  const { sort, viewerId, seller, mix, page, limit, ids, ...filters } = parsed.data;
+  const hidden = await hiddenSellerIds(viewerId);
+
+  if (ids) {
+    const wanted = ids.split(",").filter(Boolean).slice(0, 50);
+    const rows = await prisma.listing.findMany({ where: { id: { in: wanted }, hiddenAt: null, sellerId: hidden.length ? { notIn: hidden } : undefined }, include: listingInclude });
+    const byId = new Map((await serializeListings(rows)).map((l) => [l.id, l]));
+    res.setHeader("X-Has-More", "0");
+    return res.json(wanted.map((id) => byId.get(id)).filter(Boolean));
+  }
+
+  const where = listingWhere(filters, hidden);
+  const scoped: Prisma.ListingWhereInput = seller ? { AND: [where, { sellerId: seller }] } : where;
+  const order = sort ?? "newest";
+  const withIbay = !!mix && !seller && !!req.userId;
+  // A price sort mixed with iBay has to merge both lists before cutting a page,
+  // so it reads every row up to the end of this page (capped by MAX_PAGE).
+  const mergeByPrice = withIbay && order !== "newest";
+  const boosted = await boostedIds();
+  // Boosted items lead page one of a newest-first feed. A price sort stays
+  // strictly by price, and a seller's own page isn't a place to compete.
+  const lead = order === "newest" && !seller && boosted.size;
+  const pinned = lead && page === 0 ? await prisma.listing.findMany({ where: { AND: [scoped, { id: { in: [...boosted] } }] }, include: listingInclude, orderBy: SORTS.newest }) : [];
+  const rows = await prisma.listing.findMany({
+    where: lead ? { AND: [scoped, { id: { notIn: [...boosted] } }] } : scoped,
     include: listingInclude,
-    orderBy: SORTS[sort ?? "newest"],
+    orderBy: SORTS[order],
+    skip: mergeByPrice ? 0 : page * limit,
+    take: mergeByPrice ? (page + 1) * limit + 1 : limit + 1,
   });
-  const boosted = await boostedListingIds();
-  const serialized = (await serializeListings(listings)).map((l) => ({ ...l, boosted: boosted.has(l.id) }));
-  // Boosted items lead a newest-first feed. A price sort stays strictly by price,
-  // and a seller's own page isn't a place to compete for attention.
-  const own = (sort && sort !== "newest") || seller ? serialized : [...serialized.filter((l) => l.boosted), ...serialized.filter((l) => !l.boosted)];
-  // Only signed-in people can open an iBay item, so only they get them in a feed.
-  if (!mix || seller || !req.userId) return res.json(own);
-  res.json(mergeFeeds<{ price: number }>(own, await mixedIbayListings(filters, sort), sort));
+  let hasMore = rows.length > (mergeByPrice ? (page + 1) * limit : limit);
+  const ownRows = mergeByPrice ? rows.slice(0, (page + 1) * limit) : rows.slice(0, limit);
+  const own = (await serializeListings([...pinned, ...ownRows])).map((l) => ({ ...l, description: undefined, boosted: boosted.has(l.id) }));
+
+  if (!withIbay) {
+    res.setHeader("X-Has-More", hasMore ? "1" : "0");
+    return res.json(own);
+  }
+  const ibay = await ibayFor(filters, sort);
+  let items: unknown[];
+  if (mergeByPrice) {
+    const merged = mergeFeeds<{ price: number }>(own, ibay, sort);
+    hasMore = hasMore || merged.length > (page + 1) * limit;
+    items = merged.slice(page * limit, (page + 1) * limit);
+  } else {
+    // Each page interleaves this page of Alibe items with the same window of iBay's.
+    const window = ibay.slice(page * limit, (page + 1) * limit);
+    hasMore = hasMore || ibay.length > (page + 1) * limit;
+    items = mergeFeeds<{ price: number }>(own, window, sort);
+  }
+  res.setHeader("X-Has-More", hasMore ? "1" : "0");
+  res.json(items);
+});
+
+// Everything Home needs in one small response: the newest items and a row per
+// category (12 each, iBay mixed in for signed-in people). Built once and shared
+// for 30 seconds; only blocked sellers are filtered per person.
+const HOME_RAIL = 12;
+const HOME_LATEST = 24;
+
+async function buildHome(signedIn: boolean) {
+  const [categories, boosted] = await Promise.all([prisma.category.findMany(), boostedIds()]);
+  const active = { status: "ACTIVE" as const, hiddenAt: null };
+  const leadBoosted = <T extends { id: string }>(list: T[]) => [...list.filter((l) => boosted.has(l.id)), ...list.filter((l) => !boosted.has(l.id))];
+  const [latestRows, ...railRows] = await Promise.all([
+    prisma.listing.findMany({ where: active, include: listingInclude, orderBy: SORTS.newest, take: HOME_LATEST }),
+    ...categories.map((c) => prisma.listing.findMany({ where: { ...active, categoryId: c.id }, include: listingInclude, orderBy: SORTS.newest, take: HOME_RAIL })),
+  ]);
+  const serialize = async (rows: typeof latestRows) => leadBoosted((await serializeListings(rows)).map((l) => ({ ...l, description: undefined, boosted: boosted.has(l.id) })));
+  const ibay = signedIn ? await ibayFor({}, undefined) : [];
+  const ibayBy = (slug: string) => ibay.filter((i) => i.category.slug === slug);
+  const rails = (
+    await Promise.all(
+      categories.map(async (c, i) => ({ category: c, items: mergeFeeds<{ price: number }>(await serialize(railRows[i]), ibayBy(c.slug)).slice(0, HOME_RAIL) }))
+    )
+  )
+    .filter((r) => r.items.length)
+    .sort((a, b) => b.items.length - a.items.length);
+  const latest = mergeFeeds<{ price: number }>(await serialize(latestRows), ibay).slice(0, HOME_LATEST);
+  return { latest, rails };
+}
+
+listingsRouter.get("/home", async (req, res) => {
+  const home = await cached(`home:${req.userId ? "in" : "out"}`, 30_000, () => buildHome(!!req.userId));
+  const hidden = new Set(await hiddenSellerIds(req.userId));
+  if (!hidden.size) return res.json(home);
+  const visible = <T extends { seller: { id: string } }>(list: T[]) => list.filter((l) => !hidden.has(l.seller.id));
+  res.json({ latest: visible(home.latest as any[]), rails: home.rails.map((r) => ({ ...r, items: visible(r.items as any[]) })).filter((r) => r.items.length) });
 });
 
 listingsRouter.get("/:id", async (req, res) => {

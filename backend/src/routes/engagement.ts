@@ -72,40 +72,48 @@ notificationsRouter.post("/:userId/price-drops/:listingId/seen", async (req, res
 // this to drive tab badges, the bell and in-app message banners.
 notificationsRouter.get("/:userId", async (req, res) => {
   const { userId } = req.params;
-  const conversations = await prisma.conversation.findMany({
-    where: { OR: [{ buyerId: userId }, { sellerId: userId }] },
-    include: { buyer: true, seller: true, listing: { select: { id: true, title: true, images: true } } },
+  // Polled by every signed-in app, so it must stay cheap however many chats
+  // someone has: one query finds every conversation with unread messages, its
+  // unread count and the newest unread message.
+  const unread = await prisma.$queryRaw<{ conversationId: string; messageId: string; text: string; mediaType: string | null; createdAt: Date; count: bigint }[]>`
+    SELECT DISTINCT ON (m."conversationId")
+      m."conversationId", m.id AS "messageId", m.text, m."mediaType", m."createdAt",
+      COUNT(*) OVER (PARTITION BY m."conversationId") AS count
+    FROM "Message" m
+    JOIN "Conversation" c ON c.id = m."conversationId"
+    WHERE (c."buyerId" = ${userId} OR c."sellerId" = ${userId})
+      AND m."senderId" <> ${userId}
+      AND m."createdAt" > COALESCE(CASE WHEN c."buyerId" = ${userId} THEN c."buyerLastReadAt" ELSE c."sellerLastReadAt" END, 'epoch'::timestamp)
+    ORDER BY m."conversationId", m."createdAt" DESC`;
+  const unreadConversations = unread.length
+    ? await prisma.conversation.findMany({
+        where: { id: { in: unread.map((u) => u.conversationId) } },
+        include: { buyer: true, seller: true, listing: { select: { id: true, title: true, images: true } } },
+      })
+    : [];
+  const conversationBy = new Map(unreadConversations.map((c) => [c.id, c]));
+  const chatItems = unread.flatMap((u) => {
+    const c = conversationBy.get(u.conversationId);
+    if (!c) return [];
+    const other = c.buyerId === userId ? c.seller : c.buyer;
+    return [
+      {
+        type: "message" as const,
+        id: `msg-${u.messageId}`,
+        messageId: u.messageId,
+        conversationId: c.id,
+        fromName: other.name,
+        listingTitle: c.listing.title,
+        image: c.listing.images[0] ?? null,
+        preview: u.text || (u.mediaType === "VIDEO" ? "Sent a video" : "Sent a photo"),
+        count: Number(u.count),
+        createdAt: u.createdAt,
+      },
+    ];
   });
 
-  const chatItems = (
-    await Promise.all(
-      conversations.map(async (c) => {
-        const lastRead = (c.buyerId === userId ? c.buyerLastReadAt : c.sellerLastReadAt) ?? new Date(0);
-        const where = { conversationId: c.id, senderId: { not: userId }, createdAt: { gt: lastRead } };
-        const [count, latest] = await Promise.all([
-          prisma.message.count({ where }),
-          prisma.message.findFirst({ where, orderBy: { createdAt: "desc" } }),
-        ]);
-        if (!count || !latest) return null;
-        const other = c.buyerId === userId ? c.seller : c.buyer;
-        return {
-          type: "message" as const,
-          id: `msg-${latest.id}`,
-          messageId: latest.id,
-          conversationId: c.id,
-          fromName: other.name,
-          listingTitle: c.listing.title,
-          image: c.listing.images[0] ?? null,
-          preview: latest.text || (latest.mediaType === "VIDEO" ? "Sent a video" : "Sent a photo"),
-          count,
-          createdAt: latest.createdAt,
-        };
-      })
-    )
-  ).filter((x): x is NonNullable<typeof x> => !!x);
-
   const pendingOffers = await prisma.offer.findMany({
-    where: { status: "PENDING", fromId: { not: userId }, conversationId: { in: conversations.map((c) => c.id) } },
+    where: { status: "PENDING", fromId: { not: userId }, conversation: { OR: [{ buyerId: userId }, { sellerId: userId }] } },
     include: { from: true, listing: { select: { title: true, images: true } } },
     orderBy: { createdAt: "desc" },
   });

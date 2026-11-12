@@ -16,7 +16,7 @@ import { uploadsRouter, UPLOAD_DIR } from "./routes/uploads.js";
 import { ordersRouter } from "./routes/orders.js";
 import { startReminders } from "./reminders.js";
 import { authenticate } from "./auth.js";
-import { rateLimit } from "./rateLimit.js";
+import { ipCeiling, accountLimits } from "./rateLimit.js";
 import { slipsRouter, moveSlipsOutOfPublicUploads } from "./routes/slips.js";
 
 const app = express();
@@ -26,10 +26,12 @@ app.disable("x-powered-by");
 // CORS_ORIGINS (or WEB_ORIGIN, the app's own web address) limits which websites
 // may call the API from a browser. Native apps send no Origin and aren't affected.
 const allowedOrigins = (process.env.CORS_ORIGINS || process.env.WEB_ORIGIN)?.split(",").map((o) => o.trim()).filter(Boolean);
-app.use(cors(allowedOrigins?.length ? { origin: allowedOrigins } : undefined));
-app.use(rateLimit);
+// X-Has-More tells paged lists (listings) whether to ask for another page.
+app.use(cors({ ...(allowedOrigins?.length ? { origin: allowedOrigins } : {}), exposedHeaders: ["X-Has-More"] }));
+app.use(ipCeiling);
 app.use(express.json({ limit: "1mb" }));
 app.use(authenticate);
+app.use(accountLimits);
 
 app.get("/health", (_req, res) => res.json({ ok: true, service: "alibe-backend" }));
 app.use("/categories", categoriesRouter);
@@ -62,8 +64,14 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 });
 
 const port =process.env.PORT ? Number(process.env.PORT) : 4000;
-app.listen(port, "0.0.0.0", () => {
+const server = app.listen(port, "0.0.0.0", () => {
   startReminders();
   moveSlipsOutOfPublicUploads().catch((e) => console.error("Couldn't move payment slips:", e));
   console.log(`Alibe backend listening on http://0.0.0.0:${port}`);
 });
+
+// nginx keeps connections to each replica open and reuses them (upstream
+// keepalive_timeout 30s). Node must hold them longer, or it can close one just
+// as nginx sends a request on it, which nginx sees as a failed replica.
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;

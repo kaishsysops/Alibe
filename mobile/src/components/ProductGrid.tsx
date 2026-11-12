@@ -1,5 +1,5 @@
 import React from "react";
-import { FlatList, View, Platform, useWindowDimensions } from "react-native";
+import { FlatList, View, Platform, useWindowDimensions, ActivityIndicator } from "react-native";
 import { Listing } from "../api/client";
 import ListingCard from "./ListingCard";
 import { GridSkeleton } from "./Skeleton";
@@ -32,6 +32,8 @@ export default function ProductGrid({
   horizontalPadding = spacing.md,
   bottomPadding = tabBarClearance,
   renderCard,
+  onEndReached,
+  loadingMore,
 }: {
   data: Listing[];
   onPressItem: (l: Listing) => void;
@@ -43,6 +45,9 @@ export default function ProductGrid({
   horizontalPadding?: number;
   bottomPadding?: number;
   renderCard?: (l: Listing, width: number) => React.ReactElement;
+  // Paged lists: called near the bottom to fetch the next page.
+  onEndReached?: () => void;
+  loadingMore?: boolean;
 }) {
   const { width: windowWidth } = useWindowDimensions();
   const width = containerWidth ?? windowWidth;
@@ -69,6 +74,9 @@ export default function ProductGrid({
         )
       }
       refreshControl={refreshControl}
+      onEndReached={onEndReached}
+      onEndReachedThreshold={0.6}
+      ListFooterComponent={loadingMore ? <ActivityIndicator style={{ marginVertical: spacing.lg }} /> : undefined}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
       renderItem={({ item, index }) => (

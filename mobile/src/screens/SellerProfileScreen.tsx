@@ -29,6 +29,9 @@ export default function SellerProfileScreen() {
   const { id } = route.params;
   const [seller, setSeller] = useState<PublicUser | null>(null);
   const [listings, setListings] = useState<Listing[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -39,11 +42,31 @@ export default function SellerProfileScreen() {
     Promise.all([api.user(id), api.sellerListings(id)])
       .then(([u, l]) => {
         setSeller(u);
-        setListings(l);
+        setListings(l.items);
+        setHasMore(l.hasMore);
+        setPage(0);
       })
       .catch(() => setMissing(true))
       .finally(() => setLoading(false));
   }, [id]);
+
+  const loadMore = async () => {
+    if (!hasMore || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const next = await api.sellerListings(id, page + 1);
+      setListings((prev) => {
+        const seen = new Set(prev.map((l) => l.id));
+        return [...prev, ...next.items.filter((l) => !seen.has(l.id))];
+      });
+      setHasMore(next.hasMore);
+      setPage(page + 1);
+    } catch {
+      // Scrolling again retries.
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const goToProduct = (l: Listing) => navigation.push("ProductDetail", { id: l.id });
   const memberSince = seller?.createdAt ? new Date(seller.createdAt).toLocaleDateString("en-GB", { month: "long", year: "numeric" }) : "";
@@ -128,6 +151,8 @@ export default function SellerProfileScreen() {
     <ProductGrid
       data={listings}
       loading={loading}
+      onEndReached={loadMore}
+      loadingMore={loadingMore}
       onPressItem={goToProduct}
       containerWidth={isDesktopWeb ? contentWidth : undefined}
       horizontalPadding={pad}

@@ -81,7 +81,8 @@ development keeps using `docker-compose.yml`.
 | Container        | What it is                                             | Port              |
 |------------------|--------------------------------------------------------|-------------------|
 | `alibe-web`      | The app as a static website (nginx), and the API at `/api` | 8081 (public) |
-| `alibe-backend`  | API, `NODE_ENV=production`, compiled with `tsc`        | 127.0.0.1:4000    |
+| `backend` ×N     | API replicas (`BACKEND_REPLICAS`, default 2), load balanced by the web nginx | none (internal) |
+| `migrate`        | One-off per deploy: migrations + seed, then exits      | none              |
 | `alibe-postgres` | Database                                               | 127.0.0.1:5432    |
 | `alibe-backup`   | Daily `pg_dump` + photo archive into `./backups`       | none              |
 
@@ -90,16 +91,38 @@ Testers open `http://<VPS_IP>:8081`; the app calls the API at
 provider's firewall panel too, if it has one).
 
 **Deploys without downtime for visitors.** Images build while the old version
-keeps serving. Then only the API restarts: for those few seconds nginx answers
-API calls with `503 {"code":"MAINTENANCE"}` and the app shows an "Alibe is
-updating" screen that checks every 4 seconds and reloads itself when the API is
+keeps serving. Migrations run as a one-off step. Then new API replicas start
+next to the old ones, and only once they're all healthy are the old ones
+retired, so there is always an API answering. If every replica is down at once
+(a crash, a first deploy), nginx answers `503 {"code":"MAINTENANCE"}` and the
+app shows an "Alibe is updating" screen that reloads itself when the API is
 back. The web container only restarts when the app itself changed.
+
+**Load handling.** Lists are paged (40 items, `X-Has-More`), Home is one small
+server-built response, categories/Home/boosted items are cached for 30-60
+seconds, notifications cost one query however many chats someone has, and the
+app polls every 15s (chat 4s) only while visible. Rate limits are per account
+for signed-in people (carrier NAT puts many phones on one IP) plus a high
+per-IP ceiling; sign-in code requests are limited per IP in nginx.
+
+**Staff commands** run in one API replica through `./scripts/admin.sh`:
+
+```bash
+ADMIN_PASSWORD='...' ./scripts/admin.sh set-admin kaish
+STAFF_CODE=12345678  ./scripts/admin.sh set-staff-code
+./scripts/admin.sh import-ibay        # then: ./scripts/admin.sh ibay-log
+./scripts/admin.sh psql               # database shell
+./scripts/admin.sh logs               # API logs
+```
 
 **Settings live in `.env`** (created by the first deploy, `chmod 600`, never committed):
 
 | Setting              | Meaning                                                              |
 |----------------------|----------------------------------------------------------------------|
-| `LAN_IP`             | The server's public IPv4; the web app is built to call `http://LAN_IP:4000` |
+| `LAN_IP`             | The server's public IPv4; the web app is built to call `http://LAN_IP:8081/api` |
+| `BACKEND_REPLICAS`   | How many API replicas to run (default 2). About one per CPU core the VPS can spare |
+| `SLIP_LINK_SECRET`   | Generated. Signs staff links to payment slips (shared by all replicas) |
+| `RATE_LIMITS`        | `off` disables the app's own rate limits (load testing only) |
 | `POSTGRES_PASSWORD`  | Generated on first deploy. The database password is set to match on every deploy |
 | `SHOW_CODES_IN_APP`  | `true` = sign-in codes show in the app (no SMS/email yet). **Anyone can sign in as anyone.** Set to `false` once sending works |
 | `SEED_DEMO`          | `false` stops adding the demo users and listings (categories and atolls are always seeded) |

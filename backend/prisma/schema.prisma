@@ -150,6 +150,11 @@ model Listing {
   reports       Report[]
   offers        Offer[]
   orders        Order[]
+
+  // Feed, chat and notification queries (added for load).
+  @@index([status, hiddenAt, createdAt])
+  @@index([categoryId, status, createdAt])
+  @@index([sellerId, status])
 }
 
 model Favorite {
@@ -182,6 +187,10 @@ model Conversation {
   updatedAt DateTime  @updatedAt
 
   @@unique([listingId, buyerId])
+
+  // Feed, chat and notification queries (added for load).
+  @@index([buyerId])
+  @@index([sellerId])
 }
 
 model Message {
@@ -201,6 +210,9 @@ model Message {
   // Scam pattern spotted by src/safety.ts (PAY_FIRST, LINK, ...), if any.
   flag           String?
   createdAt      DateTime     @default(now())
+
+  // Feed, chat and notification queries (added for load).
+  @@index([conversationId, createdAt])
 }
 
 enum MediaType {
@@ -231,6 +243,9 @@ model Offer {
   order          Order?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+
+  // Feed, chat and notification queries (added for load).
+  @@index([conversationId, status])
 }
 
 // A sale between one buyer and the seller. The seller is responsible for
@@ -278,6 +293,10 @@ model Order {
   remindersSent  Int            @default(0)
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
+
+  // Feed, chat and notification queries (added for load).
+  @@index([sellerId, status])
+  @@index([buyerId, status])
 }
 
 model Review {
@@ -295,6 +314,9 @@ model Review {
 
   // One review per buyer per item: a second submit edits it instead.
   @@unique([reviewerId, listingId])
+
+  // Feed, chat and notification queries (added for load).
+  @@index([sellerId])
 }
 
 enum ReportReason {

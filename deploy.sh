@@ -135,6 +135,11 @@ if [ -z "$(env_get POSTGRES_PASSWORD)" ]; then
   info "Generated a strong database password (kept in .env)"
 fi
 
+# Signs staff links to payment slips; shared by every API replica.
+if [ -z "$(env_get SLIP_LINK_SECRET)" ]; then
+  env_set SLIP_LINK_SECRET "$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+fi
+
 # With no SMS/email provider, codes must show in the app or nobody can sign in.
 if [ -z "$(env_get SHOW_CODES_IN_APP)" ]; then
   env_set SHOW_CODES_IN_APP true
@@ -152,12 +157,40 @@ step "Starting the database" start_db
 step "Securing the database password" set_db_password
 # The old version keeps serving while everything builds.
 step "Building images (the web app takes a few minutes)" $C build
-# Only now is anything restarted. While the new API starts and migrates, the
-# running web server answers for it and visitors see "Alibe is updating".
-restart_api() { $C up -d --no-deps backend && wait_for http://localhost:4000/health; }
+
+# Database changes first, while the old API keeps serving. (Migrations should
+# only add things, so the old code still works against the new schema.)
+step "Updating the database" $C run --rm -T migrate
+
+# Rolling restart: start the new API replicas next to the old ones, wait until
+# every new one is healthy, give nginx a moment to find them, then retire the
+# old ones. Visitors are always served by one version or the other.
+replicas=$(env_get BACKEND_REPLICAS); replicas=${replicas:-2}
+old_api=$($C ps -q backend 2>/dev/null || true)
+old_count=$(printf '%s' "$old_api" | grep -c . || true)
+start_new_api() {
+  $C up -d --no-deps --no-recreate --scale backend=$((replicas + old_count)) backend || return 1
+  for _ in $(seq 1 60); do
+    local ready=1 id
+    for id in $($C ps -q backend); do
+      printf '%s' "$old_api" | grep -q "$id" && continue
+      [ "$(docker inspect -f '{{.State.Health.Status}}' "$id")" = healthy ] || ready=0
+    done
+    [ "$ready" = 1 ] && return 0
+    sleep 3
+  done
+  return 1
+}
+retire_old_api() {
+  [ -n "$old_api" ] || return 0
+  sleep 7  # nginx re-reads the replica list every 5 seconds
+  # shellcheck disable=SC2086
+  docker stop -t 10 $old_api >/dev/null && docker rm $old_api >/dev/null
+}
+step "Starting $replicas new API replicas next to the old ones" start_new_api
+step "Retiring the old API replicas" retire_old_api
 # The old dev-server container (pre-production setup) holds port 8081: clear it first.
-swap_web() { docker rm -f alibe-mobile >/dev/null 2>&1 || true; $C up -d --remove-orphans; }
-step "Restarting the API (visitors see 'Alibe is updating')" restart_api
+swap_web() { docker rm -f alibe-mobile >/dev/null 2>&1 || true; $C up -d --no-deps --remove-orphans web backup; }
 step "Switching to the new web app" swap_web
 step "Checking the app reaches the API" wait_for http://localhost:8081/api/health
 
@@ -173,10 +206,11 @@ cat <<EOF
   ${ORANGE}${B}│${R}  ${GREEN}${B}Alibe is live${R}  ${GREY}($(git rev-parse --short HEAD 2>/dev/null || echo local))${R}
   ${ORANGE}${B}│${R}
   ${ORANGE}${B}│${R}  App      ${CYAN}http://$ip:8081${R}
-  ${ORANGE}${B}│${R}  API      ${CYAN}http://$ip:8081/api/health${R}
+  ${ORANGE}${B}│${R}  Health   ${CYAN}http://$ip:8081/api/health${R}
+  ${ORANGE}${B}│${R}  API      ${GREY}$replicas replicas, load balanced (BACKEND_REPLICAS in .env)${R}
   ${ORANGE}${B}│${R}  Backups  ${GREY}daily into ./backups ($dumps so far)${R}
   ${ORANGE}${B}│${R}
-  ${ORANGE}${B}│${R}  ${GREY}Logs: docker compose -f docker-compose.prod.yml logs -f backend${R}
+  ${ORANGE}${B}│${R}  ${GREY}Logs and staff commands: ./scripts/admin.sh${R}
   ${ORANGE}${B}╰────────────────────────────────────────────${R}
 EOF
 if [ "$(env_get SHOW_CODES_IN_APP)" = true ]; then

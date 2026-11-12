@@ -7,6 +7,11 @@ import { SHOWCASE_KEY, isShowcaseOn } from "./ibay.js";
 import { MONEY_KEY, moneySettings } from "../money.js";
 import { ratingsFor } from "../serializers.js";
 import { signedSlipUrl } from "./slips.js";
+import { invalidate } from "../cache.js";
+
+// Feeds are cached for up to a minute; staff changes show at once on the
+// server that handled them (other replicas catch up within the minute).
+const clearFeedCaches = () => ["categories", "home:", "ibay:", "boosted"].forEach(invalidate);
 
 // The report queue: what people have flagged, and what staff did about it.
 export const adminRouter = safeRouter();
@@ -65,6 +70,7 @@ adminRouter.post("/ibay/showcase", async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: "Please try that again." });
   const value = parsed.data.on ? "on" : "off";
   await prisma.appSetting.upsert({ where: { key: SHOWCASE_KEY }, update: { value }, create: { key: SHOWCASE_KEY, value } });
+  clearFeedCaches();
   res.json({ showcaseOn: parsed.data.on });
 });
 
@@ -74,6 +80,7 @@ adminRouter.post("/ibay/:id/hide", async (req, res) => {
   const { count } = await prisma.ibayItem.updateMany({ where: { id: req.params.id }, data: { hiddenAt: parsed.data.hidden ? new Date() : null } });
   if (!count) return res.status(404).json({ error: "We couldn't find that item." });
   if (!parsed.data.hidden) await prisma.ibayReport.deleteMany({ where: { itemId: req.params.id } });
+  clearFeedCaches();
   res.status(204).send();
 });
 

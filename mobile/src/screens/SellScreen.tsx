@@ -111,8 +111,9 @@ function SellForm() {
     const category = categories.find((c) => c.id === categoryId);
     if (!category) return setPriceHint(null);
     api
-      .listings({ categorySlug: category.slug })
-      .then((listings) => {
+      // The newest 60 in the category are a fair sample of current prices.
+      .listingsPage({ categorySlug: category.slug }, 0, 60)
+      .then(({ items: listings }) => {
         if (listings.length < 3) return setPriceHint(null);
         const prices = listings.map((l) => l.price).sort((a, b) => a - b);
         setPriceHint({ min: prices[Math.floor(prices.length * 0.2)], max: prices[Math.floor(prices.length * 0.8)] });

@@ -23,8 +23,10 @@ import { useAppAlert } from "./AppAlertProvider";
 import { FadeIn, Nudge } from "./Motion";
 import SafetyWarning, { shouldShowWarning } from "./SafetyWarning";
 import TrustBadge from "./TrustBadge";
+import { appIsVisible } from "../utils/visibility";
 
-const POLL_INTERVAL_MS = 3000;
+// An open chat checks for new messages every 4 seconds while it's on screen.
+const POLL_INTERVAL_MS = 4000;
 const QUICK_REPLIES_BUYER = ["Is this still available?", "What's your best price?", "Can I see it today?"];
 const QUICK_REPLIES_SELLER = ["Yes, it's available.", "Price is firm, sorry.", "When can you pick it up?"];
 
@@ -169,7 +171,7 @@ export default function ChatThreadView({
   useEffect(() => {
     if (!isFocused) return;
     loadThread();
-    const interval = setInterval(() => AppState.currentState === "active" && loadThread(), POLL_INTERVAL_MS);
+    const interval = setInterval(() => appIsVisible() && loadThread(), POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [isFocused, loadThread]);
 

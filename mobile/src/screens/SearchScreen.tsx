@@ -83,7 +83,11 @@ export default function SearchScreen() {
     if (user && q.trim()) addRecentSearch(user.id, q).then(setRecent);
   };
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Results arrive a page at a time; more load as the person scrolls.
   const [results, setResults] = useState<Listing[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const page = useRef(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const requestId = useRef(0);
@@ -117,22 +121,30 @@ export default function SearchScreen() {
     }
   }, [route.params]);
 
+  const searchParams = useCallback(
+    () => ({
+      mix: "1",
+      q: query.trim() || undefined,
+      atollId,
+      categorySlug,
+      condition,
+      minPrice: minPrice || undefined,
+      maxPrice: maxPrice || undefined,
+      delivery,
+      sort,
+    }),
+    [query, atollId, categorySlug, condition, minPrice, maxPrice, delivery, sort]
+  );
+
   const runSearch = useCallback(async () => {
     const id = ++requestId.current;
     try {
-      const list = await api.listings({
-        mix: "1",
-        q: query.trim() || undefined,
-        atollId,
-        categorySlug,
-        condition,
-        minPrice: minPrice || undefined,
-        maxPrice: maxPrice || undefined,
-        delivery,
-        sort,
-      });
+      const first = await api.listingsPage(searchParams(), 0);
       // Ignore responses for searches the user has already typed past.
-      if (id === requestId.current) setResults(list);
+      if (id !== requestId.current) return;
+      page.current = 0;
+      setResults(first.items);
+      setHasMore(first.hasMore);
     } catch {
       if (id === requestId.current) toast.error("Couldn't load results. Pull down to try again.");
     } finally {
@@ -141,7 +153,28 @@ export default function SearchScreen() {
         setRefreshing(false);
       }
     }
-  }, [query, atollId, categorySlug, condition, minPrice, maxPrice, delivery, sort, toast]);
+  }, [searchParams, toast]);
+
+  const loadMore = async () => {
+    if (!hasMore || loadingMore || loading) return;
+    const id = requestId.current;
+    setLoadingMore(true);
+    try {
+      const next = await api.listingsPage(searchParams(), page.current + 1);
+      if (id !== requestId.current) return;
+      page.current += 1;
+      // A newly posted item can shift pages by one: skip anything already shown.
+      setResults((prev) => {
+        const seen = new Set(prev.map((l) => l.id));
+        return [...prev, ...next.items.filter((l) => !seen.has(l.id))];
+      });
+      setHasMore(next.hasMore);
+    } catch {
+      toast.error("Couldn't load more. Scroll down to try again.");
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   // Search as you type, debounced; filter taps apply immediately.
   const lastQuery = useRef(query);
@@ -383,7 +416,10 @@ export default function SearchScreen() {
 
   // Category tiles: shown while the user is browsing rather than searching.
   const tileColumns = isDesktopWeb ? 4 : width >= 600 ? 4 : 2;
+  // "40+" while more pages exist: the full count isn't known without loading them.
+  const resultCount = `${results.length}${hasMore ? "+" : ""}`;
   const latestPhoto = new Map<string, string>();
+  for (const c of categories) if (c.photo) latestPhoto.set(c.slug, c.photo);
   for (const l of results) if (l.images[0] && !latestPhoto.has(l.category.slug)) latestPhoto.set(l.category.slug, l.images[0]);
   const tileAreaWidth = isDesktopWeb ? contentWidth - FILTER_PANEL_WIDTH - spacing.lg : width - gutter * 2;
   const tileWidth = Math.floor((tileAreaWidth - spacing.sm * (tileColumns - 1)) / tileColumns);
@@ -471,7 +507,7 @@ export default function SearchScreen() {
           <Text style={[styles.sectionTitle, { marginBottom: 0 }]} numberOfLines={1}>
             {isBrowsing ? "Latest listings" : activeCategory && !query.trim() ? activeCategory.name : query.trim() ? `"${query.trim()}"` : "Results"}
           </Text>
-          {!loading && <Text style={styles.resultsCount}>{results.length} {results.length === 1 ? "item" : "items"}</Text>}
+          {!loading && <Text style={styles.resultsCount}>{resultCount} {results.length === 1 && !hasMore ? "item" : "items"}</Text>}
         </View>
         {sortPill}
       </View>
@@ -523,6 +559,8 @@ export default function SearchScreen() {
               <ProductGrid
                 data={results}
                 loading={loading && results.length === 0}
+                onEndReached={loadMore}
+                loadingMore={loadingMore}
                 onPressItem={goToProduct}
                 containerWidth={contentWidth - FILTER_PANEL_WIDTH - spacing.lg}
                 horizontalPadding={0}
@@ -562,6 +600,8 @@ export default function SearchScreen() {
         ListHeaderComponent={resultsHeader}
         ListEmptyComponent={empty}
         refreshControl={refreshControl}
+        onEndReached={loadMore}
+        loadingMore={loadingMore}
       />
 
       <Sheet visible={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filters">
@@ -570,7 +610,7 @@ export default function SearchScreen() {
         </ScrollView>
         <View style={{ paddingHorizontal: spacing.lg }}>
           <Tap style={styles.doneButton} onPress={() => setFiltersOpen(false)} scaleTo={0.97}>
-            <Text style={styles.doneText}>{loading ? "Searching..." : `Show ${results.length} ${results.length === 1 ? "item" : "items"}`}</Text>
+            <Text style={styles.doneText}>{loading ? "Searching..." : `Show ${resultCount} ${results.length === 1 && !hasMore ? "item" : "items"}`}</Text>
           </Tap>
         </View>
       </Sheet>

@@ -54,7 +54,9 @@ export default function MaintenanceOverlay() {
       stopped = true;
       clearInterval(timer);
       if (Platform.OS === "web" && typeof window !== "undefined") {
-        window.location.reload();
+        // Spread the reloads out so every open tab doesn't hit the new
+        // version in the same second.
+        setTimeout(() => window.location.reload(), Math.random() * 5000);
         return;
       }
       Animated.timing(fade, { toValue: 0, duration: 250, useNativeDriver }).start(() => setVisible(false));

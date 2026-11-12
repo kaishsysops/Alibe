@@ -30,9 +30,9 @@ Built 2026-11-02: email sign-in, real one-time codes, new onboarding, report que
 - [ ] Stop people ending up with a second, empty account when they sign in with an email they haven't linked.
 
 ## Staff accounts
-- [ ] Change the `kaish` password before hosting anywhere public: `docker exec -e ADMIN_PASSWORD='...' alibe-backend npx tsx prisma/set-admin.ts kaish`
+- [ ] Change the `kaish` password before hosting anywhere public: `ADMIN_PASSWORD='...' ./scripts/admin.sh set-admin kaish`
 
-- Staff sign-in opens by typing the secret number into the phone field. Change it with `docker exec -e STAFF_CODE=<8 digits> alibe-backend npx tsx prisma/set-staff-code.ts`
+- Staff sign-in opens by typing the secret number into the phone field. Change it with `STAFF_CODE=<8 digits> ./scripts/admin.sh set-staff-code`
 
 ## iBay catalogue
 - [ ] Get iBay's agreement or legal advice before hosting the public showcase. Only the robots.txt rules were followed so far. Admin > iBay items has the on/off switch; a new database starts with it off.
@@ -45,7 +45,7 @@ Built 2026-11-02: email sign-in, real one-time codes, new onboarding, report que
 - [x] Payment slips move to private storage on submit; staff open them via signed links that expire in an hour.
 - [ ] Item pages are read live from iBay the first time someone opens them (cached 6 hours). Watch this once there's real traffic.
 - [ ] Decide whether phone numbers sellers typed into titles should be stripped.
-- Refresh: `docker exec -d alibe-backend sh -c 'npx tsx prisma/import-ibay.ts > /tmp/ibay.log 2>&1'`
+- Refresh: `./scripts/admin.sh import-ibay` (progress: `./scripts/admin.sh ibay-log`)
 
 ## Next if real users ask for it
 - [ ] Ferry proof: photo of the cargo receipt when marking a ferry order as sent.

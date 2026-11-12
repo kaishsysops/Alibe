@@ -157,8 +157,8 @@ export default function ProductDetailScreen() {
   useEffect(() => {
     if (!listing) return;
     api
-      .listings({ categorySlug: listing.category.slug, viewerId: user?.id })
-      .then((list) => setSimilar(list.filter((l) => l.id !== listing.id).slice(0, 12)))
+      .listingsPage({ categorySlug: listing.category.slug, viewerId: user?.id }, 0, 13)
+      .then((page) => setSimilar(page.items.filter((l) => l.id !== listing.id).slice(0, 12)))
       .catch(() => {});
   }, [listing?.id]);
 
