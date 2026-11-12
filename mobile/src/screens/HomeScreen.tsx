@@ -58,17 +58,18 @@ export default function HomeScreen() {
 
   const loadAll = useCallback(async () => {
     try {
-      const [cats, list] = await Promise.all([api.categories(), api.listings({ mix: "1" })]);
-      setCategories(cats);
-      setAllListings(list);
-      setFailed(false);
-    } catch {
-      setFailed(true);
-      // Content already on screen stays; only a cold start shows the error page.
-      setAllListings((prev) => {
-        if (prev.length) toast.error("Couldn't refresh. Showing what we had.");
-        return prev;
-      });
+      // Loaded independently: if listings fail, the categories still show.
+      const [cats, list] = await Promise.allSettled([api.categories(), api.listings({ mix: "1" })]);
+      if (cats.status === "fulfilled") setCategories(cats.value);
+      if (list.status === "fulfilled") setAllListings(list.value);
+      setFailed(list.status === "rejected");
+      if (cats.status === "rejected" || list.status === "rejected") {
+        // Content already on screen stays; say so rather than blanking it.
+        setAllListings((prev) => {
+          if (prev.length) toast.error("Couldn't refresh. Showing what we had.");
+          return prev;
+        });
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -113,7 +114,8 @@ export default function HomeScreen() {
   const activeCategory = categories.find((c) => c.slug === activeSlug);
   const firstName = user?.name?.split(" ")[0];
 
-  if (!loading && failed && !allListings.length) {
+  // Full-page error only when nothing at all could load (really offline).
+  if (!loading && failed && !allListings.length && !categories.length) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         {isDesktopWeb && <WebNavBar active="home" />}
@@ -133,6 +135,21 @@ export default function HomeScreen() {
   }
 
   const noListings = !loading && !allListings.length;
+  // Categories loaded but listings didn't: say so in the listings area.
+  const listingsError = (
+    <EmptyState
+      icon={WifiOff}
+      tone="error"
+      compact
+      title="Couldn't load listings"
+      message="The categories above still work. Try again in a moment."
+      actionLabel="Try again"
+      onAction={() => {
+        setLoading(true);
+        loadAll();
+      }}
+    />
+  );
   const emptyMarket = (
     <EmptyState
       icon={PackageOpen}
@@ -198,7 +215,7 @@ export default function HomeScreen() {
                     <RailSkeleton horizontalPadding={0} cardWidth={180} />
                   </>
                 ) : noListings ? (
-                  emptyMarket
+                  failed ? listingsError : emptyMarket
                 ) : (
                   <>
                     <AdBanner />
@@ -299,7 +316,7 @@ export default function HomeScreen() {
             <RailSkeleton horizontalPadding={gutter} />
           </>
         ) : noListings ? (
-          emptyMarket
+          failed ? listingsError : emptyMarket
         ) : (
           <>
             {recentlyViewed.length >= 2 && (
