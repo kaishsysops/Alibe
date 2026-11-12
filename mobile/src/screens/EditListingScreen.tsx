@@ -18,6 +18,7 @@ import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, conte
 import { useResponsive } from "../hooks/useResponsive";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import { usePersistentState } from "../hooks/usePersistentState";
+import { IslandField } from "../components/IslandPicker";
 
 const CONDITIONS: Array<{ value: Listing["condition"]; label: string }> = [
   { value: "NEW", label: "New" },
@@ -232,7 +233,7 @@ export default function EditListingScreen() {
             <Text style={styles.label}>Condition</Text>
             <View style={styles.chipGrid}>{CONDITIONS.map((c) => chip(c.label, form.condition === c.value, () => set({ condition: c.value })))}</View>
             <Text style={styles.label}>Island</Text>
-            <View style={styles.chipGrid}>{atolls.flatMap((a) => a.islands).map((i) => chip(i.name, form.islandId === i.id, () => set({ islandId: i.id })))}</View>
+            <IslandField atolls={atolls} value={form.islandId} onChange={(id) => set({ islandId: id })} />
             <Text style={styles.label}>Delivery</Text>
             <View style={styles.chipGrid}>
               {DELIVERY.map((d) =>

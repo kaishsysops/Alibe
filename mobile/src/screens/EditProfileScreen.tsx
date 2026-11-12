@@ -19,6 +19,7 @@ import { spacing, radius, cardShadow, fontSize, fontWeight, controlHeight, conte
 import { useResponsive } from "../hooks/useResponsive";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import { formatPhone } from "../utils/phone";
+import { IslandField, defaultIslandId } from "../components/IslandPicker";
 
 const AVATAR_COLORS = ["#FF6A00", "#1E7BE0", "#E0336E", "#16A34A", "#7347E6", "#E39A1F", "#00A3A3", "#8E5A3D"];
 const PAYMENT_OPTIONS: Array<{ value: PaymentMethod; label: string }> = [
@@ -123,7 +124,8 @@ export default function EditProfileScreen() {
         bio: form.bio.trim() || null,
         avatarColor: form.avatarColor,
         avatarUrl: form.avatarUrl,
-        islandId: form.islandId ?? null,
+        // Nobody picked one yet: save the default the field shows (Malé).
+        islandId: form.islandId ?? defaultIslandId(atolls) ?? null,
         paymentMethod: form.paymentMethod ?? null,
         promoOptIn: form.promoOptIn,
         showPhone: form.showPhone,
@@ -334,14 +336,8 @@ export default function EditProfileScreen() {
           </Section>
 
           <Section title="Selling preferences">
-            <Field label="Default island">
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-                {atolls.flatMap((a) => a.islands).map((i) => (
-                  <Tap key={i.id} style={[styles.chip, form.islandId === i.id && styles.chipActive]} onPress={() => set({ islandId: i.id })} scaleTo={0.92}>
-                    <Text style={[styles.chipText, form.islandId === i.id && styles.chipTextActive]}>{i.name}</Text>
-                  </Tap>
-                ))}
-              </ScrollView>
+            <Field label="Your island" helper="New listings start here. You can change it per listing.">
+              <IslandField atolls={atolls} value={form.islandId ?? defaultIslandId(atolls)} onChange={(id) => set({ islandId: id })} />
             </Field>
             <Field label="Preferred payment">
               <View style={{ flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" }}>

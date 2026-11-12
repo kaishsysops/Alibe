@@ -21,6 +21,7 @@ import { spacing, radius, conditionColors, cardShadow, fontSize, fontWeight, con
 import { categoryIcons, AllCategoriesIcon } from "../theme/categoryIcons";
 import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
 import AvatarPhoto from "../components/AvatarPhoto";
+import IslandPicker from "../components/IslandPicker";
 
 const CONDITIONS: Array<Listing["condition"]> = ["NEW", "LIKE_NEW", "GOOD", "FAIR"];
 const SORTS: Array<{ key: ListingSort; label: string }> = [
@@ -299,12 +300,7 @@ export default function SearchScreen() {
     <View style={{ gap: spacing.md }}>
       <View>
         <Text style={styles.filterLabel}>Location</Text>
-        <View style={styles.wrapRow}>
-          <Chip label="Anywhere" active={!atollId} onPress={() => setAtollId(undefined)} />
-          {atolls.map((a) => (
-            <Chip key={a.id} label={a.name} active={atollId === a.id} onPress={() => setAtollId(atollId === a.id ? undefined : a.id)} />
-          ))}
-        </View>
+        <IslandPicker mode="atoll" atolls={atolls} value={atollId} onChange={setAtollId} mapHeight={isDesktopWeb ? 300 : 280} />
       </View>
       <View>
         <Text style={styles.filterLabel}>Condition</Text>

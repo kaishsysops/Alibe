@@ -1,10 +1,10 @@
 import React, { useContext, useEffect, useRef, useState } from "react";
-import { View, Text, TextInput, ActivityIndicator, KeyboardAvoidingView, Keyboard, Platform, Animated, Easing, StyleSheet, useWindowDimensions } from "react-native";
+import { View, Text, TextInput, ActivityIndicator, KeyboardAvoidingView, Keyboard, Platform, Animated, Easing, StyleSheet, useWindowDimensions, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { ShoppingBag, ArrowRight, Check, ShieldCheck, ChevronLeft, Mail, Phone, MapPin, Tag, MessageCircle, BadgePercent, KeyRound, PackageCheck, LucideIcon } from "lucide-react-native";
-import { api, errorMessage, setAuthToken, SignedIn, User } from "../api/client";
+import { api, Atoll, errorMessage, setAuthToken, SignedIn, User } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import { useToast } from "../components/Toast";
 import Tap from "../components/Tap";
@@ -16,6 +16,7 @@ import { useSingleFlight } from "../hooks/useSingleFlight";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 import { formatPhone } from "../utils/phone";
 import AlibeMark from "../components/AlibeMark";
+import IslandPicker, { defaultIslandId, islandLabel } from "../components/IslandPicker";
 
 const useNativeDriver = Platform.OS !== "web";
 
@@ -250,7 +251,7 @@ function MethodSwitch({ method, onChange }: { method: Method; onChange: (m: Meth
 }
 
 type Method = "phone" | "email";
-type Step = "welcome" | "enter" | "code" | "name" | "staff" | "done";
+type Step = "welcome" | "enter" | "code" | "name" | "island" | "staff" | "done";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const haptic = (run: () => Promise<void>) => {
@@ -279,6 +280,9 @@ export default function OnboardingScreen() {
   const [retryIn, setRetryIn] = useState(0);
   const [session, setSession] = useState<SignedIn>();
   const [name, setName] = useState("");
+  // New accounts say where they live; Malé is chosen until they pick.
+  const [atolls, setAtolls] = useState<Atoll[]>([]);
+  const [islandId, setIslandId] = useState<string>();
   const [greeting, setGreeting] = useState("");
   const [staffEntryCode, setStaffEntryCode] = useState("");
   const [staffUsername, setStaffUsername] = useState("");
@@ -401,11 +405,29 @@ export default function OnboardingScreen() {
     }
     try {
       const updated = await api.updateProfile(session.user.id, { name: trimmedName });
-      await finish(updated, session.token, trimmedName.split(" ")[0], true);
+      setSession({ ...session, user: updated });
+      Keyboard.dismiss();
+      const list = await api.atolls().catch(() => [] as Atoll[]);
+      // No island data (offline, odd server): don't block sign-up on it.
+      if (!list.length) return finish(updated, session.token, trimmedName.split(" ")[0], true);
+      setAtolls(list);
+      setIslandId(updated.islandId ?? defaultIslandId(list));
+      moveTo("island");
     } catch (e) {
       toast.error(errorMessage(e));
     }
   });
+
+  const [saveIsland, savingIsland] = useSingleFlight(async () => {
+    if (!session || !islandId) return;
+    try {
+      const updated = await api.updateProfile(session.user.id, { islandId });
+      await finish(updated, session.token, updated.name.split(" ")[0], true);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  });
+  const chosen = islandLabel(atolls, islandId);
 
   const staffReady = !!staffUsername.trim() && !!staffPassword;
   const [staffSignIn, signingInStaff] = useSingleFlight(async () => {
@@ -619,6 +641,19 @@ export default function OnboardingScreen() {
               </View>
               <Tap style={[styles.button, trimmedName.length < 2 && styles.buttonDisabled]} onPress={() => saveName()} disabled={savingName} scaleTo={0.97}>
                 {savingName ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Continue</Text>}
+              </Tap>
+            </FadeIn>
+          )}
+
+          {step === "island" && (
+            <FadeIn key="island">
+              <Text style={[styles.cardTitle, styles.noBackTop]}>Where are you?</Text>
+              <Text style={[styles.cardText, { marginBottom: spacing.md }]}>We'll show what's nearby and fill in your island when you sell. Change it any time.</Text>
+              <ScrollView style={{ maxHeight: height * 0.58 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                <IslandPicker atolls={atolls} value={islandId} onChange={setIslandId} mapHeight={Math.min(320, Math.round(height * 0.36))} />
+              </ScrollView>
+              <Tap style={[styles.button, !islandId && styles.buttonDisabled]} onPress={() => saveIsland()} disabled={savingIsland || !islandId} scaleTo={0.97}>
+                {savingIsland ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>{chosen ? `I'm in ${chosen.island}` : "Continue"}</Text>}
               </Tap>
             </FadeIn>
           )}

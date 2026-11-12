@@ -203,6 +203,8 @@ export type User = {
   username?: string | null;
   avatarColor?: string | null;
   avatarUrl?: string | null;
+  // The island they said they live on (onboarding / profile).
+  islandId?: string | null;
   themeColor?: string | null;
   showPhone?: boolean;
   whatsappEnabled?: boolean;

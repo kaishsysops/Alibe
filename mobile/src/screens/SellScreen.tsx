@@ -18,6 +18,7 @@ import { useResponsive } from "../hooks/useResponsive";
 import { usePersistentState } from "../hooks/usePersistentState";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import { useKeyboardVisible } from "../hooks/useKeyboardVisible";
+import IslandPicker, { defaultIslandId, findIsland } from "../components/IslandPicker";
 
 const CONDITIONS: Array<{ value: Listing["condition"]; label: string; hint: string }> = [
   { value: "NEW", label: "New", hint: "Unused, in original packaging" },
@@ -106,6 +107,13 @@ function SellForm() {
     api.categories().then(setCategories).catch(() => toast.error("Couldn't load categories. Check your connection."));
     api.atolls().then(setAtolls).catch(() => {});
   }, [toast]);
+
+  // Start on the seller's own island (from onboarding), or Malé.
+  useEffect(() => {
+    if (!hydrated || islandId || !atolls.length) return;
+    update({ islandId: (user?.islandId && findIsland(atolls, user.islandId) ? user.islandId : defaultIslandId(atolls)) ?? undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, atolls.length]);
 
   useEffect(() => {
     const category = categories.find((c) => c.id === categoryId);
@@ -346,18 +354,9 @@ function SellForm() {
       <View>
         <Text style={styles.header}>Where is it?</Text>
         <Text style={styles.subheader}>Pick the island buyers will collect from.</Text>
-        {atolls.map((a) => (
-          <View key={a.id} style={{ marginBottom: spacing.md }}>
-            <Text style={styles.groupLabel}>{a.name}</Text>
-            <View style={styles.chipGrid}>
-              {a.islands.map((i) => (
-                <Tap key={i.id} style={[styles.chip, islandId === i.id && styles.chipActive]} onPress={() => update({ islandId: i.id })} scaleTo={0.92}>
-                  <Text style={[styles.chipText, islandId === i.id && styles.chipTextActive]}>{i.name}</Text>
-                </Tap>
-              ))}
-            </View>
-          </View>
-        ))}
+        <View style={{ marginBottom: spacing.lg }}>
+          <IslandPicker atolls={atolls} value={islandId} onChange={(id) => update({ islandId: id })} mapHeight={360} />
+        </View>
         <Text style={styles.fieldLabel}>How can buyers get it?</Text>
         <View style={{ gap: spacing.sm }}>
           {DELIVERY.map((d) => {
