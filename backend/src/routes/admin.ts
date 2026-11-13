@@ -319,3 +319,18 @@ adminRouter.post("/users/:id/unban", async (req, res) => {
   await unbanUser(req.params.id);
   res.status(204).send();
 });
+
+// Open disputes, oldest first, with each side's evidence count.
+adminRouter.get("/disputes", async (_req, res) => {
+  const orders = await prisma.order.findMany({
+    where: { status: "DISPUTED" },
+    include: {
+      listing: { select: { id: true, title: true, images: true } },
+      buyer: { select: { id: true, name: true } },
+      seller: { select: { id: true, name: true } },
+      _count: { select: { evidence: true } },
+    },
+    orderBy: { updatedAt: "asc" },
+  });
+  res.json(orders.map((o) => ({ id: o.id, amount: o.amount, problem: o.problem, updatedAt: o.updatedAt, conversationId: o.conversationId, deliveryMethod: o.deliveryMethod, cargoReceiptUrl: o.cargoReceiptUrl, listing: o.listing, buyer: o.buyer, seller: o.seller, evidenceCount: o._count.evidence })));
+});

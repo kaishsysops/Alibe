@@ -3,7 +3,7 @@ import { View, Text, TextInput, ScrollView, LayoutChangeEvent } from "react-nati
 import { Search, X, Check, ChevronUp, ChevronDown, ChevronRight, MapPin, Globe2 } from "lucide-react-native";
 import { Atoll, Island } from "../api/client";
 import { ATOLL_GEO, ATOLL_ORDER, DEFAULT_ISLAND, ISLAND_GEO, POPULAR_ISLANDS } from "../data/maldives";
-import MaldivesMap from "./MaldivesMap";
+import MaldivesMap, { AtollDetailMap } from "./MaldivesMap";
 import { Sheet } from "./Sheet";
 import Tap from "./Tap";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
@@ -110,7 +110,9 @@ export default function IslandPicker(props: Props) {
     [atolls]
   );
 
-  const mapWidth = Math.round(Math.min(190, Math.max(120, width * 0.42)));
+  // The whole country stays narrow; the chosen atoll up close gets the room.
+  const mapWidth = Math.round(Math.min(150, Math.max(96, width * 0.3)));
+  const detailHeight = Math.round(Math.min(230, mapHeight * 0.55));
   const pin = atollMode ? null : selectedIsland ? pinFor(selectedIsland.atoll, selectedIsland.island) : null;
 
   return (
@@ -192,7 +194,7 @@ export default function IslandPicker(props: Props) {
                     const on = a.id === props.value;
                     return (
                       <Tap key={a.id} style={[styles.atollRow, on && styles.atollRowOn]} onPress={() => onMapSelect(a.code)} scaleTo={0.97}>
-                        <Text style={[styles.atollRowText, on && { color: colors.primary }]} numberOfLines={1}>
+                        <Text style={[styles.atollRowText, on && { color: colors.primary }]} numberOfLines={2}>
                           {a.name}
                         </Text>
                         {on && <Check size={14} color={colors.primary} strokeWidth={3} />}
@@ -219,7 +221,10 @@ export default function IslandPicker(props: Props) {
                         <ChevronDown size={18} color={colors.text} />
                       </Tap>
                     </View>
-                    <ScrollView style={{ maxHeight: mapHeight - 64 }} contentContainerStyle={styles.islands} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+                    {/* The atoll up close: tap an island's dot to choose it. */}
+                    <AtollDetailMap width={Math.max(140, width - mapWidth - spacing.md)} height={detailHeight} code={viewAtoll.code} islands={viewAtoll.islands} selectedId={props.value} onSelectIsland={pickIsland} />
+                    <Text style={styles.orList}>or pick from the list</Text>
+                    <ScrollView style={{ maxHeight: Math.max(96, mapHeight - 64 - detailHeight - 28) }} contentContainerStyle={styles.islands} showsVerticalScrollIndicator={false} nestedScrollEnabled>
                       {viewAtoll.islands.map((i) => {
                         const on = i.id === props.value;
                         return (
@@ -237,7 +242,7 @@ export default function IslandPicker(props: Props) {
               )}
             </View>
           </View>
-          <Text style={styles.hint}>Tap the map or use the arrows to move between atolls.</Text>
+          <Text style={styles.hint}>{atollMode ? "Tap or drag along the map to choose an atoll." : "Choose an atoll on the left, then tap your island on the close-up."}</Text>
         </>
       )}
     </View>
@@ -316,10 +321,11 @@ const useStyles = makeStyles((colors) => ({
   islandOn: { backgroundColor: colors.primary, borderColor: colors.primary },
   islandText: { flexShrink: 1, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text },
   islandTextOn: { color: colors.inverseText, fontWeight: fontWeight.bold },
-  atollRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.sm + 2, height: 36, borderRadius: radius.md },
+  atollRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.sm + 2, minHeight: 36, paddingVertical: 6, borderRadius: radius.md },
   atollRowOn: { backgroundColor: colors.primaryTint },
   atollRowText: { flex: 1, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text },
   hint: { fontSize: fontSize.caption, color: colors.textMuted, marginTop: spacing.sm },
+  orList: { fontSize: fontSize.caption, color: colors.textMuted, textAlign: "center", marginTop: spacing.sm, marginBottom: 6 },
   done: { backgroundColor: colors.primary, borderRadius: radius.pill, height: controlHeight.primary, alignItems: "center", justifyContent: "center", marginTop: spacing.sm },
   doneText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.md },
   field: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 4, padding: spacing.sm, paddingRight: spacing.md, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background },

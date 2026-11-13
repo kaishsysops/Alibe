@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Animated, Linking, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -15,8 +15,12 @@ import {
   Truck,
   AlertTriangle,
   XCircle,
+  ImagePlus,
 } from "lucide-react-native";
-import { api, DeliveryOption, DispatchDetails, errorMessage, newClientId, Order } from "../api/client";
+import { api, DeliveryOption, DispatchDetails, errorMessage, mediaUrl, newClientId, Order, uploadMedia } from "../api/client";
+import { Image } from "expo-image";
+import * as ImagePicker from "expo-image-picker";
+import DisputePanel from "../components/DisputePanel";
 import { ContactIconButtons } from "../components/ContactButtons";
 import { useAuth, DRAFT_PREFIX } from "../api/AuthContext";
 import ScreenHeader from "../components/ScreenHeader";
@@ -160,6 +164,12 @@ export default function OrderDetailScreen() {
       <FadeIn key={order.status} delay={140} style={{ gap: spacing.md }}>
         <NextStep order={order} onChange={updateOrder} onReport={() => setProblemOpen(true)} onReview={() => setReviewOpen(true)} />
       </FadeIn>
+
+      {(order.status === "DISPUTED" || !!order.disputeOutcome) && (
+        <FadeIn delay={180}>
+          <DisputePanel orderId={order.id} />
+        </FadeIn>
+      )}
 
       {(order.status === "AWAITING_DISPATCH" || order.status === "DISPATCHED") && (
         <FadeIn delay={210}>
@@ -403,6 +413,7 @@ function SendItemCard({ order, onChange }: { order: Order; onChange: (o: Order) 
     time: "",
     pm: false,
     cargoReference: "",
+    receiptUrl: "",
     courierName: "",
     greeted: false,
   });
@@ -420,6 +431,8 @@ function SendItemCard({ order, onChange }: { order: Order; onChange: (o: Order) 
         ? "Enter the boat's name"
         : !departure
         ? "Enter when the boat leaves, like 2:30"
+        : !form.receiptUrl
+        ? "Add a photo of the cargo receipt"
         : null
       : form.method === "COURIER" && !form.courierName.trim()
       ? "Enter the courier or driver's name"
@@ -440,11 +453,24 @@ function SendItemCard({ order, onChange }: { order: Order; onChange: (o: Order) 
     }
   });
 
+  // Ferry proof: the cargo receipt photo, uploaded as soon as it's picked.
+  const [pickReceipt, uploadingReceipt] = useSingleFlight(async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return toast.error("Please allow photo access to add the receipt.");
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+    if (result.canceled) return;
+    try {
+      set({ receiptUrl: (await uploadMedia(result.assets[0].uri, result.assets[0].mimeType ?? "image/jpeg")).url });
+    } catch (e) {
+      toast.error(errorMessage(e, "Couldn't upload the receipt. Please try again."));
+    }
+  });
+
   const [send, busy] = useSingleFlight(async () => {
     if (!user || missing) return;
     const details: DispatchDetails =
       form.method === "FERRY"
-        ? { method: "FERRY", boatName: form.boatName.trim(), boatDeparture: departure!, cargoReference: form.cargoReference.trim() || undefined }
+        ? { method: "FERRY", boatName: form.boatName.trim(), boatDeparture: departure!, cargoReference: form.cargoReference.trim() || undefined, cargoReceiptUrl: form.receiptUrl }
         : form.method === "COURIER"
         ? { method: "COURIER", courierName: form.courierName.trim() }
         : { method: "PICKUP", pickupNote: form.pickupNote.trim() || undefined };
@@ -546,6 +572,20 @@ function SendItemCard({ order, onChange }: { order: Order; onChange: (o: Order) 
             })}
           </View>
           <Field label="Cargo number" optional value={form.cargoReference} onChangeText={(t) => set({ cargoReference: t })} placeholder="From your cargo receipt" maxLength={40} />
+          <Text style={styles.receiptLabel}>Photo of the cargo receipt</Text>
+          {form.receiptUrl ? (
+            <View style={styles.receiptRow}>
+              <Image source={{ uri: mediaUrl(form.receiptUrl) }} style={styles.receiptThumb} contentFit="cover" />
+              <Tap onPress={pickReceipt} scaleTo={0.95}>
+                <Text style={styles.receiptChange}>Change photo</Text>
+              </Tap>
+            </View>
+          ) : (
+            <Tap style={styles.receiptButton} onPress={pickReceipt} disabled={uploadingReceipt} scaleTo={0.97}>
+              {uploadingReceipt ? <ActivityIndicator color={colors.primary} /> : <ImagePlus size={18} color={colors.primary} />}
+              <Text style={styles.receiptButtonText}>Add the receipt photo</Text>
+            </Tap>
+          )}
         </>
       )}
 
@@ -571,7 +611,7 @@ function DeliveryDetails({ order }: { order: Order }) {
   } else if (order.pickupNote) {
     rows.push(["Meet", order.pickupNote]);
   }
-  if (!rows.length) return null;
+  if (!rows.length && !order.cargoReceiptUrl) return null;
   return (
     <View style={styles.details}>
       {rows.map(([k, v]) => (
@@ -580,6 +620,12 @@ function DeliveryDetails({ order }: { order: Order }) {
           <Text style={styles.detailValue}>{v}</Text>
         </View>
       ))}
+      {!!order.cargoReceiptUrl && (
+        <Tap onPress={() => Linking.openURL(mediaUrl(order.cargoReceiptUrl) ?? "").catch(() => {})} scaleTo={0.98} accessibilityLabel="Open the cargo receipt">
+          <Text style={styles.detailKey}>Cargo receipt</Text>
+          <Image source={{ uri: mediaUrl(order.cargoReceiptUrl) }} style={styles.receiptPhoto} contentFit="cover" />
+        </Tap>
+      )}
     </View>
   );
 }
@@ -851,6 +897,13 @@ function OrderSkeleton() {
 }
 
 const useStyles = makeStyles((colors) => ({
+  receiptLabel: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.text, marginTop: spacing.sm },
+  receiptButton: { flexDirection: "row", alignItems: "center", gap: spacing.sm, alignSelf: "flex-start", paddingHorizontal: spacing.md, height: 42, borderRadius: radius.pill, backgroundColor: colors.primaryTint, marginTop: 6 },
+  receiptButtonText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.primary },
+  receiptRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginTop: 6 },
+  receiptThumb: { width: 72, height: 72, borderRadius: radius.md },
+  receiptChange: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.primary },
+  receiptPhoto: { width: "100%", height: 160, borderRadius: radius.md, marginTop: 6 },
   container: { flex: 1, backgroundColor: colors.background },
   content: { paddingTop: spacing.sm, gap: spacing.md },
   desktopColumn: { maxWidth: contentWidth.form, width: "100%", alignSelf: "center", paddingTop: spacing.lg },

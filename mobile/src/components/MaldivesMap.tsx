@@ -3,7 +3,7 @@ import { Animated, Platform, View, GestureResponderEvent } from "react-native";
 import * as Haptics from "expo-haptics";
 import Svg, { Circle, Defs, Ellipse, G, Line, LinearGradient, Path, Rect, Stop, Text as SvgText } from "react-native-svg";
 import { MapPin } from "lucide-react-native";
-import { ATOLL_GEO, AtollGeo } from "../data/maldives";
+import { ATOLL_GEO, AtollGeo, ISLAND_GEO } from "../data/maldives";
 import { useTheme } from "../theme/ThemeContext";
 
 // An illustrated, interactive map of the Maldives. Each atoll is a ring of tiny
@@ -264,5 +264,124 @@ export default function MaldivesMap({ width, height, codes, selected, pin, onSel
         </Animated.View>
       )}
     </View>
+  );
+}
+
+// ---- one atoll, up close ------------------------------------------------------
+// The chosen atoll's lagoon with each island as a dot you can tap. Islands with
+// known positions sit where they really are; the rest are spaced around the
+// rim. Tapping anywhere picks the nearest island.
+
+type DetailIsland = { id: string; name: string };
+
+export function AtollDetailMap({
+  width,
+  height,
+  code,
+  islands,
+  selectedId,
+  onSelectIsland,
+}: {
+  width: number;
+  height: number;
+  code: string;
+  islands: DetailIsland[];
+  selectedId?: string | null;
+  onSelectIsland?: (id: string) => void;
+}) {
+  const { colors, scheme } = useTheme();
+  const dark = scheme === "dark";
+  const g = ATOLL_GEO[code];
+  const pad = 22;
+
+  const layout = useMemo(() => {
+    if (!g) return null;
+    // Frame the lagoon with a margin; small atolls get a minimum span.
+    const latSpan = Math.max(0.16, g.ry * 2.5);
+    const lngSpan = Math.max(0.16, g.rx * 2.5);
+    const x = (lng: number) => pad + ((lng - (g.lng - lngSpan / 2)) / lngSpan) * (width - pad * 2);
+    const y = (lat: number) => pad + (((g.lat + latSpan / 2) - lat) / latSpan) * (height - pad * 2);
+    const cx = x(g.lng);
+    const cy = y(g.lat);
+    const rx = Math.max(10, (g.rx / lngSpan) * (width - pad * 2));
+    const ry = Math.max(10, (g.ry / latSpan) * (height - pad * 2));
+    const rand = seeded(code + "detail");
+    const reefDots = Array.from({ length: 56 }, (_, i) => {
+      const t = (i / 56) * Math.PI * 2 + rand() * 0.1;
+      const w = 0.9 + rand() * 0.18;
+      return { x: cx + Math.cos(t) * rx * w, y: cy + Math.sin(t) * ry * w, r: 0.8 + rand() * 1.2 };
+    });
+    const unplaced = islands.filter((i) => !ISLAND_GEO[`${code}/${i.name}`]);
+    const points = islands.map((i) => {
+      const known = ISLAND_GEO[`${code}/${i.name}`];
+      if (known) return { ...i, x: x(known.lng), y: y(known.lat) };
+      if (islands.length === 1) return { ...i, x: cx, y: cy };
+      const k = unplaced.indexOf(i);
+      const t = -Math.PI / 2 + (k / unplaced.length) * Math.PI * 2 + 0.4;
+      return { ...i, x: cx + Math.cos(t) * rx * 0.82, y: cy + Math.sin(t) * ry * 0.82 };
+    });
+    return { cx, cy, rx, ry, reefDots, points };
+  }, [g, code, islands, width, height]);
+
+  if (!g || !layout) return null;
+  const sel = colors.primary;
+  const water = dark ? ["#0B2A3C", "#0E3A52"] : ["#E6F6FB", "#C9ECF5"];
+  const reef = dark ? "rgba(120,210,230,0.35)" : "rgba(40,150,180,0.35)";
+  const ink = dark ? "#E8F1F5" : "#1B2B34";
+
+  const pick = (e: GestureResponderEvent) => {
+    if (!onSelectIsland) return;
+    const { locationX: px, locationY: py } = e.nativeEvent;
+    let best = layout.points[0];
+    let bestD = Infinity;
+    for (const p of layout.points) {
+      const d = Math.hypot(px - p.x, py - p.y);
+      if (d < bestD) {
+        bestD = d;
+        best = p;
+      }
+    }
+    if (best) {
+      if (Platform.OS !== "web") Haptics.selectionAsync().catch(() => {});
+      onSelectIsland(best.id);
+    }
+  };
+
+  // Labels go on whichever side has room, so close neighbours don't collide.
+  const labelRight = (p: { x: number }) => p.x < width * 0.62;
+
+  const drawing = (
+    <Svg width={width} height={height}>
+      <Defs>
+        <LinearGradient id="seaDetail" x1="0" y1="0" x2="0.4" y2="1">
+          <Stop offset="0" stopColor={water[0]} />
+          <Stop offset="1" stopColor={water[1]} />
+        </LinearGradient>
+      </Defs>
+      <Rect x={0} y={0} width={width} height={height} rx={16} fill="url(#seaDetail)" />
+      {islands.length > 1 && <Ellipse cx={layout.cx} cy={layout.cy} rx={layout.rx} ry={layout.ry} fill={reef} fillOpacity={0.16} stroke={reef} strokeOpacity={0.45} strokeWidth={1.2} />}
+      {islands.length > 1 && layout.reefDots.map((d, i) => <Circle key={i} cx={d.x} cy={d.y} r={d.r} fill={reef} />)}
+      {layout.points.map((p) => {
+        const on = p.id === selectedId;
+        const right = labelRight(p);
+        return (
+          <G key={p.id}>
+            {on && <Circle cx={p.x} cy={p.y} r={13} fill={sel} fillOpacity={0.18} />}
+            <Circle cx={p.x} cy={p.y} r={on ? 7 : 5} fill={on ? sel : dark ? "#BFE6D2" : "#3E9E78"} stroke={dark ? "#0B2A3C" : "#fff"} strokeWidth={2} />
+            <SvgText x={right ? p.x + 10 : p.x - 10} y={p.y + 4} fontSize={on ? 12 : 10.5} fontWeight={on ? "800" : "600"} fill={on ? sel : ink} textAnchor={right ? "start" : "end"}>
+              {p.name}
+            </SvgText>
+          </G>
+        );
+      })}
+    </Svg>
+  );
+
+  return onSelectIsland ? (
+    <View onStartShouldSetResponder={() => true} onResponderRelease={pick} accessible accessibilityLabel={`Map of ${g.short}. Tap an island to choose it.`} style={Platform.OS === "web" ? ({ cursor: "pointer", userSelect: "none" } as any) : undefined}>
+      <View pointerEvents="none">{drawing}</View>
+    </View>
+  ) : (
+    drawing
   );
 }

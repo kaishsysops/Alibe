@@ -42,7 +42,8 @@ ibayRouter.use(async (_req, res, next) => {
 const cleanTitle = (title: string) =>
   title
     .replace(/\b(call|viber|whatsapp|contact|tel|ph)\b[\s:./-]*(?:\+?\d[\d\s/-]{5,})?/gi, " ")
-    .replace(/\+?\b\d{3}[\s-]?\d{4}\b/g, " ")
+    // Phone numbers, with or without the +960 / 960 country code.
+    .replace(/(?:\+?960[\s-]?)?\b\d{3}[\s-]?\d{4}\b/g, " ")
     .replace(/[|/\s-]+$/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();

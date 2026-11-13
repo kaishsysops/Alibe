@@ -28,6 +28,7 @@ import { useSingleFlight } from "../hooks/useSingleFlight";
 import { timeAgo } from "../utils/time";
 import TrustBadge from "../components/TrustBadge";
 import AvatarPhoto from "../components/AvatarPhoto";
+import ListingLocationCard from "../components/ListingLocationCard";
 
 const DELIVERY_META: Record<DeliveryOption, { label: string; icon: any }> = {
   PICKUP: { label: "Pickup", icon: Hand },
@@ -386,6 +387,13 @@ export default function ProductDetailScreen() {
 
       <Text style={styles.sectionTitle}>About this item</Text>
       <Text style={styles.description}>{listing.description}</Text>
+
+      {listing.island?.atoll && (
+        <>
+          <Text style={styles.sectionTitle}>Where it is</Text>
+          <ListingLocationCard island={listing.island} deliveryOptions={listing.deliveryOptions} />
+        </>
+      )}
     </>
   );
 

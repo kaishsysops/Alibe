@@ -296,8 +296,25 @@ export type Order = {
   buyer: PublicSeller;
   seller: PublicSeller;
   paymentMethod: PaymentMethod | null;
+  cargoReceiptUrl?: string | null;
+  disputeOutcome?: "DELIVERED" | "CANCELLED" | null;
+  disputeNote?: string | null;
 };
-export type DispatchDetails = { method: DeliveryOption; boatName?: string; boatDeparture?: string; cargoReference?: string; courierName?: string; pickupNote?: string };
+export type DispatchDetails = { method: DeliveryOption; boatName?: string; boatDeparture?: string; cargoReference?: string; courierName?: string; pickupNote?: string; cargoReceiptUrl?: string };
+export type DisputeEvidence = { id: string; text: string; photoUrl: string | null; createdAt: string; by: { id: string; name: string }; role: "BUYER" | "SELLER" | "STAFF" };
+export type DisputeInfo = { status: OrderStatus; problem: string | null; outcome: "DELIVERED" | "CANCELLED" | null; note: string | null; resolvedAt: string | null; evidence: DisputeEvidence[] };
+export type AdminDispute = {
+  id: string;
+  amount: number;
+  problem: string | null;
+  updatedAt: string;
+  deliveryMethod: DeliveryOption | null;
+  cargoReceiptUrl: string | null;
+  listing: { id: string; title: string; images: string[] };
+  buyer: { id: string; name: string };
+  seller: { id: string; name: string };
+  evidenceCount: number;
+};
 export type VerificationProgress = { verificationStatus: "NONE" | "VERIFIED"; verifiedAt: string | null; delivered: number; required: number };
 export type Thread = { messages: Message[]; offers: Offer[]; otherLastReadAt: string | null; blocked: boolean; order: { id: string; status: OrderStatus; amount: number } | null };
 export type Review = {
@@ -414,7 +431,11 @@ export type IbayItemDetail = IbayItemSummary & {
 export type IbayItem = { id: string; title: string; url: string; imageUrl: string | null; price: number | null; currency: string | null; condition: string | null; category: string; firstSeenAt: string; hiddenAt: string | null };
 // `devCode` only comes back in development, where nothing is really sent.
 export type CodeRequest = { sent: boolean; retryIn: number; devCode?: string };
-export type SignedIn = { token: string; user: User; needsName: boolean };
+export type SignedIn = { token: string; user: User; needsName: boolean; linked?: "phone" | "email" };
+// Verifying a code for a phone/email Alibe doesn't know yet returns a link
+// token instead of an account: the person says if they're new or not.
+export type NewContact = { newContact: true; linkToken: string };
+export type VerifyResult = SignedIn | NewContact;
 export type ListingSort = "newest" | "price_asc" | "price_desc";
 export type ListingInput = {
   title: string;
@@ -454,19 +475,20 @@ export const api = {
     request<Listing>(`/listings/${id}`, { method: "PATCH", body: JSON.stringify({ status, sellerId }) }),
   deleteListing: (id: string, sellerId: string) => request<void>(`/listings/${id}?sellerId=${encodeURIComponent(sellerId)}`, { method: "DELETE" }),
   requestOtp: (phone: string) => request<CodeRequest & { staffEntry?: boolean }>("/auth/otp/request", { method: "POST", body: JSON.stringify({ phone }) }),
-  verifyOtp: (phone: string, code: string, themeColor?: string) =>
-    request<SignedIn>("/auth/otp/verify", {
+  verifyOtp: (phone: string, code: string, themeColor?: string, linkToken?: string) =>
+    request<VerifyResult>("/auth/otp/verify", {
       method: "POST",
-      body: JSON.stringify({ phone, code, themeColor }),
+      body: JSON.stringify({ phone, code, themeColor, linkToken }),
     }),
   staffSignIn: (entryCode: string, username: string, password: string) =>
     request<SignedIn>("/auth/staff", { method: "POST", body: JSON.stringify({ entryCode, username, password }) }),
   requestEmailCode: (email: string) => request<CodeRequest>("/auth/email/request", { method: "POST", body: JSON.stringify({ email }) }),
-  verifyEmailCode: (email: string, code: string, themeColor?: string) =>
-    request<SignedIn>("/auth/email/verify", {
+  verifyEmailCode: (email: string, code: string, themeColor?: string, linkToken?: string) =>
+    request<VerifyResult>("/auth/email/verify", {
       method: "POST",
-      body: JSON.stringify({ email, code, themeColor }),
+      body: JSON.stringify({ email, code, themeColor, linkToken }),
     }),
+  createAccount: (linkToken: string, themeColor?: string) => request<SignedIn>("/auth/create", { method: "POST", body: JSON.stringify({ linkToken, themeColor }) }),
 
   user: (id: string) => request<PublicUser>(`/users/${id}`),
   searchSellers: (q: string) => request<SellerSearchResult[]>(`/users?q=${encodeURIComponent(q)}`),
@@ -522,6 +544,11 @@ export const api = {
   order: (id: string, userId: string) => request<Order>(`/orders/${id}?userId=${userId}`),
   sellToBuyer: (conversationId: string, sellerId: string, amount?: number) =>
     request<Order>(`/orders`, { method: "POST", body: JSON.stringify({ conversationId, sellerId, amount }) }),
+  orderDispute: (id: string) => request<DisputeInfo>(`/orders/${id}/dispute`),
+  addDisputeEvidence: (id: string, userId: string, text: string, photoUrl?: string) =>
+    request<{ ok: true }>(`/orders/${id}/evidence`, { method: "POST", body: JSON.stringify({ userId, text, photoUrl }) }),
+  resolveDispute: (id: string, outcome: "DELIVERED" | "CANCELLED", note: string) => request<void>(`/orders/${id}/resolve`, { method: "POST", body: JSON.stringify({ outcome, note }) }),
+  adminDisputes: () => request<AdminDispute[]>("/admin/disputes"),
   dispatchOrder: (id: string, userId: string, details: DispatchDetails) =>
     request<Order>(`/orders/${id}/dispatch`, { method: "POST", body: JSON.stringify({ userId, ...details }) }),
   // Only the seller confirms, and only with the buyer's handover code.

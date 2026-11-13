@@ -28,6 +28,7 @@ import { ChangeEmailScreen, ChangePhoneScreen } from "../screens/ChangeContactSc
 import AdminReportsScreen from "../screens/AdminReportsScreen";
 import AdminIbayScreen from "../screens/AdminIbayScreen";
 import AdminSellersScreen from "../screens/AdminSellersScreen";
+import AdminDisputesScreen from "../screens/AdminDisputesScreen";
 import IbayBrowseScreen from "../screens/IbayBrowseScreen";
 import IbayItemScreen from "../screens/IbayItemScreen";
 import PurchasesScreen from "../screens/PurchasesScreen";
@@ -67,6 +68,7 @@ const linking = {
       AdminReports: "admin/reports",
       AdminIbay: "admin/ibay",
       AdminSellers: "admin/sellers",
+      AdminDisputes: "admin/disputes",
       AdminMoney: "admin/money",
       Purchases: "purchases",
       BuyAd: "advertise",
@@ -155,6 +157,7 @@ export default function RootNavigator() {
             <Stack.Screen name="AdminReports" component={AdminReportsScreen} />
             <Stack.Screen name="AdminIbay" component={AdminIbayScreen} />
             <Stack.Screen name="AdminSellers" component={AdminSellersScreen} />
+            <Stack.Screen name="AdminDisputes" component={AdminDisputesScreen} />
             <Stack.Screen name="IbayBrowse" component={IbayBrowseScreen} />
             <Stack.Screen name="IbayItem" component={IbayItemScreen} />
             <Stack.Screen name="Purchases" component={PurchasesScreen} />

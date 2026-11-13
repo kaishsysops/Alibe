@@ -93,6 +93,7 @@ model User {
   conversationsAsBuyer   Conversation[] @relation("BuyerConversations")
   conversationsAsSeller  Conversation[] @relation("SellerConversations")
   sessions               Session[]
+  disputeEvidence        DisputeEvidence[]
 }
 
 enum Condition {
@@ -146,6 +147,7 @@ model Listing {
   previousPrice Int?
   priceDroppedAt DateTime?
   priceRaisedAt DateTime?
+  imageHashes   ImageHash[]
   favoritedBy   Favorite[]
   conversations Conversation[]
   reviews       Review[]
@@ -291,6 +293,14 @@ model Order {
   deliveredAt    DateTime?
   verifiedBy     String?
   problem        String?
+  // Ferry shipments: photo of the cargo receipt, shown to the buyer.
+  cargoReceiptUrl   String?
+  // Disputes: both sides add evidence, staff decide (DELIVERED = seller keeps
+  // the sale, CANCELLED = buyer is owed their money back).
+  disputeOutcome    String?
+  disputeNote       String?
+  disputeResolvedAt DateTime?
+  evidence          DisputeEvidence[]
   // Nudges sent to a seller who hasn't sent the item yet (see reminders.ts).
   remindersSent  Int            @default(0)
   createdAt      DateTime       @default(now())
@@ -515,4 +525,34 @@ model Session {
   lastUsedAt DateTime @default(now())
 
   @@index([userId])
+}
+
+// What each side says (and shows) about a disputed order.
+model DisputeEvidence {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  text      String
+  photoUrl  String?
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+}
+
+// A 64-bit fingerprint (difference hash) of each listing photo. Near-identical
+// photos have fingerprints a few bits apart, so a listing reusing someone
+// else's photos is spotted and sent to staff.
+model ImageHash {
+  id        String   @id @default(cuid())
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  sellerId  String
+  imageUrl  String
+  hash      BigInt
+  createdAt DateTime @default(now())
+
+  @@unique([listingId, imageUrl])
+  @@index([sellerId])
 }

@@ -419,11 +419,19 @@ export default function SearchScreen() {
   for (const l of results) if (l.images[0] && !latestPhoto.has(l.category.slug)) latestPhoto.set(l.category.slug, l.images[0]);
   const tileAreaWidth = isDesktopWeb ? contentWidth - FILTER_PANEL_WIDTH - spacing.lg : width - gutter * 2;
   const tileWidth = Math.floor((tileAreaWidth - spacing.sm * (tileColumns - 1)) / tileColumns);
+  // Only categories with something in them, busiest first, in full rows:
+  // 8 tiles on a phone (or 7 + "All categories"), so the grid stays balanced
+  // and listings start within a scroll.
+  const [allTiles, setAllTiles] = useState(false);
+  const stocked = [...categories].filter((c) => (c.listingCount ?? 0) > 0).sort((a, b) => (b.listingCount ?? 0) - (a.listingCount ?? 0));
+  const tileLimit = tileColumns * (isDesktopWeb || width >= 600 ? 2 : 4);
+  const overflow = !allTiles && stocked.length > tileLimit;
+  const shownTiles = overflow ? stocked.slice(0, tileLimit - 1) : stocked;
   const categoryTiles = (
     <View style={{ marginBottom: spacing.lg }}>
       <Text style={styles.sectionTitle}>Browse by category</Text>
       <View style={styles.tileGrid}>
-        {categories.map((c) => {
+        {shownTiles.map((c) => {
           const meta = categoryIcons[c.slug];
           const Icon = meta?.Icon ?? AllCategoriesIcon;
           const tint = meta?.color ?? colors.primary;
@@ -431,7 +439,7 @@ export default function SearchScreen() {
             <CategoryTile
               key={c.id}
               name={c.name}
-              subtitle={`${c.listingCount ?? 0} listings`}
+              subtitle={`${(c.listingCount ?? 0).toLocaleString()} ${c.listingCount === 1 ? "listing" : "listings"}`}
               image={latestPhoto.get(c.slug)}
               Icon={Icon}
               color={tint}
@@ -441,6 +449,13 @@ export default function SearchScreen() {
             />
           );
         })}
+        {overflow && (
+          <Tap style={[styles.moreTile, { width: tileWidth, height: Math.round(tileWidth * 0.62) }]} onPress={() => setAllTiles(true)} scaleTo={0.96} accessibilityLabel="Show all categories">
+            <AllCategoriesIcon size={22} color={colors.primary} />
+            <Text style={styles.moreTileText}>All categories</Text>
+            <Text style={styles.moreTileMeta}>+{stocked.length - shownTiles.length} more</Text>
+          </Tap>
+        )}
       </View>
     </View>
   );
@@ -545,7 +560,7 @@ export default function SearchScreen() {
         <View style={[styles.desktopColumn, { paddingHorizontal: gutter }]}>
           <View style={styles.desktopTop}>
             <View style={{ width: FILTER_PANEL_WIDTH }}>{searchBar}</View>
-            <View style={{ flex: 1, minWidth: 0 }}>{categoryChips}</View>
+            <View style={{ flex: 1, minWidth: 0 }}>{!isBrowsing && categoryChips}</View>
           </View>
           <View style={{ flexDirection: "row", flex: 1, gap: spacing.lg }}>
             <ScrollView style={{ width: FILTER_PANEL_WIDTH, flexGrow: 0 }} contentContainerStyle={styles.filterCard}>
@@ -585,7 +600,8 @@ export default function SearchScreen() {
           )}
         </Tap>
       </View>
-      {categoryChips}
+      {/* While browsing, the category tiles below do this job. */}
+      {!isBrowsing && categoryChips}
       {pillsRow}
       <View style={{ height: spacing.sm + 4 }} />
       <ProductGrid
@@ -655,6 +671,9 @@ const useStyles = makeStyles((colors) => ({
   chipText: { color: colors.text, fontSize: fontSize.sm, fontWeight: fontWeight.semibold },
   chipTextActive: { color: colors.inverseText },
   sectionTitle: { fontSize: fontSize.lg, fontWeight: fontWeight.extrabold, color: colors.text, marginBottom: spacing.sm + 2 },
+  moreTile: { borderRadius: radius.lg, backgroundColor: colors.primaryTint, alignItems: "center", justifyContent: "center", gap: 2 },
+  moreTileText: { fontSize: fontSize.sm, fontWeight: fontWeight.extrabold, color: colors.primary },
+  moreTileMeta: { fontSize: fontSize.caption, color: colors.primary },
   tileGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   saveSearch: { flexDirection: "row", alignItems: "center", gap: spacing.sm, alignSelf: "flex-start", marginTop: spacing.sm, marginBottom: spacing.sm, paddingHorizontal: spacing.md, height: 40, borderRadius: radius.pill, backgroundColor: colors.primaryTint },
   saveSearchDone: { backgroundColor: `${colors.success}18` },

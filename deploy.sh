@@ -146,6 +146,20 @@ if [ -z "$(env_get SHOW_CODES_IN_APP)" ]; then
   info "SHOW_CODES_IN_APP=true until SMS/email sending is set up"
 fi
 chmod 600 .env
+
+# HTTPS through Caddy, only when DOMAINS is set in .env, e.g.
+#   DOMAINS=alibe.online, www.alibe.online, beta.alibe.online
+domains=$(env_get DOMAINS)
+if [ -n "$domains" ]; then
+  export COMPOSE_PROFILES=https
+  # Never fight another web server for 80/443: if something other than
+  # Alibe's own Caddy holds them, stop and say what.
+  holders=$(sudo -n ss -tlnpH '( sport = :80 or sport = :443 )' 2>/dev/null || ss -tlnH '( sport = :80 or sport = :443 )' 2>/dev/null || true)
+  if [ -n "$holders" ] && ! docker ps --format '{{.Names}}' | grep -qx alibe-caddy; then
+    printf '%s\n' "$holders" | sed 's/^/    /'
+    fail "Ports 80/443 are already in use (above), so Caddy can't start. Nothing was changed. Free them, or remove DOMAINS from .env."
+  fi
+fi
 mkdir -p backups
 
 start_db() { $C up -d postgres && wait_healthy alibe-postgres; }
@@ -191,8 +205,12 @@ step "Starting $replicas new API replicas next to the old ones" start_new_api
 step "Retiring the old API replicas" retire_old_api
 # The old dev-server container (pre-production setup) holds port 8081: clear it first.
 swap_web() { docker rm -f alibe-mobile >/dev/null 2>&1 || true; $C up -d --no-deps --remove-orphans web backup; }
+# Caddy keeps running across deploys; a reload picks up Caddyfile changes
+# without dropping connections or certificates.
+start_https() { $C up -d --no-deps caddy && sleep 2 && docker exec alibe-caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile; }
 step "Switching to the new web app" swap_web
 step "Checking the app reaches the API" wait_for http://localhost:8081/api/health
+[ -n "$domains" ] && step "Starting HTTPS (Caddy) for $domains" start_https
 
 # ---------- summary --------------------------------------------------------
 echo
@@ -205,7 +223,8 @@ cat <<EOF
   ${ORANGE}${B}╭────────────────────────────────────────────${R}
   ${ORANGE}${B}│${R}  ${GREEN}${B}Alibe is live${R}  ${GREY}($(git rev-parse --short HEAD 2>/dev/null || echo local))${R}
   ${ORANGE}${B}│${R}
-  ${ORANGE}${B}│${R}  App      ${CYAN}http://$ip:8081${R}
+$(if [ -n "$domains" ]; then for d in ${domains//,/ }; do printf '  %s│%s  App      %shttps://%s%s\n' "${ORANGE}${B}" "$R" "$CYAN" "$d" "$R"; done; fi)
+  ${ORANGE}${B}│${R}  Direct   ${CYAN}http://$ip:8081${R}
   ${ORANGE}${B}│${R}  Health   ${CYAN}http://$ip:8081/api/health${R}
   ${ORANGE}${B}│${R}  API      ${GREY}$replicas replicas, load balanced (BACKEND_REPLICAS in .env)${R}
   ${ORANGE}${B}│${R}  Backups  ${GREY}daily into ./backups ($dumps so far)${R}

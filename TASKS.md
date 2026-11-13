@@ -17,7 +17,7 @@ Built 2026-11-02: email sign-in, real one-time codes, new onboarding, report que
 
 ### Housekeeping
 - [x] Production stack (2026-11-12): `docker-compose.prod.yml` + `./deploy.sh`. Compiled backend, Prisma migrations, static web app on nginx, generated DB password, CORS, daily backups, rate limits, photo compression, private payment slips. See README.
-- [ ] Domain + HTTPS: host nginx (already serving other sites on the VPS) + certbot proxying to port 8081 (the API is already at `/api` on it), then bind 8081 to 127.0.0.1, set `TRUST_PROXY=2`, and build the web app with the https URL.
+- [ ] Domain + HTTPS (alibe.online, www, beta): Caddy is ready in the repo (opt-in, `DOMAINS=` in `.env`, see README). Blocked on the VPS: ports 80/443 were held by a host nginx serving other sites. Decide how to free them, then set DOMAINS and `./deploy.sh`. Afterwards `WEB_PUBLISH=127.0.0.1:8081:80`.
 - [ ] Turn off `SHOW_CODES_IN_APP` in the VPS `.env` once SMS or email sending works. Until then anyone can sign in as anyone.
 - [ ] Uploaded files live in the `alibe-uploads` Docker volume on one machine. Move to object storage (e.g. Cloudflare R2) before hosting.
 - [ ] SMS gateway (Dhiraagu/Ooredoo aggregator) in `backend/src/messaging.ts`. Codes are real now, but in production phone sign-in refuses to send until this exists.
@@ -27,7 +27,7 @@ Built 2026-11-02: email sign-in, real one-time codes, new onboarding, report que
 
 ## Launch blockers
 - [ ] SMS gateway, email provider, hosting and photo storage (see Housekeeping). Nobody outside the network can use the app without them.
-- [ ] Stop people ending up with a second, empty account when they sign in with an email they haven't linked.
+- [x] Second, empty accounts (2026-11-14): a code for an unknown phone/email no longer creates an account. The app asks "new, or used Alibe before?" and links the new contact to the existing account.
 
 ## Staff accounts
 - [ ] Change the `kaish` password before hosting anywhere public: `ADMIN_PASSWORD='...' ./scripts/admin.sh set-admin kaish`
@@ -44,14 +44,14 @@ Built 2026-11-02: email sign-in, real one-time codes, new onboarding, report que
 - [ ] Before taking real money: business registration, tax and advice on reselling. Add a card/BML gateway later if volume justifies it.
 - [x] Payment slips move to private storage on submit; staff open them via signed links that expire in an hour.
 - [ ] Item pages are read live from iBay the first time someone opens them (cached 6 hours). Watch this once there's real traffic.
-- [ ] Decide whether phone numbers sellers typed into titles should be stripped.
+- [x] Phone numbers in iBay titles are stripped, including +960 / 960 prefixes.
 - Refresh: `./scripts/admin.sh import-ibay` (progress: `./scripts/admin.sh ibay-log`)
 
 ## Next if real users ask for it
-- [ ] Ferry proof: photo of the cargo receipt when marking a ferry order as sent.
-- [ ] Banner telling buyers never to pay in full before receiving.
-- [ ] Dispute flow: both sides add evidence, staff decide.
-- [ ] Duplicate/stolen photo detection.
+- [x] Ferry proof: a cargo receipt photo is required to mark a ferry order as sent; the buyer sees it on the order.
+- [x] Buyers see "Never pay in full before you have the item" in each chat until they close it.
+- [x] Dispute flow: buyer and seller add evidence (text + photo) on the order; staff settle it in Profile > Disputes (sale stands / refund buyer).
+- [x] Duplicate/stolen photos: every listing photo is fingerprinted (dHash); a near match with another seller's photo files a report to staff.
 
 ## Parked (decided 2026-11-02: not needed before there are real users)
 Alibe Pay and escrow (licensing, holding other people's money), Stories, atoll map, bundles, seller dashboard, offer from card, confetti and other delight effects, morphing icons, parallax, collapsing headers, optional ID check, price anomaly flags, delivery deadlines, simulator tap control.

@@ -8,8 +8,51 @@ import { sendEmailCode, sendSmsCode } from "../messaging.js";
 import { CLOSED_ACCOUNT_ERROR, isBannedContact } from "../moderation.js";
 import { DECOY_HASH, verifyPassword } from "../password.js";
 import { isStaffCode } from "../staffEntry.js";
+import crypto from "node:crypto";
 
 export const authRouter = safeRouter();
+
+// ---- new phone/email: new account, or link it to one they already have ----
+// A verified code for a contact Alibe doesn't know yet doesn't create an
+// account straight away (that's how people ended up with a second, empty one).
+// It returns a link token instead: signed proof, for 15 minutes, that this
+// person owns that phone/email. The app then either creates the account with
+// it (/auth/create), or the person signs in with the contact they used before
+// and passes the token, which links the new contact to that account.
+const LINK_SECRET = process.env.SLIP_LINK_SECRET || crypto.randomBytes(32).toString("hex");
+const LINK_TTL_MS = 15 * 60_000;
+type Contact = { kind: "phone" | "email"; value: string };
+
+function linkToken(c: Contact) {
+  const body = Buffer.from(JSON.stringify({ ...c, exp: Date.now() + LINK_TTL_MS })).toString("base64url");
+  return `${body}.${crypto.createHmac("sha256", LINK_SECRET).update(body).digest("base64url")}`;
+}
+
+function readLinkToken(token: string | undefined): Contact | null {
+  const [body, sig] = (token ?? "").split(".");
+  if (!body || !sig) return null;
+  const expected = crypto.createHmac("sha256", LINK_SECRET).update(body).digest("base64url");
+  if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  try {
+    const c = JSON.parse(Buffer.from(body, "base64url").toString());
+    return c.exp > Date.now() && (c.kind === "phone" || c.kind === "email") && typeof c.value === "string" ? { kind: c.kind, value: c.value } : null;
+  } catch {
+    return null;
+  }
+}
+
+// After a sign-in, attach the contact from a link token if this account has
+// none of that kind and nobody else uses it. Returns which kind was linked.
+async function linkContact(userId: string, token: string | undefined) {
+  const c = readLinkToken(token);
+  if (!c) return undefined;
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user || user[c.kind]) return undefined;
+  if (await prisma.user.findFirst({ where: { [c.kind]: c.value } })) return undefined;
+  if (await isBannedContact(c.value)) return undefined;
+  await prisma.user.update({ where: { id: userId }, data: { [c.kind]: c.value } });
+  return c.kind;
+}
 
 // New accounts start with this name until the welcome flow asks for a real one.
 const DEFAULT_NAME = "New Seller";
@@ -38,21 +81,19 @@ const verifySchema = z.object({
   code: z.string(),
   name: z.string().optional(),
   themeColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  linkToken: z.string().max(1000).optional(),
 });
 
 authRouter.post("/otp/verify", async (req, res) => {
   const parsed = verifySchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Please enter the code we sent you." });
-  const { phone, code, name, themeColor } = parsed.data;
+  const { phone, code, linkToken: token } = parsed.data;
   if (await isBannedContact(phone)) return res.status(403).json({ error: CLOSED_ACCOUNT_ERROR });
   if (!respondToCheck(res, await checkCode(`signin:phone:${phone}`, code))) return;
-  const user = await prisma.user.upsert({
-    where: { phone },
-    // Returning users keep the colour they saved; the device's colour only seeds new accounts.
-    update: {},
-    create: { phone, name: name ?? DEFAULT_NAME, themeColor },
-  });
-  res.json(await signedIn(user));
+  const user = await prisma.user.findUnique({ where: { phone } });
+  if (!user) return res.json({ newContact: true, linkToken: linkToken({ kind: "phone", value: phone }) });
+  const linked = await linkContact(user.id, token);
+  res.json({ ...(await signedIn(linked ? (await prisma.user.findUnique({ where: { id: user.id } }))! : user)), linked });
 });
 
 const emailRequestSchema = z.object({ email: z.string().transform(normalizeEmail).pipe(z.string().email()) });
@@ -69,18 +110,35 @@ const emailVerifySchema = z.object({
   email: z.string().transform(normalizeEmail),
   code: z.string(),
   themeColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  linkToken: z.string().max(1000).optional(),
 });
 
 authRouter.post("/email/verify", async (req, res) => {
   const parsed = emailVerifySchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Please enter the code we sent you." });
-  const { email, code, themeColor } = parsed.data;
+  const { email, code, linkToken: token } = parsed.data;
   if (await isBannedContact(email)) return res.status(403).json({ error: CLOSED_ACCOUNT_ERROR });
   if (!respondToCheck(res, await checkCode(`signin:email:${email}`, code))) return;
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (!user) return res.json({ newContact: true, linkToken: linkToken({ kind: "email", value: email }) });
+  const linked = await linkContact(user.id, token);
+  res.json({ ...(await signedIn(linked ? (await prisma.user.findUnique({ where: { id: user.id } }))! : user)), linked });
+});
+
+// "I'm new": create the account for a contact proven by a link token.
+const createSchema = z.object({ linkToken: z.string().max(1000), themeColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional() });
+
+authRouter.post("/create", async (req, res) => {
+  const parsed = createSchema.safeParse(req.body);
+  const c = parsed.success ? readLinkToken(parsed.data.linkToken) : null;
+  if (!c) return res.status(400).json({ error: "That took a little too long. Please ask for a new code." });
+  if (await isBannedContact(c.value)) return res.status(403).json({ error: CLOSED_ACCOUNT_ERROR });
+  // Upsert: a double tap, or someone who created it a moment ago, just signs in.
   const user = await prisma.user.upsert({
-    where: { email },
+    where: c.kind === "phone" ? { phone: c.value } : { email: c.value },
+    // Returning users keep the colour they saved; the device's colour only seeds new accounts.
     update: {},
-    create: { email, name: DEFAULT_NAME, themeColor },
+    create: { [c.kind]: c.value, name: DEFAULT_NAME, themeColor: parsed.data!.themeColor },
   });
   res.json(await signedIn(user));
 });

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { View, Text, TextInput, FlatList, Platform, AppState, Image, ActivityIndicator } from "react-native";
 import { useIsFocused, useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import { Send, Clock, AlertCircle, ChevronRight, MessageCircle, ImagePlus, Play, Tag, Star, Ban, CheckCheck, Package } from "lucide-react-native";
+import { Send, Clock, AlertCircle, ChevronRight, MessageCircle, ImagePlus, Play, Tag, Star, Ban, CheckCheck, Package, ShieldAlert, X } from "lucide-react-native";
 import { api, Conversation, Message, Offer, Thread, newClientId, errorMessage, mediaUrl, uploadMedia } from "../api/client";
 import { useAuth, DRAFT_PREFIX } from "../api/AuthContext";
 import { useNotifications } from "../api/NotificationsContext";
@@ -386,6 +386,9 @@ export default function ChatThreadView({
   };
 
   const quickReplies = isBuyer ? QUICK_REPLIES_BUYER : QUICK_REPLIES_SELLER;
+  // Buyers see, once per chat until they close it: never pay everything up front.
+  const [payTipClosed, setPayTipClosed] = usePersistentState(`payTip.closed.${conversationId}`, false);
+  const showPayTip = isBuyer && !payTipClosed && order?.status !== "DELIVERED";
 
   return (
     <View style={{ flex: 1 }}>
@@ -448,6 +451,18 @@ export default function ChatThreadView({
               <Text style={styles.stripText}>Rate seller</Text>
             </Tap>
           )}
+        </View>
+      )}
+
+      {showPayTip && (
+        <View style={styles.payTip} accessibilityRole="alert">
+          <ShieldAlert size={18} color={colors.gold} />
+          <Text style={styles.payTipText}>
+            <Text style={{ fontWeight: fontWeight.extrabold }}>Never pay in full before you have the item.</Text> Pay on pickup, or send part now and the rest when it arrives.
+          </Text>
+          <Tap onPress={() => setPayTipClosed(true)} hitSlop={10} scaleTo={0.85} accessibilityLabel="Close tip">
+            <X size={16} color={colors.textMuted} />
+          </Tap>
         </View>
       )}
 
@@ -601,6 +616,8 @@ export default function ChatThreadView({
 }
 
 const useStyles = makeStyles((colors) => ({
+  payTip: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm, marginHorizontal: spacing.md, marginTop: spacing.sm, padding: spacing.sm + 4, borderRadius: radius.md, backgroundColor: `${colors.gold}1F` },
+  payTipText: { flex: 1, fontSize: fontSize.sm, lineHeight: 19, color: colors.text },
   listingBanner: {
     flexDirection: "row",
     alignItems: "center",

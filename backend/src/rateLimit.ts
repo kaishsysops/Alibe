@@ -19,7 +19,7 @@ const ipRules: Rule[] = [{ name: "ip", max: 3000, windowMs: MINUTE, match: () =>
 
 const accountRules: Rule[] = [
   { name: "code-request", max: 10, windowMs: 15 * MINUTE, match: (r) => r.method === "POST" && /^\/auth\/(otp|email)\/request$/.test(r.path) },
-  { name: "code-verify", max: 30, windowMs: 15 * MINUTE, match: (r) => r.method === "POST" && /^\/auth\/((otp|email)\/verify|staff)$/.test(r.path) },
+  { name: "code-verify", max: 30, windowMs: 15 * MINUTE, match: (r) => r.method === "POST" && /^\/auth\/((otp|email)\/verify|staff|create)$/.test(r.path) },
   { name: "upload", max: 60, windowMs: 10 * MINUTE, match: (r) => r.method === "POST" && /^\/uploads\/?$/.test(r.path) },
   { name: "new-listing", max: 30, windowMs: 60 * MINUTE, match: (r) => r.method === "POST" && /^\/listings\/?$/.test(r.path) },
   { name: "write", max: 120, windowMs: MINUTE, match: isWrite },

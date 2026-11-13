@@ -113,10 +113,13 @@ const dispatchSchema = z
     cargoReference: z.string().trim().max(40).optional(),
     courierName: z.string().trim().max(80).optional(),
     pickupNote: z.string().trim().max(200).optional(),
+    // Ferry: photo of the cargo receipt (an /uploads path), shown to the buyer.
+    cargoReceiptUrl: z.string().regex(/^\/uploads\/[\w.-]+$/).optional(),
   })
   .superRefine((d, ctx) => {
     if (d.method === "FERRY" && !d.boatName) ctx.addIssue({ code: "custom", message: "Enter the boat's name so the buyer knows which ferry to meet." });
     if (d.method === "FERRY" && !d.boatDeparture) ctx.addIssue({ code: "custom", message: "Enter when the boat departs." });
+    if (d.method === "FERRY" && !d.cargoReceiptUrl) ctx.addIssue({ code: "custom", message: "Add a photo of the cargo receipt, so the buyer can see it was sent." });
     if (d.method === "COURIER" && !d.courierName) ctx.addIssue({ code: "custom", message: "Enter the courier or driver's name." });
   });
 
@@ -137,7 +140,7 @@ ordersRouter.post("/:id/dispatch", async (req, res) => {
     if (!changed.count) return false;
     const text =
       method === "FERRY"
-        ? `Sent by ferry on ${details.boatName}, departing ${details.boatDeparture!.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Indian/Maldives" })}${details.cargoReference ? ` (cargo ref ${details.cargoReference})` : ""}. Confirm in the app once you have it.`
+        ? `Sent by ferry on ${details.boatName}, departing ${details.boatDeparture!.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Indian/Maldives" })}${details.cargoReference ? ` (cargo ref ${details.cargoReference})` : ""}. The cargo receipt photo is on the order. Confirm in the app once you have it.`
         : method === "COURIER"
         ? `Out for delivery with ${details.courierName}. Confirm in the app once you have it.`
         : `Ready for pickup${details.pickupNote ? `: ${details.pickupNote}` : ""}. Show your handover code when you collect it.`;
@@ -282,4 +285,70 @@ ordersRouter.post("/:id/cancel", async (req, res) => {
   if (!changed && current.status !== "CANCELLED") return res.status(409).json({ error: "Orders can only be cancelled before the item is sent." });
   if (changed) notifyUser(order.buyerId, "Order cancelled", order.listing.title, { type: "order", orderId: order.id, conversationId: order.conversationId });
   res.json(serializeOrder(current, parsed.data.userId));
+});
+
+// ---- disputes: both sides add evidence, staff decide ------------------------
+
+const isAdmin = async (userId?: string) => !!userId && !!(await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } }))?.isAdmin;
+
+// The dispute so far, for the buyer, the seller and staff.
+ordersRouter.get("/:id/dispute", async (req, res) => {
+  const order = await prisma.order.findUnique({
+    where: { id: req.params.id },
+    include: { evidence: { include: { user: { select: { id: true, name: true } } }, orderBy: { createdAt: "asc" } } },
+  });
+  if (!order) return res.status(404).json({ error: "This order no longer exists." });
+  const party = req.userId === order.buyerId || req.userId === order.sellerId;
+  if (!party && !(await isAdmin(req.userId))) return res.status(403).json({ error: "You can't see this dispute." });
+  res.json({
+    status: order.status,
+    problem: order.problem,
+    outcome: order.disputeOutcome,
+    note: order.disputeNote,
+    resolvedAt: order.disputeResolvedAt,
+    evidence: order.evidence.map((e) => ({ id: e.id, text: e.text, photoUrl: e.photoUrl, createdAt: e.createdAt, by: e.user, role: e.userId === order.buyerId ? "BUYER" : e.userId === order.sellerId ? "SELLER" : "STAFF" })),
+  });
+});
+
+const evidenceSchema = z.object({ userId: z.string(), text: z.string().trim().min(3).max(1000), photoUrl: z.string().regex(/^\/uploads\/[\w.-]+$/).optional() });
+
+ordersRouter.post("/:id/evidence", async (req, res) => {
+  const parsed = evidenceSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Please describe what happened (at least a few words)." });
+  const order = await prisma.order.findUnique({ where: { id: req.params.id }, include: { listing: { select: { title: true } } } });
+  if (!order) return res.status(404).json({ error: "This order no longer exists." });
+  const { userId, text, photoUrl } = parsed.data;
+  if (userId !== order.buyerId && userId !== order.sellerId) return res.status(403).json({ error: "Only the buyer and seller can add evidence." });
+  if (order.status !== "DISPUTED") return res.status(409).json({ error: "This order isn't in dispute." });
+  if ((await prisma.disputeEvidence.count({ where: { orderId: order.id, userId } })) >= 20) return res.status(429).json({ error: "That's plenty of evidence. Staff will be in touch." });
+  await prisma.disputeEvidence.create({ data: { orderId: order.id, userId, text, photoUrl } });
+  const other = userId === order.buyerId ? order.sellerId : order.buyerId;
+  notifyUser(other, "New evidence in a dispute", order.listing.title, { type: "order", orderId: order.id, conversationId: order.conversationId });
+  res.status(201).json({ ok: true });
+});
+
+// Staff only (checked here: this router isn't behind the admin gate).
+const resolveSchema = z.object({ outcome: z.enum(["DELIVERED", "CANCELLED"]), note: z.string().trim().min(3).max(500) });
+
+ordersRouter.post("/:id/resolve", async (req, res) => {
+  if (!(await isAdmin(req.userId))) return res.status(403).json({ error: "Only staff can settle a dispute." });
+  const parsed = resolveSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Choose an outcome and add a short note for both sides." });
+  const order = await prisma.order.findUnique({ where: { id: req.params.id }, include: { listing: { select: { title: true } } } });
+  if (!order) return res.status(404).json({ error: "This order no longer exists." });
+  const { outcome, note } = parsed.data;
+  const now = new Date();
+  const done = await prisma.$transaction(async (tx) => {
+    const c = await tx.order.updateMany({
+      where: { id: order.id, status: "DISPUTED" },
+      data: { status: outcome, disputeOutcome: outcome, disputeNote: note, disputeResolvedAt: now, ...(outcome === "DELIVERED" ? { deliveredAt: now, verifiedBy: "STAFF" } : {}) },
+    });
+    if (!c.count) return false;
+    const text = outcome === "DELIVERED" ? `Alibe staff closed the dispute: the sale stands. ${note}` : `Alibe staff closed the dispute: the order is cancelled and the buyer should get their money back. ${note}`;
+    await systemMessage(tx, order, order.sellerId, text);
+    return true;
+  });
+  if (!done) return res.status(409).json({ error: "This dispute is already settled." });
+  for (const who of [order.buyerId, order.sellerId]) notifyUser(who, "Your dispute was settled", order.listing.title, { type: "order", orderId: order.id, conversationId: order.conversationId });
+  res.status(204).send();
 });

@@ -150,6 +150,25 @@ Copy them off the server now and then. To restore a database dump:
 ./scripts/restore.sh backups/db-YYYYMMDD-HHMM.dump
 ```
 
+**HTTPS (alibe.online).** Caddy in front of the web container, with
+automatic Let's Encrypt certificates. It's opt-in: add the domains to `.env`
+and deploy.
+
+```bash
+echo 'DOMAINS=alibe.online, www.alibe.online, beta.alibe.online' >> .env
+./deploy.sh
+```
+
+`deploy.sh` refuses to start Caddy if something else already holds ports 80
+or 443, and changes nothing in that case. Behind Cloudflare (orange cloud,
+SSL "Full (strict)"), Caddy trusts Cloudflare's addresses and takes the
+visitor's IP from `CF-Connecting-IP`. If the first certificate fails because
+of the proxy, grey-cloud the records until Caddy has its certificates, then
+turn the proxy back on. Once the domains work, set
+`WEB_PUBLISH=127.0.0.1:8081:80` so plain port 8081 isn't public any more.
+The web app calls the API at `/api` on whatever address it was loaded from,
+so the same build works on the IP, alibe.online, www and beta.
+
 **What's still missing for a public launch:** a domain with HTTPS (host nginx +
 certbot proxying to port 8081, then bind 8081 to 127.0.0.1), an SMS gateway and/or email
 sending (then `SHOW_CODES_IN_APP=false`), and photo storage off the server.

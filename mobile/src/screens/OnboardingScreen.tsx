@@ -260,7 +260,7 @@ function MethodSwitch({ method, onChange }: { method: Method; onChange: (m: Meth
 
 type Method = "phone" | "email";
 // First-time setup runs name -> photo -> island -> interests -> notify -> ready.
-type Step = "welcome" | "enter" | "code" | "name" | "photo" | "island" | "interests" | "notify" | "ready" | "staff" | "done";
+type Step = "welcome" | "enter" | "code" | "newOrExisting" | "name" | "photo" | "island" | "interests" | "notify" | "ready" | "staff" | "done";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const haptic = (run: () => Promise<void>) => {
@@ -313,6 +313,11 @@ export default function OnboardingScreen() {
   const [devCode, setDevCode] = useState<{ destination: string; code: string }>();
   const [retryIn, setRetryIn] = useState(0);
   const [session, setSession] = useState<SignedIn>();
+  // A code was right but Alibe doesn't know that phone/email yet. Proof of it,
+  // kept while the person says whether they're new or already have an account.
+  const [newContact, setNewContact] = useState<{ token: string; destination: string; method: Method }>();
+  // "I've used Alibe before": link this to the account they sign in to next.
+  const [pendingLink, setPendingLink] = useState<{ token: string; destination: string; method: Method }>();
   const [name, setName] = useState("");
   // New accounts say where they live; Malé is chosen until they pick.
   const [atolls, setAtolls] = useState<Atoll[]>([]);
@@ -410,7 +415,8 @@ export default function OnboardingScreen() {
   };
 
   const [verify, verifying] = useSingleFlight(async (fullCode: string) => {
-    const call = isPhone ? api.verifyOtp(destination, fullCode, accent) : api.verifyEmailCode(destination, fullCode, accent);
+    const link = pendingLink?.token;
+    const call = isPhone ? api.verifyOtp(destination, fullCode, accent, link) : api.verifyEmailCode(destination, fullCode, accent, link);
     const [result] = await Promise.allSettled([call, wait(DIGIT_SETTLE_MS)]);
     if (result.status === "rejected") {
       haptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error));
@@ -421,7 +427,19 @@ export default function OnboardingScreen() {
       setCode("");
       return;
     }
-    const signedIn = result.value;
+    const verified = result.value;
+    if ("newContact" in verified) {
+      setNewContact({ token: verified.linkToken, destination, method });
+      moveTo("newOrExisting");
+      return;
+    }
+    await enter(verified);
+  });
+
+  // Signed in (new or returning): new accounts go through setup.
+  const enter = async (signedIn: SignedIn) => {
+    if (signedIn.linked && pendingLink) toast.success(`${pendingLink.destination} is now linked to your account.`);
+    setPendingLink(undefined);
     if (signedIn.needsName) {
       // Signed in, but the app stays on this screen until they've got a name.
       setAuthToken(signedIn.token);
@@ -431,7 +449,30 @@ export default function OnboardingScreen() {
       return;
     }
     await finish(signedIn.user, signedIn.token, signedIn.user.name.split(" ")[0], false);
+  };
+
+  const [createAccount, creatingAccount] = useSingleFlight(async () => {
+    if (!newContact) return;
+    try {
+      await enter(await api.createAccount(newContact.token, accent));
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
   });
+
+  // They have an account under their other phone/email: sign in with that,
+  // and this one gets added to it.
+  const useExistingAccount = () => {
+    if (!newContact) return;
+    setPendingLink(newContact);
+    const other: Method = newContact.method === "phone" ? "email" : "phone";
+    setMethod(other);
+    if (other === "phone") setPhone("");
+    else setEmail("");
+    setCode("");
+    moveTo("enter");
+    setTimeout(() => entryRef.current?.focus(), 300);
+  };
 
   const onCodeChange = (digits: string) => {
     setCode(digits);
@@ -553,6 +594,9 @@ export default function OnboardingScreen() {
       setStaffEntryCode("");
       moveTo("enter");
       setTimeout(() => entryRef.current?.focus(), 300);
+    } else if (step === "newOrExisting") {
+      setNewContact(undefined);
+      moveTo("enter");
     } else if (step === "code") {
       setCode("");
       moveTo("enter");
@@ -607,14 +651,36 @@ export default function OnboardingScreen() {
         >
           {inSetup && <SetupProgress index={setupIndex} total={setupSteps.length} />}
 
-          {(step === "enter" || step === "code" || step === "staff" || step === "welcome" || (inSetup && setupIndex > 0)) && (
+          {(step === "enter" || step === "code" || step === "newOrExisting" || step === "staff" || step === "welcome" || (inSetup && setupIndex > 0)) && (
             <Tap style={styles.back} onPress={back} hitSlop={10} scaleTo={0.88} accessibilityLabel="Go back">
               <ChevronLeft size={22} color={colors.text} strokeWidth={2.4} />
             </Tap>
           )}
 
+          {step === "newOrExisting" && newContact && (
+            <FadeIn key="newOrExisting">
+              <Text style={styles.cardTitle}>New to Alibe?</Text>
+              <Text style={styles.cardText}>
+                {newContact.destination} isn't on an Alibe account yet. If you've signed in before with your {newContact.method === "phone" ? "email" : "phone number"}, use that and we'll add this to it.
+              </Text>
+              <Tap style={styles.button} onPress={() => createAccount()} disabled={creatingAccount} scaleTo={0.97}>
+                {creatingAccount ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>I'm new, create my account</Text>}
+              </Tap>
+              <Tap style={[styles.button, styles.secondaryButton]} onPress={useExistingAccount} scaleTo={0.97}>
+                <Text style={[styles.buttonText, { color: colors.primary }]}>I've used Alibe with my {newContact.method === "phone" ? "email" : "phone"}</Text>
+              </Tap>
+            </FadeIn>
+          )}
+
           {(step === "enter" || step === "welcome") && (
             <>
+              {pendingLink && (
+                <View style={styles.linkNotice}>
+                  <Text style={styles.linkNoticeText}>
+                    Sign in with the {method === "phone" ? "phone number" : "email"} you used before. We'll add {pendingLink.destination} to that account.
+                  </Text>
+                </View>
+              )}
               <MethodSwitch method={method} onChange={switchMethod} />
               <FadeIn key={method} distance={6}>
                 <Text style={styles.cardTitle}>{isPhone ? "What's your number?" : "What's your email?"}</Text>
@@ -1003,6 +1069,9 @@ const useStyles = makeStyles((colors) => ({
   resendText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.textMuted },
   spamHint: { fontSize: fontSize.caption, color: colors.textMuted, textAlign: "center", marginTop: spacing.sm },
 
+  secondaryButton: { backgroundColor: colors.primaryTint, marginTop: spacing.sm },
+  linkNotice: { backgroundColor: colors.primaryTint, borderRadius: radius.md, padding: spacing.sm + 4, marginBottom: spacing.sm },
+  linkNoticeText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.primary },
   progressWrap: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.xs, marginBottom: spacing.sm },
   progressBars: { flex: 1, flexDirection: "row", gap: 5 },
   progressTrack: { flex: 1, height: 5, borderRadius: 3, backgroundColor: colors.border, overflow: "hidden" },

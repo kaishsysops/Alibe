@@ -9,6 +9,7 @@ import { notifyUser } from "../push.js";
 import { mixedIbayListings } from "./ibay.js";
 import { boostedListingIds } from "./purchases.js";
 import { cached } from "../cache.js";
+import { checkListingPhotosLater } from "../photoHash.js";
 
 const DEFAULT_LIMIT = 40;
 const MAX_LIMIT = 60;
@@ -213,6 +214,7 @@ listingsRouter.post("/", async (req, res) => {
   if (block) return res.status(block.status).json({ error: block.error, code: block.code });
   try {
     const listing = await prisma.listing.create({ data: parsed.data, include: listingInclude });
+    checkListingPhotosLater(listing.id);
     res.status(201).json(serializeListing(listing));
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002" && clientRequestId) {
@@ -266,6 +268,7 @@ listingsRouter.patch("/:id", async (req, res) => {
       notifyUser(userId, "Price drop on something you saved", `${listing.title} is now MVR ${listing.price.toLocaleString()}.`, { type: "price_drop", listingId: listing.id });
     }
   }
+  if (data.images) checkListingPhotosLater(listing.id);
   res.json(serializeListing(listing));
 });
 
