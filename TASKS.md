@@ -18,9 +18,9 @@ Built 2026-11-02: email sign-in, real one-time codes, new onboarding, report que
 ### Housekeeping
 - [x] Production stack (2026-11-12): `docker-compose.prod.yml` + `./deploy.sh`. Compiled backend, Prisma migrations, static web app on nginx, generated DB password, CORS, daily backups, rate limits, photo compression, private payment slips. See README.
 - [x] Domain + HTTPS (alibe.online, www, beta): automatic in `./deploy.sh` (adds an nginx site + certbot on this VPS, or Caddy if 80/443 are free). Run it once on the VPS; grey-cloud in Cloudflare only if the certificate step says so.
-- [x] Production sign-in switch is automatic: with RESEND_API_KEY in `.env` and the MAIL_FROM domain verified in Resend, `./deploy.sh` turns test mode off and codes go by email. Phone sign-in is hidden until an SMS gateway is connected (`deliveryMethods()` in messaging.ts). Accounts made with only a phone number during testing can't sign in until then.
+- [x] Production sign-in switch is automatic: with RESEND_API_KEY in `.env` and the MAIL_FROM domain verified in Resend, `./deploy.sh` turns test mode off and codes go by email. Sign-in is email only (2026-11-14): phone sign-in, adding a phone number and the phone-before-selling rule are off until an SMS gateway is connected in `sendSmsCode` and `PHONE_SIGN_IN=true` is set. Accounts made with only a phone number during testing can't sign in until then.
 - [ ] Uploaded files live in the `alibe-uploads` Docker volume on one machine. Move to object storage (e.g. Cloudflare R2) before hosting.
-- [ ] SMS gateway (Dhiraagu/Ooredoo aggregator) in `backend/src/messaging.ts`. Codes are real now, but in production phone sign-in refuses to send until this exists.
+- [ ] Later: Google sign-in ("Continue with Google"), and an SMS gateway in `backend/src/messaging.ts` + `PHONE_SIGN_IN=true` to bring phone sign-in back.
 - [ ] Email sending: set `RESEND_API_KEY` and verify the `MAIL_FROM` domain. Never exercised against the real service yet.
 - [x] Per-IP limits (`backend/src/rateLimit.ts`): 10 code requests / 15 min, uploads, new listings, all writes. Set `TRUST_PROXY=1` once behind nginx.
 - [ ] Copy `./backups` off the VPS regularly (another machine or object storage).

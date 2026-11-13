@@ -1,4 +1,5 @@
 import { prisma } from "./db.js";
+import { deliveryMethods } from "./messaging.js";
 
 // Things Alibe can't carry. Blocks at publish time, so the wording stays narrow:
 // everyday items that only mention these words (wine glasses, a glue gun) pass.
@@ -29,8 +30,9 @@ const today = () => ({ gte: new Date(Date.now() - DAY_MS) });
 export async function listingBlock(userId: string) {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { phone: true, createdAt: true } });
   if (!user) return { status: 404, error: "Your account couldn't be found. Please sign in again." };
-  // A verified number is what makes a ban stick, so sellers need one.
-  if (!user.phone) return { status: 403, error: "Please add your phone number before you sell.", code: "PHONE_REQUIRED" };
+  // With phone sign-in on, a verified number is what makes a ban stick, so
+  // sellers need one. Email-only for now: the verified email does that job.
+  if (deliveryMethods().phone && !user.phone) return { status: 403, error: "Please add your phone number before you sell.", code: "PHONE_REQUIRED" };
   if (isNewAccount(user.createdAt) && (await prisma.listing.count({ where: { sellerId: userId, createdAt: today() } })) >= NEW_ACCOUNT_LISTINGS_PER_DAY) {
     return { status: 429, error: `New accounts can post ${NEW_ACCOUNT_LISTINGS_PER_DAY} items a day. Please post the rest tomorrow.` };
   }

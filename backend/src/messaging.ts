@@ -40,14 +40,12 @@ export async function sendSmsCode(to: string, code: string): Promise<Delivery> {
   return developmentOnly("sms", to, code);
 }
 
-// Which sign-in methods can actually deliver a code right now. The app only
-// offers these, so nobody waits for a code that can't arrive. In test mode
-// (codes shown in the app) both work.
+// Which sign-in methods are on. Email only for now: phone sign-in (and the
+// phone-number requirement for selling) is off until an SMS gateway is
+// connected in sendSmsCode and PHONE_SIGN_IN=true is set.
 export function deliveryMethods() {
-  const shown = !isProduction;
   return {
-    email: shown || !!process.env.RESEND_API_KEY,
-    // The SMS gateway isn't connected yet (sendSmsCode above).
-    phone: shown,
+    email: !isProduction || !!process.env.RESEND_API_KEY,
+    phone: process.env.PHONE_SIGN_IN === "true",
   };
 }

@@ -19,6 +19,7 @@ import { usePersistentState } from "../hooks/usePersistentState";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import { useKeyboardVisible } from "../hooks/useKeyboardVisible";
 import IslandPicker, { defaultIslandId, findIsland } from "../components/IslandPicker";
+import { useAuthMethods } from "../hooks/useAuthMethods";
 
 const CONDITIONS: Array<{ value: Listing["condition"]; label: string; hint: string }> = [
   { value: "NEW", label: "New", hint: "Unused, in original packaging" },
@@ -70,7 +71,9 @@ export default function SellScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<any>();
   const { isDesktopWeb } = useResponsive();
-  if (user && !user.phone) {
+  const { phone: phoneSignIn } = useAuthMethods();
+  // Only while phone sign-in is on (it isn't yet): then sellers need a number.
+  if (phoneSignIn && user && !user.phone) {
     return (
       <View style={{ flex: 1 }}>
         {isDesktopWeb && <WebNavBar />}

@@ -306,7 +306,8 @@ export default function OnboardingScreen() {
   const reduceMotion = useReducedMotion();
   const { width, height } = useWindowDimensions();
   const [step, setStep] = useState<Step>("welcome");
-  const [method, setMethod] = useState<Method>("phone");
+  // Email first: phone sign-in is off until an SMS gateway is connected.
+  const [method, setMethod] = useState<Method>("email");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -348,7 +349,7 @@ export default function OnboardingScreen() {
   const entryValid = isPhone ? /^\+[0-9]{7,15}$/.test(destination) && phone.replace(/\D/g, "").length >= 7 : isValidEmail(email) || /^\d{8}$/.test(email.trim());
 
   // Only offer what the server can deliver: without an SMS gateway, email only.
-  const [methods, setMethods] = useState({ email: true, phone: true });
+  const [methods, setMethods] = useState({ email: true, phone: false });
   useEffect(() => {
     api
       .authMethods()

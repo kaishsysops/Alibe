@@ -20,10 +20,12 @@ import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, contentWidth } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
 import { useSingleFlight } from "../hooks/useSingleFlight";
+import { useAuthMethods } from "../hooks/useAuthMethods";
 
 const MAX_WIDTH = contentWidth.list;
 
 export default function IbayItemScreen() {
+  const { phone: phoneSignIn } = useAuthMethods();
   const styles = useStyles();
   const { colors } = useTheme();
   const navigation = useNavigation<any>();
@@ -198,7 +200,7 @@ export default function IbayItemScreen() {
             ) : (
               <>
                 <Text style={styles.description}>Sign in with the phone number on this listing, and you can move it to Alibe or remove it from here.</Text>
-                {item.myPhoneMissing && (
+                {item.myPhoneMissing && phoneSignIn && (
                   <Tap style={styles.link} onPress={() => navigation.navigate("ChangePhone")}>
                     <Text style={[styles.linkText, { color: colors.primary }]}>Add my phone number</Text>
                   </Tap>

@@ -18,8 +18,10 @@ import { useSingleFlight } from "../hooks/useSingleFlight";
 import { formatPhone } from "../utils/phone";
 import { WhatsAppIcon, ViberIcon } from "../components/BrandIcons";
 import AvatarPhoto from "../components/AvatarPhoto";
+import { useAuthMethods } from "../hooks/useAuthMethods";
 
 export default function ProfileScreen() {
+  const { phone: phoneSignIn } = useAuthMethods();
   const styles = useStyles();
   const { colors, mode } = useTheme();
   const { user, signOut, deleteAccount } = useAuth();
@@ -87,7 +89,7 @@ export default function ProfileScreen() {
       { icon: Megaphone, label: "Advertise on Alibe", onPress: () => navigation.navigate("BuyAd") },
     ],
     [
-      { icon: Phone, label: "Phone number", value: formatPhone(user?.phone) || "Add", onPress: () => navigation.navigate("ChangePhone") },
+      ...(phoneSignIn ? [{ icon: Phone, label: "Phone number", value: formatPhone(user?.phone) || "Add", onPress: () => navigation.navigate("ChangePhone") }] : []),
       { icon: Mail, label: "Email", value: user?.email || "Add", onPress: () => navigation.navigate("ChangeEmail") },
       { icon: MessageSquareText, label: "WhatsApp and Viber", value: contactSummary, onPress: () => navigation.navigate("EditProfile", { section: "contact" }) },
       { icon: Palette, label: "App colour", value: <View style={[styles.colorDot, { backgroundColor: colors.primary }]} />, onPress: () => navigation.navigate("EditProfile", { section: "appearance" }) },

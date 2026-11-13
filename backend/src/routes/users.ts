@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
 import { safeRouter, sendValidationError, PHONE_REGEX, normalizePhone, normalizeEmail } from "../http.js";
 import { checkCode, respondToCheck, sendCode } from "../otp.js";
-import { sendEmailCode, sendSmsCode } from "../messaging.js";
+import { deliveryMethods, sendEmailCode, sendSmsCode } from "../messaging.js";
 import { publicUser, ratingsFor } from "../serializers.js";
 import { deliveredCount, DELIVERIES_TO_VERIFY } from "./orders.js";
 import { trustFor } from "../trust.js";
@@ -121,6 +121,7 @@ const phoneTaken = "That number is already linked to another Alibe account.";
 const emailTaken = "That email is already linked to another Alibe account.";
 
 usersRouter.post("/:id/phone/request", async (req, res) => {
+  if (!deliveryMethods().phone) return res.status(403).json({ error: "Adding a phone number isn't available yet." });
   const parsed = phoneSchema.safeParse(req.body);
   if (!parsed.success || !PHONE_REGEX.test(parsed.data.phone)) {
     return res.status(400).json({ error: "Please enter a valid phone number, e.g. +960 7771234." });

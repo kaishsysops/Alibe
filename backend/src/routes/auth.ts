@@ -72,6 +72,7 @@ authRouter.post("/otp/request", async (req, res) => {
   }
   const { phone } = parsed.data;
   if (await isStaffCode(phone)) return res.json({ staffEntry: true });
+  if (!deliveryMethods().phone) return res.status(403).json({ error: "Phone sign-in isn't available yet. Please sign in with your email." });
   if (await isBannedContact(phone)) return res.status(403).json({ error: CLOSED_ACCOUNT_ERROR });
   await sendCode(res, `signin:phone:${phone}`, (code) => sendSmsCode(phone, code));
 });
