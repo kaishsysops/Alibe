@@ -182,6 +182,8 @@ export default function IbayItemScreen() {
             <Text style={styles.outlineText}>See it on iBay</Text>
           </Tap>
 
+          {/* Claiming works by matching the seller's phone number: only with phone sign-in. */}
+          {(phoneSignIn || item.isMine) && (
           <View style={styles.card}>
             <View style={styles.sellerRow}>
               <Store size={18} color={colors.primary} />
@@ -208,6 +210,7 @@ export default function IbayItemScreen() {
               </>
             )}
           </View>
+          )}
 
           <Tap style={styles.link} onPress={confirmReport}>
             <Text style={styles.linkText}>Report this item</Text>

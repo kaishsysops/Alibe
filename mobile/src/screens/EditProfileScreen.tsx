@@ -20,6 +20,7 @@ import { useResponsive } from "../hooks/useResponsive";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import { formatPhone } from "../utils/phone";
 import { IslandField, defaultIslandId } from "../components/IslandPicker";
+import { useAuthMethods } from "../hooks/useAuthMethods";
 
 const PAYMENT_OPTIONS: Array<{ value: PaymentMethod; label: string }> = [
   { value: "CASH", label: "Cash on pickup" },
@@ -48,6 +49,8 @@ function Field({ label, children, helper }: { label: string; children: React.Rea
 }
 
 export default function EditProfileScreen() {
+  // Phone number (sign-in via SMS) only while phone sign-in is on.
+  const { phone: phoneSignIn } = useAuthMethods();
   const styles = useStyles();
   const { colors, accent, mode, setMode } = useTheme();
   const { user, updateUser } = useAuth();
@@ -242,6 +245,8 @@ export default function EditProfileScreen() {
           </Section>
 
           <Section title="Contact and messaging">
+            {phoneSignIn && (
+            <>
             <Tap style={styles.linkRow} onPress={() => navigation.navigate("ChangePhone")} scaleTo={0.98}>
               <View style={styles.channelIcon}>
                 <Phone size={18} color={colors.primary} />
@@ -254,6 +259,8 @@ export default function EditProfileScreen() {
               <ChevronRight size={16} color={colors.primary} />
             </Tap>
             <View style={styles.divider} />
+            </>
+            )}
             <Tap style={styles.linkRow} onPress={() => navigation.navigate("ChangeEmail")} scaleTo={0.98}>
               <View style={styles.channelIcon}>
                 <Mail size={18} color={colors.primary} />
