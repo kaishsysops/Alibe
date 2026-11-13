@@ -4,7 +4,7 @@ import { prisma } from "../db.js";
 import { safeRouter, PHONE_REGEX, normalizePhone, normalizeEmail } from "../http.js";
 import { createSession, deleteSession } from "../auth.js";
 import { checkCode, respondToCheck, sendCode } from "../otp.js";
-import { sendEmailCode, sendSmsCode } from "../messaging.js";
+import { deliveryMethods, sendEmailCode, sendSmsCode } from "../messaging.js";
 import { CLOSED_ACCOUNT_ERROR, isBannedContact } from "../moderation.js";
 import { DECOY_HASH, verifyPassword } from "../password.js";
 import { isStaffCode } from "../staffEntry.js";
@@ -96,9 +96,18 @@ authRouter.post("/otp/verify", async (req, res) => {
   res.json({ ...(await signedIn(linked ? (await prisma.user.findUnique({ where: { id: user.id } }))! : user)), linked });
 });
 
+// What the sign-in screen should offer.
+authRouter.get("/methods", (_req, res) => {
+  res.json(deliveryMethods());
+});
+
 const emailRequestSchema = z.object({ email: z.string().transform(normalizeEmail).pipe(z.string().email()) });
 
 authRouter.post("/email/request", async (req, res) => {
+  // Staff sign-in also opens from the email field (for when phone sign-in is
+  // switched off): the secret number typed in place of an address.
+  const raw = String(req.body?.email ?? "").trim();
+  if (/^\d{8}$/.test(raw) && (await isStaffCode(raw))) return res.json({ staffEntry: true });
   const parsed = emailRequestSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Please enter a valid email address." });
   const { email } = parsed.data;

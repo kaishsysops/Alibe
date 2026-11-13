@@ -344,7 +344,22 @@ export default function OnboardingScreen() {
 
   const isPhone = method === "phone";
   const destination = isPhone ? toE164(phone) : email.trim().toLowerCase();
-  const entryValid = isPhone ? /^\+[0-9]{7,15}$/.test(destination) && phone.replace(/\D/g, "").length >= 7 : isValidEmail(email);
+  // An 8-digit number in the email field is the staff entry code.
+  const entryValid = isPhone ? /^\+[0-9]{7,15}$/.test(destination) && phone.replace(/\D/g, "").length >= 7 : isValidEmail(email) || /^\d{8}$/.test(email.trim());
+
+  // Only offer what the server can deliver: without an SMS gateway, email only.
+  const [methods, setMethods] = useState({ email: true, phone: true });
+  useEffect(() => {
+    api
+      .authMethods()
+      .then((m) => {
+        setMethods(m);
+        if (!m.phone && m.email) setMethod("email");
+        if (!m.email && m.phone) setMethod("phone");
+      })
+      .catch(() => {});
+  }, []);
+  const bothMethods = methods.email && methods.phone;
   const cardUp = step !== "welcome";
 
   const moveTo = (next: Step) => {
@@ -661,14 +676,16 @@ export default function OnboardingScreen() {
             <FadeIn key="newOrExisting">
               <Text style={styles.cardTitle}>New to Alibe?</Text>
               <Text style={styles.cardText}>
-                {newContact.destination} isn't on an Alibe account yet. If you've signed in before with your {newContact.method === "phone" ? "email" : "phone number"}, use that and we'll add this to it.
+                {newContact.destination} isn't on an Alibe account yet.{bothMethods ? ` If you've signed in before with your ${newContact.method === "phone" ? "email" : "phone number"}, use that and we'll add this to it.` : ""}
               </Text>
               <Tap style={styles.button} onPress={() => createAccount()} disabled={creatingAccount} scaleTo={0.97}>
                 {creatingAccount ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>I'm new, create my account</Text>}
               </Tap>
-              <Tap style={[styles.button, styles.secondaryButton]} onPress={useExistingAccount} scaleTo={0.97}>
-                <Text style={[styles.buttonText, { color: colors.primary }]}>I've used Alibe with my {newContact.method === "phone" ? "email" : "phone"}</Text>
-              </Tap>
+              {bothMethods && (
+                <Tap style={[styles.button, styles.secondaryButton]} onPress={useExistingAccount} scaleTo={0.97}>
+                  <Text style={[styles.buttonText, { color: colors.primary }]}>I've used Alibe with my {newContact.method === "phone" ? "email" : "phone"}</Text>
+                </Tap>
+              )}
             </FadeIn>
           )}
 
@@ -681,7 +698,7 @@ export default function OnboardingScreen() {
                   </Text>
                 </View>
               )}
-              <MethodSwitch method={method} onChange={switchMethod} />
+              {bothMethods && <MethodSwitch method={method} onChange={switchMethod} />}
               <FadeIn key={method} distance={6}>
                 <Text style={styles.cardTitle}>{isPhone ? "What's your number?" : "What's your email?"}</Text>
                 <Text style={styles.cardText}>{isPhone ? "We'll text you a code. No password needed." : "We'll email you a code. No password needed."}</Text>

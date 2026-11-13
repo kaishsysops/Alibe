@@ -488,6 +488,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ email, code, themeColor, linkToken }),
     }),
+  // Which sign-in methods can deliver a code right now (no SMS gateway yet = email only).
+  authMethods: () => request<{ email: boolean; phone: boolean }>("/auth/methods"),
   createAccount: (linkToken: string, themeColor?: string) => request<SignedIn>("/auth/create", { method: "POST", body: JSON.stringify({ linkToken, themeColor }) }),
 
   user: (id: string) => request<PublicUser>(`/users/${id}`),

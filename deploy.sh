@@ -150,10 +150,65 @@ if [ -z "$(env_get SLIP_LINK_SECRET)" ]; then
   env_set SLIP_LINK_SECRET "$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
 fi
 
-# With no SMS/email provider, codes must show in the app or nobody can sign in.
-if [ -z "$(env_get SHOW_CODES_IN_APP)" ]; then
-  env_set SHOW_CODES_IN_APP true
-  info "SHOW_CODES_IN_APP=true until SMS/email sending is set up"
+# ---- production sign-in ----
+# Codes are shown in the app (test mode) until they can really be delivered.
+# With a Resend key that works and a verified sending domain, this switches to
+# production by itself: codes go by email, and the app hides phone sign-in
+# until an SMS gateway is added. If anything isn't right it stays in test mode
+# and says why, because switching with no way to deliver codes would lock
+# everyone out.
+resend_check() {
+  # Prints: ok | restricted | invalid | unverified | offline
+  local key=$1 domain=$2 body
+  body=$(curl -sS --max-time 15 -H "Authorization: Bearer $key" https://api.resend.com/domains 2>/dev/null) || { echo offline; return; }
+  printf '%s' "$body" | python3 -c '
+import sys, json
+domain = sys.argv[1]
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    print("offline"); sys.exit()
+if d.get("name") == "restricted_api_key":
+    print("restricted"); sys.exit()
+if "data" not in d:
+    print("invalid"); sys.exit()
+ok = any(x.get("name") == domain and x.get("status") == "verified" for x in d["data"])
+print("ok" if ok else "unverified")
+' "$domain" 2>/dev/null || echo offline
+}
+
+resend_key=$(env_get RESEND_API_KEY)
+if [ -n "$resend_key" ] && [ -z "$(env_get MAIL_FROM)" ]; then
+  first_domain=$(env_get DOMAINS | cut -d, -f1 | tr -d ' ')
+  env_set MAIL_FROM "Alibe <no-reply@${first_domain:-alibe.online}>"
+  info "Set MAIL_FROM=Alibe <no-reply@${first_domain:-alibe.online}>"
+fi
+mail_domain=$(env_get MAIL_FROM | sed -E 's/.*@([^>]+)>?.*/\1/' | tr -d ' ')
+
+if [ -z "$resend_key" ]; then
+  [ -n "$(env_get SHOW_CODES_IN_APP)" ] || env_set SHOW_CODES_IN_APP true
+  [ "$(env_get SHOW_CODES_IN_APP)" = true ] && info "Test mode: sign-in codes show in the app. Add RESEND_API_KEY to .env to go live."
+else
+  case "$(resend_check "$resend_key" "$mail_domain")" in
+    ok | restricted)
+      [ "$(env_get SHOW_CODES_IN_APP)" = false ] || info "Going live: sign-in codes are now sent by email (from $mail_domain)."
+      env_set SHOW_CODES_IN_APP false
+      [ "$(resend_check "$resend_key" "$mail_domain")" = restricted ] && info "(Your Resend key can only send, so $mail_domain couldn't be checked. Make sure it shows Verified in Resend.)"
+      ;;
+    invalid)
+      env_set SHOW_CODES_IN_APP true
+      info "Resend rejected RESEND_API_KEY, so codes still show in the app (test mode). Check the key in .env."
+      ;;
+    unverified)
+      env_set SHOW_CODES_IN_APP true
+      info "$mail_domain isn't verified in Resend yet, so codes still show in the app (test mode)."
+      info "In Resend > Domains, add $mail_domain and put its DNS records in Cloudflare as 'DNS only'. Then deploy again."
+      ;;
+    *)
+      [ -n "$(env_get SHOW_CODES_IN_APP)" ] || env_set SHOW_CODES_IN_APP true
+      info "Couldn't reach Resend to check the key; sign-in mode left as it was."
+      ;;
+  esac
 fi
 chmod 600 .env
 
@@ -254,6 +309,6 @@ $([ "$(env_get WEB_PUBLISH)" = "127.0.0.1:8081:80" ] || printf '  %s│%s  Direc
 EOF
 if [ "$(env_get SHOW_CODES_IN_APP)" = true ]; then
   printf '\n  %s%s⚠  Test mode: sign-in codes show in the app, so anyone can sign in as anyone.%s\n' "$ORANGE" "$B" "$R"
-  printf '  %s   Set SHOW_CODES_IN_APP=false in .env once SMS/email sending works.%s\n' "$GREY" "$R"
+  printf '  %s   Add RESEND_API_KEY to .env (and verify the domain in Resend) to go live.%s\n' "$GREY" "$R"
 fi
 echo

@@ -59,6 +59,7 @@ const PUBLIC: Array<[string, RegExp]> = [
   ["GET", /^\/slips\/[^/]+$/],
   ["POST", /^\/auth\/(otp|email)\/(request|verify)$/],
   ["POST", /^\/auth\/create$/],
+  ["GET", /^\/auth\/methods$/],
   ["POST", /^\/auth\/staff$/],
 ];
 
