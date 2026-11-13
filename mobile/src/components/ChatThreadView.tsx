@@ -120,6 +120,9 @@ export default function ChatThreadView({
   const openedAt = useRef(Date.now());
   // Composer text survives leaving the chat and coming back.
   const [draft, setDraft] = usePersistentState(`${DRAFT_PREFIX}chat.${conversationId}`, { text: "" });
+  // Buyers see, once per chat until they close it: never pay everything up front.
+  // (Hooks stay above the loading return below, or the screen crashes.)
+  const [payTipClosed, setPayTipClosed] = usePersistentState(`payTip.closed.${conversationId}`, false);
 
   useEffect(() => {
     setConversation(null);
@@ -386,8 +389,6 @@ export default function ChatThreadView({
   };
 
   const quickReplies = isBuyer ? QUICK_REPLIES_BUYER : QUICK_REPLIES_SELLER;
-  // Buyers see, once per chat until they close it: never pay everything up front.
-  const [payTipClosed, setPayTipClosed] = usePersistentState(`payTip.closed.${conversationId}`, false);
   const showPayTip = isBuyer && !payTipClosed && order?.status !== "DELIVERED";
 
   return (
