@@ -25,6 +25,8 @@ Built 2026-11-02: email sign-in, real one-time codes, new onboarding, report que
 - [x] Per-IP limits (`backend/src/rateLimit.ts`): 10 code requests / 15 min, uploads, new listings, all writes. Set `TRUST_PROXY=1` once behind nginx.
 - [ ] Copy `./backups` off the VPS regularly (another machine or object storage).
 
+- [x] Demo/test data (2026-11-14): `./deploy.sh` sets SEED_DEMO=false and removes the seeded demo accounts and their listings/orders/reviews (`prisma/remove-demo.ts`, by their known phone numbers), plus sign-ups that never got past the code step. Local dev no longer seeds demo data either (SEED_DEMO=true brings it back).
+
 ## Launch blockers
 - [ ] SMS gateway, email provider, hosting and photo storage (see Housekeeping). Nobody outside the network can use the app without them.
 - [x] Second, empty accounts (2026-11-14): a code for an unknown phone/email no longer creates an account. The app asks "new, or used Alibe before?" and links the new contact to the existing account.

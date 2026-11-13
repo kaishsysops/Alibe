@@ -64,6 +64,10 @@ export default function WebNavBar({ active, onSearch }: { active?: string; onSea
           })}
         </View>
 
+        {/* The Search page has its own big search bar: one is enough. */}
+        {active === "search" ? (
+          <View style={{ flex: 1 }} />
+        ) : (
         <View style={styles.searchBox}>
           <Search size={16} color={colors.textMuted} style={{ marginLeft: spacing.md }} />
           <TextInput
@@ -76,6 +80,7 @@ export default function WebNavBar({ active, onSearch }: { active?: string; onSea
             accessibilityLabel="Search listings"
           />
         </View>
+        )}
 
         <View style={styles.actions}>
           <Tap style={styles.iconButton} onPress={() => go("Favorites")} accessibilityLabel="Saved items" scaleTo={0.9}>

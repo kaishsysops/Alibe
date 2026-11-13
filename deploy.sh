@@ -157,6 +157,13 @@ if [ -z "$(env_get SHOW_CODES_IN_APP)" ]; then
 fi
 chmod 600 .env
 
+# Real users only: no demo sellers, buyers or sample listings. SEED_DEMO=true
+# in .env brings the demo data back (for a test server).
+if [ -z "$(env_get SEED_DEMO)" ]; then
+  env_set SEED_DEMO false
+  info "SEED_DEMO=false: demo data won't be added, and any already there is removed"
+fi
+
 # HTTPS for Alibe's domains (scripts/https.sh picks Caddy or the server's nginx).
 # DOMAINS= (empty) in .env turns it off.
 if ! grep -qE '^DOMAINS=' .env; then
@@ -180,6 +187,14 @@ step "Building images (the web app takes a few minutes)" $C build
 # Database changes first, while the old API keeps serving. (Migrations should
 # only add things, so the old code still works against the new schema.)
 step "Updating the database" $C run --rm -T migrate
+
+# Clears out the seeded demo accounts and everything tied to them. Only their
+# known phone numbers are touched (prisma/remove-demo.ts); a no-op once gone.
+remove_demo() { $C run --rm -T --no-deps --entrypoint npx migrate tsx prisma/remove-demo.ts | tee "$LOG_DIR/demo.txt"; }
+if [ "$(env_get SEED_DEMO)" != true ]; then
+  step "Removing demo data" remove_demo
+  grep -v '^$' "$LOG_DIR/demo.txt" 2>/dev/null | grep -v "No demo data left" | while read -r line; do info "$line"; done
+fi
 
 # Rolling restart: start the new API replicas next to the old ones, wait until
 # every new one is healthy, give nginx a moment to find them, then retire the

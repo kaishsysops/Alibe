@@ -249,6 +249,38 @@ export default function IslandPicker(props: Props) {
   );
 }
 
+// ---- compact atoll filter (Search) ---------------------------------------------
+// For filter panels: no search box (the page has one) and no drag gestures
+// (they'd fight the panel's scrolling). A small map shows the choice; the list
+// does the choosing.
+
+export function AtollFilter({ atolls: unsorted, value, onChange }: { atolls: Atoll[]; value?: string | null; onChange: (atollId: string | undefined) => void }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
+  const atolls = useMemo(() => sortAtolls(unsorted), [unsorted]);
+  const selected = atolls.find((a) => a.id === value);
+  const g = selected ? ATOLL_GEO[selected.code] : undefined;
+  return (
+    <View style={styles.filterWrap}>
+      <MaldivesMap width={56} height={150} thumbnail codes={atolls.map((a) => a.code)} selected={selected?.code} pin={g ? { lat: g.lat, lng: g.lng } : null} />
+      <ScrollView style={styles.filterList} nestedScrollEnabled showsVerticalScrollIndicator>
+        {[{ id: undefined as string | undefined, label: "Anywhere" }, ...atolls.map((a) => ({ id: a.id as string | undefined, label: ATOLL_GEO[a.code]?.short ?? a.name }))].map((row) => {
+          const on = row.id === (value ?? undefined);
+          return (
+            <Tap key={row.id ?? "any"} style={[styles.filterRow, on && styles.atollRowOn]} onPress={() => onChange(row.id)} scaleTo={0.98} accessibilityRole="radio" accessibilityState={{ selected: on }}>
+              {row.id ? null : <Globe2 size={14} color={on ? colors.primary : colors.textMuted} />}
+              <Text style={[styles.atollRowText, on && { color: colors.primary }]} numberOfLines={1}>
+                {row.label}
+              </Text>
+              {on && <Check size={14} color={colors.primary} strokeWidth={3} />}
+            </Tap>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
 // ---- in a sheet, behind a form field -------------------------------------------
 
 export function IslandPickerSheet({ visible, onClose, title = "Choose your island", ...picker }: Props & { visible: boolean; onClose: () => void; title?: string }) {
@@ -325,6 +357,9 @@ const useStyles = makeStyles((colors) => ({
   atollRowOn: { backgroundColor: colors.primaryTint },
   atollRowText: { flex: 1, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text },
   hint: { fontSize: fontSize.caption, color: colors.textMuted, marginTop: spacing.sm },
+  filterWrap: { flexDirection: "row", gap: spacing.sm, alignItems: "flex-start" },
+  filterList: { flex: 1, maxHeight: 150, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
+  filterRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.sm + 2, height: 34 },
   orList: { fontSize: fontSize.caption, color: colors.textMuted, textAlign: "center", marginTop: spacing.sm, marginBottom: 6 },
   done: { backgroundColor: colors.primary, borderRadius: radius.pill, height: controlHeight.primary, alignItems: "center", justifyContent: "center", marginTop: spacing.sm },
   doneText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.md },

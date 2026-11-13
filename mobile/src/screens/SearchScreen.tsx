@@ -21,7 +21,7 @@ import { spacing, radius, conditionColors, cardShadow, fontSize, fontWeight, con
 import { categoryIcons, AllCategoriesIcon } from "../theme/categoryIcons";
 import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
 import AvatarPhoto from "../components/AvatarPhoto";
-import IslandPicker from "../components/IslandPicker";
+import { AtollFilter } from "../components/IslandPicker";
 
 const CONDITIONS: Array<Listing["condition"]> = ["NEW", "LIKE_NEW", "GOOD", "FAIR"];
 const SORTS: Array<{ key: ListingSort; label: string }> = [
@@ -300,7 +300,7 @@ export default function SearchScreen() {
     <View style={{ gap: spacing.md }}>
       <View>
         <Text style={styles.filterLabel}>Location</Text>
-        <IslandPicker mode="atoll" atolls={atolls} value={atollId} onChange={setAtollId} mapHeight={isDesktopWeb ? 300 : 280} />
+        <AtollFilter atolls={atolls} value={atollId} onChange={setAtollId} />
       </View>
       <View>
         <Text style={styles.filterLabel}>Condition</Text>
@@ -660,7 +660,7 @@ const useStyles = makeStyles((colors) => ({
   filterLabel: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.text, marginBottom: spacing.sm },
   wrapRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   priceRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  priceInput: { flex: 1, height: 44, borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill, paddingHorizontal: spacing.md, color: colors.text, fontSize: fontSize.base, backgroundColor: colors.background, outlineStyle: "none" as any },
+  priceInput: { flex: 1, minWidth: 0, width: 0, height: 44, borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill, paddingHorizontal: spacing.md, color: colors.text, fontSize: fontSize.base, backgroundColor: colors.background, outlineStyle: "none" as any },
   priceDash: { color: colors.textMuted, fontSize: fontSize.sm },
   resetButton: { alignSelf: "flex-start", paddingVertical: spacing.xs },
   resetText: { color: colors.primary, fontWeight: fontWeight.bold, fontSize: fontSize.sm },

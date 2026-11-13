@@ -8,6 +8,7 @@ import { publicUser, ratingsFor } from "../serializers.js";
 import { deliveredCount, DELIVERIES_TO_VERIFY } from "./orders.js";
 import { trustFor } from "../trust.js";
 import { CLOSED_ACCOUNT_ERROR, isBannedContact } from "../moderation.js";
+import { deleteAccount } from "../accounts.js";
 
 export const usersRouter = safeRouter();
 
@@ -177,29 +178,7 @@ usersRouter.post("/:id/email/verify", async (req, res) => {
 // user's listings (and chats/favourites on those listings), their own
 // favourites, and every conversation they took part in.
 usersRouter.delete("/:id", async (req, res) => {
-  const userId = req.params.id;
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) return res.status(204).send();
-
-  const listingIds = (await prisma.listing.findMany({ where: { sellerId: userId }, select: { id: true } })).map((l) => l.id);
-  const conversationWhere = {
-    OR: [{ buyerId: userId }, { sellerId: userId }, { listingId: { in: listingIds } }],
-  };
-  const conversationIds = (await prisma.conversation.findMany({ where: conversationWhere, select: { id: true } })).map((c) => c.id);
-
-  await prisma.$transaction([
-    prisma.message.deleteMany({ where: { OR: [{ conversationId: { in: conversationIds } }, { senderId: userId }] } }),
-    prisma.order.deleteMany({ where: { OR: [{ conversationId: { in: conversationIds } }, { buyerId: userId }, { sellerId: userId }, { listingId: { in: listingIds } }] } }),
-    prisma.offer.deleteMany({ where: { OR: [{ conversationId: { in: conversationIds } }, { fromId: userId }, { listingId: { in: listingIds } }] } }),
-    prisma.review.deleteMany({ where: { OR: [{ reviewerId: userId }, { sellerId: userId }, { listingId: { in: listingIds } }] } }),
-    prisma.report.deleteMany({ where: { OR: [{ reporterId: userId }, { reportedUserId: userId }, { listingId: { in: listingIds } }] } }),
-    prisma.block.deleteMany({ where: { OR: [{ blockerId: userId }, { blockedId: userId }] } }),
-    prisma.savedSearch.deleteMany({ where: { userId } }),
-    prisma.conversation.deleteMany({ where: { id: { in: conversationIds } } }),
-    prisma.favorite.deleteMany({ where: { OR: [{ userId }, { listingId: { in: listingIds } }] } }),
-    prisma.listing.deleteMany({ where: { sellerId: userId } }),
-    prisma.user.delete({ where: { id: userId } }),
-  ]);
+  await deleteAccount(req.params.id);
   res.status(204).send();
 });
 
