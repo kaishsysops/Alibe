@@ -29,6 +29,7 @@ import AdminReportsScreen from "../screens/AdminReportsScreen";
 import AdminIbayScreen from "../screens/AdminIbayScreen";
 import AdminSellersScreen from "../screens/AdminSellersScreen";
 import AdminDisputesScreen from "../screens/AdminDisputesScreen";
+import StatusScreen from "../screens/StatusScreen";
 import IbayBrowseScreen from "../screens/IbayBrowseScreen";
 import IbayItemScreen from "../screens/IbayItemScreen";
 import PurchasesScreen from "../screens/PurchasesScreen";
@@ -69,6 +70,7 @@ const linking = {
       AdminIbay: "admin/ibay",
       AdminSellers: "admin/sellers",
       AdminDisputes: "admin/disputes",
+      Status: "status",
       AdminMoney: "admin/money",
       Purchases: "purchases",
       BuyAd: "advertise",
@@ -175,6 +177,8 @@ export default function RootNavigator() {
             <Stack.Screen name="Safety" component={SafetyScreen} />
           </>
         )}
+        {/* alibe.online/status works signed in or out. */}
+        <Stack.Screen name="Status" component={StatusScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

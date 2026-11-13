@@ -1,15 +1,14 @@
-# HTTPS for deploy.sh (sourced, not run). Picks how to serve the domains in
-# DOMAINS (.env) and does all of it, so deploying is the only step:
+# HTTPS for deploy.sh (sourced, not run). Alibe is one site in this server's
+# own nginx (which also serves other sites): this writes that site, gets a Let's
+# Encrypt certificate with certbot (it renews itself), switches the site to
+# HTTPS, checks it, and then publishes port 8081 on this machine only.
 #
-#   - Ports 80/443 free (or already Alibe's Caddy): Caddy in Docker.
-#   - Ports 80/443 held by the server's own nginx (other sites live there):
-#     add Alibe as one more nginx site, get a Let's Encrypt certificate with
-#     certbot (renews itself), switch the site to HTTPS, check it, then stop
-#     publishing port 8081 to the internet.
+# Once all that is in place, a deploy only checks it from the outside and
+# doesn't need sudo at all.
 #
-# Uses deploy.sh's helpers: step, info, fail, env_get, env_set, $C.
+# Uses deploy.sh's helpers: step, step_soft, info, fail, env_get, env_set, $C.
 
-https_mode=""   # "caddy" | "nginx" | "" (off)
+https_mode=""   # "ready" (nothing to do) | "nginx" (set up / repair)
 https_names=()  # alibe.online www.alibe.online ...
 NGINX_SITE_NAME=alibe
 CERT_NAME=alibe
@@ -18,24 +17,29 @@ CERT_NAME=alibe
 https_prepare() {
   local domains
   domains=$(env_get DOMAINS)
-  [ -n "$domains" ] || return 0
   read -r -a https_names <<<"${domains//,/ }"
 
-  printf '  %s🔒%s HTTPS for %s needs admin rights on this server.\n' "$ORANGE" "$R" "${https_names[*]}"
-  sudo -v || fail "HTTPS needs sudo. Run ./deploy.sh again, or remove DOMAINS from .env to skip HTTPS."
+  # Already set up? The site file matches, HTTPS answers and 8081 is local only.
+  local site
+  site=$(nginx_site_path)
+  if [ -r "$site" ] && cmp -s <(nginx_render 1) "$site" && [ "$(env_get WEB_PUBLISH)" = "127.0.0.1:8081:80" ] && nginx_check_https quick; then
+    https_mode=ready
+    info "HTTPS: in place for ${https_names[*]}"
+    return 0
+  fi
 
+  printf '  %s🔒%s Setting up HTTPS for %s needs admin rights on this server.\n' "$ORANGE" "$R" "${https_names[*]}"
+  sudo -v || fail "HTTPS needs sudo. Run ./deploy.sh again."
+  if ! command -v nginx >/dev/null; then
+    sudo -n apt-get update -qq && sudo -n DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nginx || fail "Couldn't install nginx."
+  fi
   local holders
   holders=$(sudo -n ss -tlnpH '( sport = :80 or sport = :443 )' 2>/dev/null || true)
-  if [ -z "$holders" ] || docker ps --format '{{.Names}}' | grep -qx alibe-caddy; then
-    https_mode=caddy
-    export COMPOSE_PROFILES=https
-  elif printf '%s' "$holders" | grep -q '"nginx"'; then
-    https_mode=nginx
-  else
+  if [ -n "$holders" ] && ! printf '%s' "$holders" | grep -q '"nginx"'; then
     printf '%s\n' "$holders" | sed 's/^/    /'
-    fail "Ports 80/443 are held by something other than nginx (above). Nothing was changed. Free them, or remove DOMAINS from .env."
+    fail "Ports 80/443 are held by something other than nginx (above). Nothing was changed."
   fi
-  info "HTTPS via $([ "$https_mode" = nginx ] && echo "the server's nginx (shared with its other sites)" || echo "Caddy")"
+  https_mode=nginx
 }
 
 # ---- nginx route ---------------------------------------------------------------
@@ -152,8 +156,9 @@ MSG
 }
 
 nginx_check_https() {
-  local first=${https_names[0]}
-  for _ in $(seq 1 10); do
+  local first=${https_names[0]} tries=10
+  [ "${1:-}" = quick ] && tries=1
+  for _ in $(seq 1 "$tries"); do
     curl -fsS --max-time 5 --resolve "$first:443:127.0.0.1" "https://$first/api/health" >/dev/null 2>&1 && return 0
     sleep 2
   done
@@ -172,8 +177,8 @@ lock_web_port() {
 
 https_apply() {
   case "$https_mode" in
-    caddy)
-      step "Starting HTTPS (Caddy) for ${https_names[*]}" start_https
+    ready)
+      step "Checking https://${https_names[0]}" nginx_check_https
       ;;
     nginx)
       # A long build can outlast sudo's memory: ask again here if needed.

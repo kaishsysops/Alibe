@@ -1,12 +1,12 @@
 import { prisma } from "../src/db.js";
 import { deleteAccount } from "../src/accounts.js";
 
-// Removes the demo content prisma/seed.ts adds (SEED_DEMO): the demo sellers,
+// Removes the demo content earlier versions of prisma/seed.ts added: the demo sellers,
 // their listings and the demo buyers, with their chats, orders and reviews.
 // Only these seeded phone numbers are touched, plus empty sign-ups that never
 // got past the code step (see below); real accounts never are.
 // Categories, atolls and iBay items stay. Safe to run again: it does nothing
-// once they're gone. deploy.sh runs it while SEED_DEMO=false.
+// once they're gone. deploy.sh runs it once per server.
 //   npx tsx prisma/remove-demo.ts
 const DEMO_PHONES = [
   "+9607777777", // Aishath Demo (sample listings)

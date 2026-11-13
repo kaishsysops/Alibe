@@ -46,6 +46,7 @@ function bearer(req: Request) {
 // and the sign-in endpoints themselves.
 const PUBLIC: Array<[string, RegExp]> = [
   ["GET", /^\/health$/],
+  ["GET", /^\/status$/],
   ["GET", /^\/categories\/?$/],
   ["GET", /^\/atolls\/?$/],
   ["GET", /^\/listings\/?$/],

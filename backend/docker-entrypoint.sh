@@ -21,7 +21,7 @@ if [ "$1" = "migrate" ] || [ "${MIGRATE_ON_START:-true}" = "true" ]; then
     npx prisma migrate resolve --applied 0_init
   fi
   npx prisma migrate deploy
-  # Categories and atolls always; demo users and listings unless SEED_DEMO=false.
+  # Categories, atolls and islands (no demo data).
   npx tsx prisma/seed.ts
 fi
 

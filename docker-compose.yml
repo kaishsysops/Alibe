@@ -31,8 +31,6 @@ services:
     environment:
       DATABASE_URL: postgresql://alibe:${POSTGRES_PASSWORD:-alibe}@postgres:5432/alibe
       PORT: 4000
-      # No demo sellers/listings unless SEED_DEMO=true in .env.
-      SEED_DEMO: ${SEED_DEMO:-false}
       # Leave empty in development: codes then appear in the app and the backend log.
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       MAIL_FROM: ${MAIL_FROM:-Alibe <no-reply@alibe.mv>}

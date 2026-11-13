@@ -1,4 +1,7 @@
 import express from "express";
+import os from "node:os";
+import { prisma } from "./db.js";
+import { deliveryMethods } from "./messaging.js";
 import cors from "cors";
 import { categoriesRouter } from "./routes/categories.js";
 import { atollsRouter } from "./routes/atolls.js";
@@ -34,6 +37,32 @@ app.use(authenticate);
 app.use(accountLimits);
 
 app.get("/health", (_req, res) => res.json({ ok: true, service: "alibe-backend" }));
+
+// Public status for alibe.online/status. Nothing secret: whether each part is
+// working, how fast the database answers, and which version is running.
+const startedAt = new Date();
+app.get("/status", async (_req, res) => {
+  const t = Date.now();
+  let database: { ok: boolean; latencyMs: number | null } = { ok: false, latencyMs: null };
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    database = { ok: true, latencyMs: Date.now() - t };
+  } catch {
+    // reported as down below
+  }
+  const email = deliveryMethods().email;
+  res.setHeader("Cache-Control", "no-store");
+  res.status(database.ok ? 200 : 503).json({
+    ok: database.ok && email,
+    version: process.env.APP_VERSION ?? "dev",
+    startedAt,
+    uptimeSeconds: Math.round(process.uptime()),
+    replica: os.hostname().slice(0, 12),
+    api: { ok: true },
+    database,
+    signInEmail: { ok: email },
+  });
+});
 app.use("/categories", categoriesRouter);
 app.use("/atolls", atollsRouter);
 app.use("/listings", listingsRouter);

@@ -35,7 +35,6 @@ setInterval(() => {
 
 function limiter(rules: Rule[], who: (req: Request) => string) {
   return (req: Request, res: Response, next: NextFunction) => {
-    if (process.env.RATE_LIMITS === "off") return next();
     const rule = rules.find((r) => r.match(req));
     if (!rule) return next();
     const key = `${rule.name}:${who(req)}`;

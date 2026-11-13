@@ -67,43 +67,65 @@ Refresh / backend restart automatically — no rebuild needed for code changes.
 A rebuild (`docker compose up -d --build <service>`) is only needed after
 changing `package.json` dependencies.
 
-## Running it on the VPS (production stack)
+## Running it on the VPS (production)
 
-`./deploy.sh` runs `docker-compose.prod.yml`: compiled backend, static web
-app behind nginx, database migrations, rate limits and daily backups. Local
-development keeps using `docker-compose.yml`.
+One command, run on the VPS in the project folder:
 
 ```bash
-# on the VPS, in the project folder: pulls, configures, builds, waits until healthy
 ./deploy.sh
 ```
 
-| Container        | What it is                                             | Port              |
-|------------------|--------------------------------------------------------|-------------------|
-| `alibe-web`      | The app as a static website (nginx), and the API at `/api` | 8081 (public) |
-| `backend` ×N     | API replicas (`BACKEND_REPLICAS`, default 2), load balanced by the web nginx | none (internal) |
-| `migrate`        | One-off per deploy: migrations + seed, then exits      | none              |
-| `alibe-postgres` | Database                                               | 127.0.0.1:5432    |
-| `alibe-backup`   | Daily `pg_dump` + photo archive into `./backups`       | none              |
+It pulls the latest code, checks that sign-in emails can be sent, builds,
+updates the database, swaps in the new version without downtime, and makes
+sure HTTPS works. The first run asks for the sudo password to set up HTTPS;
+after that, deploys don't need it.
 
-Testers open `http://<VPS_IP>:8081`; the app calls the API at
-`http://<VPS_IP>:8081/api`. Only port 8081 needs to be open (in the hosting
-provider's firewall panel too, if it has one).
+| Part | What it is |
+|------|------------|
+| `alibe-web` | The app (static site, nginx) and the load balancer for the API at `/api` |
+| `backend` ×N | API replicas (`BACKEND_REPLICAS`, default 2), compiled TypeScript on Node |
+| `migrate` | Runs once per deploy: database migrations, categories and islands |
+| `alibe-postgres` | Database (only reachable on the server itself) |
+| `alibe-backup` | Daily database dump + photo archive into `./backups` |
+| Server nginx | HTTPS for alibe.online, www and beta (Let's Encrypt, renews itself), proxying to the web container on 127.0.0.1:8081 |
 
-**Deploys without downtime for visitors.** Images build while the old version
-keeps serving. Migrations run as a one-off step. Then new API replicas start
-next to the old ones, and only once they're all healthy are the old ones
-retired, so there is always an API answering. If every replica is down at once
-(a crash, a first deploy), nginx answers `503 {"code":"MAINTENANCE"}` and the
-app shows an "Alibe is updating" screen that reloads itself when the API is
-back. The web container only restarts when the app itself changed.
+**Settings live in `.env`** (created by the first deploy, `chmod 600`, never committed):
 
-**Load handling.** Lists are paged (40 items, `X-Has-More`), Home is one small
-server-built response, categories/Home/boosted items are cached for 30-60
-seconds, notifications cost one query however many chats someone has, and the
-app polls every 15s (chat 4s) only while visible. Rate limits are per account
-for signed-in people (carrier NAT puts many phones on one IP) plus a high
-per-IP ceiling; sign-in code requests are limited per IP in nginx.
+| Setting | Meaning |
+|---------|---------|
+| `RESEND_API_KEY` | Required. Sign-in codes are sent by email; the deploy stops if Resend can't send |
+| `MAIL_FROM` | Sender, defaults to `Alibe <no-reply@alibe.online>` (domain verified in Resend) |
+| `DOMAINS` | The site's domains; the first is the main address |
+| `BACKEND_REPLICAS` | How many API replicas to run (about one per spare CPU core) |
+| `CERTBOT_EMAIL` | Optional: certificate expiry notices |
+| `POSTGRES_PASSWORD`, `SLIP_LINK_SECRET` | Generated on the first deploy |
+
+**Status:** https://alibe.online/status shows whether the app server,
+database and sign-in emails are working, with response times and the running
+version (also in Profile > System status).
+
+**Deploys without downtime.** Images build while the old version keeps
+serving; migrations run as a one-off step; new API replicas start next to the
+old ones and the old ones are retired once the new ones are healthy. If every
+replica is down at once, the app shows an "Alibe is updating" screen that
+reloads itself.
+
+**Sign-in is email only** for now. Phone sign-in comes back with an SMS
+gateway in `backend/src/messaging.ts` and `PHONE_SIGN_IN=true`.
+
+**Database changes use migrations.** After editing `backend/prisma/schema.prisma`:
+
+```bash
+docker compose exec backend npx prisma migrate dev --name what-changed
+```
+
+then commit the new folder under `backend/prisma/migrations/`. Migrations
+should only add things (the old version runs against the new schema for a
+moment during a deploy).
+
+**Backups** run daily (database 14 days, photos 3 days) in `./backups`. Copy
+them off the server now and then. Restore with
+`./scripts/restore.sh backups/db-YYYYMMDD-HHMM.dump`.
 
 **Staff commands** run in one API replica through `./scripts/admin.sh`:
 
@@ -115,64 +137,7 @@ STAFF_CODE=12345678  ./scripts/admin.sh set-staff-code
 ./scripts/admin.sh logs               # API logs
 ```
 
-**Settings live in `.env`** (created by the first deploy, `chmod 600`, never committed):
-
-| Setting              | Meaning                                                              |
-|----------------------|----------------------------------------------------------------------|
-| `LAN_IP`             | The server's public IPv4; the web app is built to call `http://LAN_IP:8081/api` |
-| `BACKEND_REPLICAS`   | How many API replicas to run (default 2). About one per CPU core the VPS can spare |
-| `SLIP_LINK_SECRET`   | Generated. Signs staff links to payment slips (shared by all replicas) |
-| `RATE_LIMITS`        | `off` disables the app's own rate limits (load testing only) |
-| `POSTGRES_PASSWORD`  | Generated on first deploy. The database password is set to match on every deploy |
-| `SHOW_CODES_IN_APP`  | `true` = sign-in codes show in the app (no SMS/email yet). **Anyone can sign in as anyone.** Set to `false` once sending works |
-| `SEED_DEMO`          | `false` stops adding the demo users and listings (categories and atolls are always seeded) |
-| `RESEND_API_KEY`, `MAIL_FROM` | Email codes through Resend                                  |
-| `CORS_ORIGINS`       | Extra websites allowed to call the API (defaults to the web app's own address) |
-| `TRUST_PROXY`        | Defaults to `1` (the web container's nginx is in front). Use `2` once host nginx/HTTPS is added in front of that |
-
-Change a setting, then run `./deploy.sh` again.
-
-**Database changes now use migrations.** After editing `backend/prisma/schema.prisma`:
-
-```bash
-docker compose exec backend npx prisma migrate dev --name what-changed
-```
-
-commit the new folder under `backend/prisma/migrations/`, and the next deploy
-applies it. (Databases made before migrations existed are caught up and
-marked automatically on their first production start.)
-
-**Backups** run once when the container starts and then every 24 hours:
-database dumps kept 14 days, photo archives 3 days, in `./backups` on the VPS.
-Copy them off the server now and then. To restore a database dump:
-
-```bash
-./scripts/restore.sh backups/db-YYYYMMDD-HHMM.dump
-```
-
-**HTTPS (alibe.online, www, beta) is automatic.** `./deploy.sh` asks for
-the sudo password once, then (scripts/https.sh):
-
-- if the server's nginx already holds ports 80/443 (it serves other sites on
-  this VPS), adds Alibe as one more nginx site, tests the config before
-  reloading (and puts the old file back if nginx rejects it), installs certbot
-  if needed, gets a Let's Encrypt certificate that renews itself, switches the
-  site to HTTPS, checks it, and then publishes port 8081 on this machine only;
-- if 80/443 are free, runs Caddy in Docker instead.
-
-Domains come from `DOMAINS` in `.env` (set to the three Alibe domains on the
-first run; `DOMAINS=` turns HTTPS off). `CERTBOT_EMAIL=` adds an email for
-expiry notices. With Cloudflare's orange cloud on, if Let's Encrypt can't
-verify the domains, the deploy says so and carries on over HTTP: grey-cloud
-the records, run `./deploy.sh` again, then turn the proxy back on. Cloudflare
-SSL/TLS mode: Full (strict).
-
-To undo the nginx part: `sudo rm /etc/nginx/sites-enabled/alibe && sudo systemctl reload nginx`,
-then `DOMAINS=` and `WEB_PUBLISH=8081:80` in `.env` and `./deploy.sh`.
-
-**What's still missing for a public launch:** a domain with HTTPS (host nginx +
-certbot proxying to port 8081, then bind 8081 to 127.0.0.1), an SMS gateway and/or email
-sending (then `SHOW_CODES_IN_APP=false`), and photo storage off the server.
+Staff sign-in: type the 8-digit staff code into the email field.
 
 ## Useful commands
 

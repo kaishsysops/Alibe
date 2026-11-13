@@ -96,8 +96,6 @@ wait_healthy() { for _ in $(seq 1 40); do [ "$(docker inspect -f '{{.State.Healt
 . "$(dirname "$0")/scripts/https.sh"
 
 # ---------- deploy ---------------------------------------------------------
-# Runs the production stack in docker-compose.prod.yml. To try this script
-# without git: ALIBE_SKIP_PULL=1 ./deploy.sh
 C="docker compose -f docker-compose.prod.yml"
 # Without this, newer Docker stamps every build with a fresh attestation, so
 # unchanged images get new IDs and their containers restart for nothing.
@@ -116,7 +114,7 @@ if [ "${ALIBE_SKIP_PULL:-}" != 1 ]; then
   else
     git log --oneline "$before..$after" | while read -r line; do info "+ $line"; done
     # This script may itself have just changed: carry on with the new version.
-    if git diff --name-only "$before" "$after" | grep -qx deploy.sh; then
+    if git diff --name-only "$before" "$after" | grep -qxE 'deploy.sh|scripts/https.sh'; then
       info "deploy.sh was updated, continuing with the new version"
       ALIBE_SKIP_PULL=1 exec "./deploy.sh" "$@"
     fi
@@ -127,36 +125,29 @@ fi
 touch .env
 env_get() { grep -E "^$1=" .env | tail -1 | cut -d= -f2- || true; }
 env_set() { { grep -vE "^$1=" .env || true; echo "$1=$2"; } > .env.tmp && mv .env.tmp .env; }
+env_del() { { grep -vE "^$1=" .env || true; } > .env.tmp && mv .env.tmp .env; }
 
-# The app needs the server's public IPv4 address to build its links.
-current_ip=$(env_get LAN_IP)
-if [ -z "$current_ip" ] || [[ "$current_ip" == *:* ]]; then
-  ip=$(curl -4fsS --max-time 10 ifconfig.me || true)
-  [ -n "$ip" ] || ip=$(ip -4 addr show scope global | awk '/inet /{sub(/\/.*/,"",$2); print $2; exit}')
-  [ -n "$ip" ] || fail "Couldn't find this server's IPv4 address. Put it in .env as LAN_IP=1.2.3.4"
-  env_set LAN_IP "$ip"
-  info "Set LAN_IP=$ip"
-fi
-ip=$(env_get LAN_IP)
+# Settings from earlier versions that no longer exist (test mode, demo data,
+# the server's IP): removed so .env only holds what's used.
+for old in SHOW_CODES_IN_APP SEED_DEMO RATE_LIMITS LAN_IP; do env_del "$old"; done
 
-# A strong database password replaces the old default 'alibe'.
+[ -n "$(env_get DOMAINS)" ] || env_set DOMAINS "alibe.online, www.alibe.online, beta.alibe.online"
+domains=$(env_get DOMAINS)
+first_domain=$(printf '%s' "$domains" | cut -d, -f1 | tr -d ' ')
+env_set PUBLIC_URL "https://$first_domain"
+
 if [ -z "$(env_get POSTGRES_PASSWORD)" ]; then
   env_set POSTGRES_PASSWORD "$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')"
   info "Generated a strong database password (kept in .env)"
 fi
-
 # Signs staff links to payment slips; shared by every API replica.
-if [ -z "$(env_get SLIP_LINK_SECRET)" ]; then
-  env_set SLIP_LINK_SECRET "$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
-fi
+[ -n "$(env_get SLIP_LINK_SECRET)" ] || env_set SLIP_LINK_SECRET "$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+[ -n "$(env_get MAIL_FROM)" ] || env_set MAIL_FROM "Alibe <no-reply@$first_domain>"
+chmod 600 .env
 
-# ---- production sign-in ----
-# Codes are shown in the app (test mode) until they can really be delivered.
-# With a Resend key that works and a verified sending domain, this switches to
-# production by itself: codes go by email, and the app hides phone sign-in
-# until an SMS gateway is added. If anything isn't right it stays in test mode
-# and says why, because switching with no way to deliver codes would lock
-# everyone out.
+# ---- sign-in emails ----
+# Sign-in codes are only ever sent by email. If Resend can't send them, nobody
+# could sign in, so the deploy stops here, before anything has changed.
 resend_check() {
   # Prints: ok | restricted | invalid | unverified | offline
   local key=$1 domain=$2 body
@@ -176,78 +167,41 @@ ok = any(x.get("name") == domain and x.get("status") == "verified" for x in d["d
 print("ok" if ok else "unverified")
 ' "$domain" 2>/dev/null || echo offline
 }
-
 resend_key=$(env_get RESEND_API_KEY)
-if [ -n "$resend_key" ] && [ -z "$(env_get MAIL_FROM)" ]; then
-  first_domain=$(env_get DOMAINS | cut -d, -f1 | tr -d ' ')
-  env_set MAIL_FROM "Alibe <no-reply@${first_domain:-alibe.online}>"
-  info "Set MAIL_FROM=Alibe <no-reply@${first_domain:-alibe.online}>"
-fi
 mail_domain=$(env_get MAIL_FROM | sed -E 's/.*@([^>]+)>?.*/\1/' | tr -d ' ')
+[ -n "$resend_key" ] || fail "RESEND_API_KEY is missing from .env. Sign-in codes are sent by email, so it's needed. Nothing was changed."
+case "$(resend_check "$resend_key" "$mail_domain")" in
+  ok) info "Sign-in emails: Resend, from $mail_domain" ;;
+  restricted) info "Sign-in emails: Resend, from $mail_domain (send-only key, so the domain couldn't be double-checked)" ;;
+  invalid) fail "Resend rejected RESEND_API_KEY. Check the key in .env. Nothing was changed." ;;
+  unverified) fail "$mail_domain isn't verified in Resend (Resend > Domains). Nothing was changed." ;;
+  *) info "Couldn't reach Resend to double-check the key; carrying on." ;;
+esac
 
-if [ -z "$resend_key" ]; then
-  [ -n "$(env_get SHOW_CODES_IN_APP)" ] || env_set SHOW_CODES_IN_APP true
-  [ "$(env_get SHOW_CODES_IN_APP)" = true ] && info "Test mode: sign-in codes show in the app. Add RESEND_API_KEY to .env to go live."
-else
-  case "$(resend_check "$resend_key" "$mail_domain")" in
-    ok | restricted)
-      [ "$(env_get SHOW_CODES_IN_APP)" = false ] || info "Going live: sign-in codes are now sent by email (from $mail_domain)."
-      env_set SHOW_CODES_IN_APP false
-      [ "$(resend_check "$resend_key" "$mail_domain")" = restricted ] && info "(Your Resend key can only send, so $mail_domain couldn't be checked. Make sure it shows Verified in Resend.)"
-      ;;
-    invalid)
-      env_set SHOW_CODES_IN_APP true
-      info "Resend rejected RESEND_API_KEY, so codes still show in the app (test mode). Check the key in .env."
-      ;;
-    unverified)
-      env_set SHOW_CODES_IN_APP true
-      info "$mail_domain isn't verified in Resend yet, so codes still show in the app (test mode)."
-      info "In Resend > Domains, add $mail_domain and put its DNS records in Cloudflare as 'DNS only'. Then deploy again."
-      ;;
-    *)
-      [ -n "$(env_get SHOW_CODES_IN_APP)" ] || env_set SHOW_CODES_IN_APP true
-      info "Couldn't reach Resend to check the key; sign-in mode left as it was."
-      ;;
-  esac
-fi
-chmod 600 .env
-
-# Real users only: no demo sellers, buyers or sample listings. SEED_DEMO=true
-# in .env brings the demo data back (for a test server).
-if [ -z "$(env_get SEED_DEMO)" ]; then
-  env_set SEED_DEMO false
-  info "SEED_DEMO=false: demo data won't be added, and any already there is removed"
-fi
-
-# HTTPS for Alibe's domains (scripts/https.sh picks Caddy or the server's nginx).
-# DOMAINS= (empty) in .env turns it off.
-if ! grep -qE '^DOMAINS=' .env; then
-  env_set DOMAINS "alibe.online, www.alibe.online, beta.alibe.online"
-  info "Set DOMAINS=alibe.online, www.alibe.online, beta.alibe.online"
-fi
-domains=$(env_get DOMAINS)
 https_prepare
+
+# The commit being deployed, shown on the status page.
+APP_VERSION=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+export APP_VERSION
 mkdir -p backups
 
 start_db() { $C up -d postgres && wait_healthy alibe-postgres; }
-# Databases made before this used the password 'alibe'. Setting it on every run
-# keeps the database and .env in step. Uses the local socket, so no password needed.
+# Keeps the database password in step with .env (local socket, no password needed).
 set_db_password() { docker exec alibe-postgres psql -q -U alibe -d alibe -c "ALTER USER alibe PASSWORD '$(env_get POSTGRES_PASSWORD)'"; }
 
 step "Starting the database" start_db
 step "Securing the database password" set_db_password
 # The old version keeps serving while everything builds.
-step "Building images (the web app takes a few minutes)" $C build
+step "Building images" $C build
 
 # Database changes first, while the old API keeps serving. (Migrations should
 # only add things, so the old code still works against the new schema.)
 step "Updating the database" $C run --rm -T migrate
 
-# Clears out the seeded demo accounts and everything tied to them. Only their
-# known phone numbers are touched (prisma/remove-demo.ts); a no-op once gone.
-remove_demo() { $C run --rm -T --no-deps --entrypoint npx migrate tsx prisma/remove-demo.ts | tee "$LOG_DIR/demo.txt"; }
-if [ "$(env_get SEED_DEMO)" != true ]; then
-  step "Removing demo data" remove_demo
+# Once per server: clear out the demo accounts earlier versions seeded.
+if [ "$(env_get DEMO_REMOVED)" != 1 ]; then
+  remove_demo() { $C run --rm -T --no-deps --entrypoint npx migrate tsx prisma/remove-demo.ts | tee "$LOG_DIR/demo.txt"; }
+  step "Removing old demo data" remove_demo && env_set DEMO_REMOVED 1
   grep -v '^$' "$LOG_DIR/demo.txt" 2>/dev/null | grep -v "No demo data left" | while read -r line; do info "$line"; done
 fi
 
@@ -278,37 +232,27 @@ retire_old_api() {
 }
 step "Starting $replicas new API replicas next to the old ones" start_new_api
 step "Retiring the old API replicas" retire_old_api
-# The old dev-server container (pre-production setup) holds port 8081: clear it first.
-swap_web() { docker rm -f alibe-mobile >/dev/null 2>&1 || true; $C up -d --no-deps --remove-orphans web backup; }
-# Caddy keeps running across deploys; a reload picks up Caddyfile changes
-# without dropping connections or certificates.
-start_https() { $C up -d --no-deps caddy && sleep 2 && docker exec alibe-caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile; }
-step "Switching to the new web app" swap_web
+step "Switching to the new web app" $C up -d --no-deps --remove-orphans web backup
 step "Checking the app reaches the API" wait_for http://localhost:8081/api/health
 https_apply
 
 # ---------- summary --------------------------------------------------------
 echo
 $C ps --format '{{.Name}}\t{{.Status}}' | while IFS=$'\t' read -r name status; do
-  printf '  %s●%s %-16s %s%s%s\n' "$GREEN" "$R" "$name" "$GREY" "$status" "$R"
+  printf '  %s●%s %-26s %s%s%s\n' "$GREEN" "$R" "$name" "$GREY" "$status" "$R"
 done
 dumps=$(find backups -name 'db-*.dump' 2>/dev/null | wc -l | tr -d ' ')
 cat <<EOF
 
   ${ORANGE}${B}╭────────────────────────────────────────────${R}
-  ${ORANGE}${B}│${R}  ${GREEN}${B}Alibe is live${R}  ${GREY}($(git rev-parse --short HEAD 2>/dev/null || echo local))${R}
+  ${ORANGE}${B}│${R}  ${GREEN}${B}Alibe is live${R}  ${GREY}($APP_VERSION)${R}
   ${ORANGE}${B}│${R}
-$(if [ -n "$domains" ]; then for d in ${domains//,/ }; do printf '  %s│%s  App      %shttps://%s%s\n' "${ORANGE}${B}" "$R" "$CYAN" "$d" "$R"; done; fi)
-$([ "$(env_get WEB_PUBLISH)" = "127.0.0.1:8081:80" ] || printf '  %s│%s  Direct   %shttp://%s:8081%s\n' "${ORANGE}${B}" "$R" "$CYAN" "$ip" "$R")
-  ${ORANGE}${B}│${R}  Health   ${CYAN}http://$ip:8081/api/health${R}
-  ${ORANGE}${B}│${R}  API      ${GREY}$replicas replicas, load balanced (BACKEND_REPLICAS in .env)${R}
+$(for d in ${domains//,/ }; do printf '  %s│%s  App      %shttps://%s%s\n' "${ORANGE}${B}" "$R" "$CYAN" "$d" "$R"; done)
+  ${ORANGE}${B}│${R}  Status   ${CYAN}https://$first_domain/status${R}
+  ${ORANGE}${B}│${R}  API      ${GREY}$replicas replicas, load balanced${R}
   ${ORANGE}${B}│${R}  Backups  ${GREY}daily into ./backups ($dumps so far)${R}
   ${ORANGE}${B}│${R}
   ${ORANGE}${B}│${R}  ${GREY}Logs and staff commands: ./scripts/admin.sh${R}
   ${ORANGE}${B}╰────────────────────────────────────────────${R}
+
 EOF
-if [ "$(env_get SHOW_CODES_IN_APP)" = true ]; then
-  printf '\n  %s%s⚠  Test mode: sign-in codes show in the app, so anyone can sign in as anyone.%s\n' "$ORANGE" "$B" "$R"
-  printf '  %s   Add RESEND_API_KEY to .env (and verify the domain in Resend) to go live.%s\n' "$GREY" "$R"
-fi
-echo

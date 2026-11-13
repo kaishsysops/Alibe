@@ -7,18 +7,17 @@ x-backend-env: &backend-env
   NODE_ENV: production
   PORT: 4000
   DATABASE_URL: postgresql://alibe:${POSTGRES_PASSWORD}@postgres:5432/alibe
-  WEB_ORIGIN: "http://${LAN_IP:?missing - run ./deploy.sh to set it}:8081"
+  # The site's address, e.g. https://alibe.online (deploy.sh sets it from DOMAINS).
+  WEB_ORIGIN: "${PUBLIC_URL:?missing - run ./deploy.sh to set it}"
+  # The git commit being run, shown on /status.
+  APP_VERSION: ${APP_VERSION:-unknown}
   CORS_ORIGINS: ${CORS_ORIGINS:-}
   # The web container's nginx sits in front and adds X-Forwarded-For.
   TRUST_PROXY: ${TRUST_PROXY:-1}
-  # true = sign-in codes appear in the app (no SMS/email yet). Test only.
-  SHOW_CODES_IN_APP: ${SHOW_CODES_IN_APP:-false}
-  SEED_DEMO: ${SEED_DEMO:-true}
   RESEND_API_KEY: ${RESEND_API_KEY:-}
   MAIL_FROM: "${MAIL_FROM:-Alibe <no-reply@alibe.mv>}"
   # Shared by all replicas so a slip link made by one opens on another.
   SLIP_LINK_SECRET: "${SLIP_LINK_SECRET:?missing - run ./deploy.sh to create it}"
-  RATE_LIMITS: ${RATE_LIMITS:-on}
 
 services:
   postgres:
@@ -97,30 +96,10 @@ services:
     restart: unless-stopped
     # No depends_on: nginx finds the backend by name when needed, so restarting
     # the backend never restarts the web server (no gap for visitors).
-    # WEB_PUBLISH=127.0.0.1:8081:80 in .env once everyone comes in through
-    # Caddy/HTTPS, so the plain-HTTP port isn't public any more.
+    # The server's nginx (HTTPS) is the way in; deploy.sh publishes this on
+    # 127.0.0.1 only once HTTPS works (WEB_PUBLISH in .env).
     ports:
       - "${WEB_PUBLISH:-8081:80}"
-
-  # HTTPS for the domains in DOMAINS (.env). Only runs when deploy.sh turns on
-  # the "https" profile, which it does when DOMAINS is set.
-  caddy:
-    image: caddy:2
-    container_name: alibe-caddy
-    restart: unless-stopped
-    profiles: ["https"]
-    environment:
-      DOMAINS: ${DOMAINS:-}
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"
-    volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - web
 
   backup:
     image: postgres:16-alpine
@@ -139,8 +118,6 @@ services:
       - alibe-private:/private:ro
 
 volumes:
-  caddy_data:
-  caddy_config:
   alibe-pg-data:
   alibe-uploads:
   alibe-private:

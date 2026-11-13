@@ -32,6 +32,33 @@ export async function apiIsUp() {
   }
 }
 
+// For the status page: the server's own report plus how long the round trip
+// took. Never throws: "can't reach" and "updating" are answers too.
+export type SystemStatus = {
+  reachable: boolean;
+  updating?: boolean;
+  roundTripMs?: number;
+  ok?: boolean;
+  version?: string;
+  startedAt?: string;
+  uptimeSeconds?: number;
+  replica?: string;
+  database?: { ok: boolean; latencyMs: number | null };
+  signInEmail?: { ok: boolean };
+};
+export async function fetchSystemStatus(): Promise<SystemStatus> {
+  const started = Date.now();
+  try {
+    const res = await fetch(`${BASE_URL}/status`, { cache: "no-store" });
+    const body = await res.json().catch(() => ({}));
+    const roundTripMs = Date.now() - started;
+    if (body?.code === "MAINTENANCE") return { reachable: true, updating: true, roundTripMs };
+    return { reachable: true, roundTripMs, ...body };
+  } catch {
+    return { reachable: false };
+  }
+}
+
 const OFFLINE_MESSAGE = "Can't reach Alibe right now. Check your connection and try again.";
 
 function fallbackMessage(status: number) {

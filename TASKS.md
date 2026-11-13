@@ -17,7 +17,7 @@ Built 2026-11-02: email sign-in, real one-time codes, new onboarding, report que
 
 ### Housekeeping
 - [x] Production stack (2026-11-12): `docker-compose.prod.yml` + `./deploy.sh`. Compiled backend, Prisma migrations, static web app on nginx, generated DB password, CORS, daily backups, rate limits, photo compression, private payment slips. See README.
-- [x] Domain + HTTPS (alibe.online, www, beta): automatic in `./deploy.sh` (adds an nginx site + certbot on this VPS, or Caddy if 80/443 are free). Run it once on the VPS; grey-cloud in Cloudflare only if the certificate step says so.
+- [x] Domain + HTTPS (alibe.online, www, beta): automatic in `./deploy.sh` (adds an nginx site + certbot on this VPS). After the first setup, deploys don't need sudo.
 - [x] Production sign-in switch is automatic: with RESEND_API_KEY in `.env` and the MAIL_FROM domain verified in Resend, `./deploy.sh` turns test mode off and codes go by email. Sign-in is email only (2026-11-14): phone sign-in, adding a phone number and the phone-before-selling rule are off until an SMS gateway is connected in `sendSmsCode` and `PHONE_SIGN_IN=true` is set. Accounts made with only a phone number during testing can't sign in until then.
 - [ ] Uploaded files live in the `alibe-uploads` Docker volume on one machine. Move to object storage (e.g. Cloudflare R2) before hosting.
 - [ ] Later: Google sign-in ("Continue with Google"), and an SMS gateway in `backend/src/messaging.ts` + `PHONE_SIGN_IN=true` to bring phone sign-in back.
@@ -25,7 +25,7 @@ Built 2026-11-02: email sign-in, real one-time codes, new onboarding, report que
 - [x] Per-IP limits (`backend/src/rateLimit.ts`): 10 code requests / 15 min, uploads, new listings, all writes. Set `TRUST_PROXY=1` once behind nginx.
 - [ ] Copy `./backups` off the VPS regularly (another machine or object storage).
 
-- [x] Demo/test data (2026-11-14): `./deploy.sh` sets SEED_DEMO=false and removes the seeded demo accounts and their listings/orders/reviews (`prisma/remove-demo.ts`, by their known phone numbers), plus sign-ups that never got past the code step. Local dev no longer seeds demo data either (SEED_DEMO=true brings it back).
+- [x] Demo/test data (2026-11-14): demo seeding is gone; the first deploy on a server removes the old demo accounts with their listings/orders/reviews (`prisma/remove-demo.ts`, by their known phone numbers) and sign-ups that never got past the code step. Test mode (codes shown in the app) no longer exists in production: deploys require a working Resend key. Status page at /status.
 
 ## Launch blockers
 - [ ] SMS gateway, email provider, hosting and photo storage (see Housekeeping). Nobody outside the network can use the app without them.
