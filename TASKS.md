@@ -17,7 +17,7 @@ Built 2026-11-02: email sign-in, real one-time codes, new onboarding, report que
 
 ### Housekeeping
 - [x] Production stack (2026-11-12): `docker-compose.prod.yml` + `./deploy.sh`. Compiled backend, Prisma migrations, static web app on nginx, generated DB password, CORS, daily backups, rate limits, photo compression, private payment slips. See README.
-- [ ] Domain + HTTPS (alibe.online, www, beta): Caddy is ready in the repo (opt-in, `DOMAINS=` in `.env`, see README). Blocked on the VPS: ports 80/443 were held by a host nginx serving other sites. Decide how to free them, then set DOMAINS and `./deploy.sh`. Afterwards `WEB_PUBLISH=127.0.0.1:8081:80`.
+- [x] Domain + HTTPS (alibe.online, www, beta): automatic in `./deploy.sh` (adds an nginx site + certbot on this VPS, or Caddy if 80/443 are free). Run it once on the VPS; grey-cloud in Cloudflare only if the certificate step says so.
 - [ ] Turn off `SHOW_CODES_IN_APP` in the VPS `.env` once SMS or email sending works. Until then anyone can sign in as anyone.
 - [ ] Uploaded files live in the `alibe-uploads` Docker volume on one machine. Move to object storage (e.g. Cloudflare R2) before hosting.
 - [ ] SMS gateway (Dhiraagu/Ooredoo aggregator) in `backend/src/messaging.ts`. Codes are real now, but in production phone sign-in refuses to send until this exists.

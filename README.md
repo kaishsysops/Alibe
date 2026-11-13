@@ -150,24 +150,25 @@ Copy them off the server now and then. To restore a database dump:
 ./scripts/restore.sh backups/db-YYYYMMDD-HHMM.dump
 ```
 
-**HTTPS (alibe.online).** Caddy in front of the web container, with
-automatic Let's Encrypt certificates. It's opt-in: add the domains to `.env`
-and deploy.
+**HTTPS (alibe.online, www, beta) is automatic.** `./deploy.sh` asks for
+the sudo password once, then (scripts/https.sh):
 
-```bash
-echo 'DOMAINS=alibe.online, www.alibe.online, beta.alibe.online' >> .env
-./deploy.sh
-```
+- if the server's nginx already holds ports 80/443 (it serves other sites on
+  this VPS), adds Alibe as one more nginx site, tests the config before
+  reloading (and puts the old file back if nginx rejects it), installs certbot
+  if needed, gets a Let's Encrypt certificate that renews itself, switches the
+  site to HTTPS, checks it, and then publishes port 8081 on this machine only;
+- if 80/443 are free, runs Caddy in Docker instead.
 
-`deploy.sh` refuses to start Caddy if something else already holds ports 80
-or 443, and changes nothing in that case. Behind Cloudflare (orange cloud,
-SSL "Full (strict)"), Caddy trusts Cloudflare's addresses and takes the
-visitor's IP from `CF-Connecting-IP`. If the first certificate fails because
-of the proxy, grey-cloud the records until Caddy has its certificates, then
-turn the proxy back on. Once the domains work, set
-`WEB_PUBLISH=127.0.0.1:8081:80` so plain port 8081 isn't public any more.
-The web app calls the API at `/api` on whatever address it was loaded from,
-so the same build works on the IP, alibe.online, www and beta.
+Domains come from `DOMAINS` in `.env` (set to the three Alibe domains on the
+first run; `DOMAINS=` turns HTTPS off). `CERTBOT_EMAIL=` adds an email for
+expiry notices. With Cloudflare's orange cloud on, if Let's Encrypt can't
+verify the domains, the deploy says so and carries on over HTTP: grey-cloud
+the records, run `./deploy.sh` again, then turn the proxy back on. Cloudflare
+SSL/TLS mode: Full (strict).
+
+To undo the nginx part: `sudo rm /etc/nginx/sites-enabled/alibe && sudo systemctl reload nginx`,
+then `DOMAINS=` and `WEB_PUBLISH=8081:80` in `.env` and `./deploy.sh`.
 
 **What's still missing for a public launch:** a domain with HTTPS (host nginx +
 certbot proxying to port 8081, then bind 8081 to 127.0.0.1), an SMS gateway and/or email
