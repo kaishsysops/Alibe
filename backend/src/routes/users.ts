@@ -157,7 +157,7 @@ usersRouter.post("/:id/email/request", async (req, res) => {
   if (owner && owner.id !== req.params.id) return res.status(409).json({ error: emailTaken });
   if (owner?.id === req.params.id) return res.status(400).json({ error: "That's already your current email." });
   if (await isBannedContact(email)) return res.status(403).json({ error: CLOSED_ACCOUNT_ERROR });
-  await sendCode(res, `change:${req.params.id}:email:${email}`, (code) => sendEmailCode(email, code));
+  await sendCode(res, `change:${req.params.id}:email:${email}`, (code) => sendEmailCode(email, code, "change-email"));
 });
 
 const verifyEmailSchema = z.object({ email: z.string().transform(normalizeEmail), code: z.string() });

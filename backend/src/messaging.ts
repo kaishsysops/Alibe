@@ -1,3 +1,5 @@
+import { codeEmail, CodePurpose } from "./emailTemplate.js";
+
 // Delivers one-time codes. Without a provider, development falls back to the
 // backend log and the app shows the code on screen; production refuses to
 // pretend, so a missing provider can never mean a code anyone can read.
@@ -12,17 +14,16 @@ function developmentOnly(kind: string, to: string, code: string): Delivery {
   return { shownInApp: true };
 }
 
-export async function sendEmailCode(to: string, code: string): Promise<Delivery> {
+export async function sendEmailCode(to: string, code: string, purpose: CodePurpose = "signin"): Promise<Delivery> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return developmentOnly("email", to, code);
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      from: process.env.MAIL_FROM ?? "Alibe <no-reply@alibe.mv>",
+      from: process.env.MAIL_FROM ?? "Alibe <no-reply@alibe.online>",
       to,
-      subject: `${code} is your Alibe code`,
-      text: `Your Alibe code is ${code}.\n\nIt works for 10 minutes. Never share it with anyone, not even someone saying they work for Alibe.\n\nDidn't ask for this? You can ignore this email.`,
+      ...codeEmail(code, purpose),
     }),
   });
   if (!res.ok) throw new Error(`Resend responded ${res.status}`);

@@ -47,6 +47,7 @@ function bearer(req: Request) {
 const PUBLIC: Array<[string, RegExp]> = [
   ["GET", /^\/health$/],
   ["GET", /^\/status$/],
+  ["GET", /^\/brand\/[\w.-]+$/],
   ["GET", /^\/categories\/?$/],
   ["GET", /^\/atolls\/?$/],
   ["GET", /^\/listings\/?$/],

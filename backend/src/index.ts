@@ -1,5 +1,6 @@
 import express from "express";
 import os from "node:os";
+import path from "node:path";
 import { prisma } from "./db.js";
 import { deliveryMethods } from "./messaging.js";
 import cors from "cors";
@@ -81,6 +82,8 @@ app.use("/saved-searches", savedSearchesRouter);
 app.use("/notifications", notificationsRouter);
 app.use("/orders", ordersRouter);
 app.use("/slips", slipsRouter);
+// The logo in emails (email apps need a plain PNG at a public address).
+app.use("/brand", express.static(path.resolve("assets"), { maxAge: "30d" }));
 app.use("/uploads", uploadsRouter, express.static(UPLOAD_DIR, { maxAge: "30d", immutable: true }));
 
 app.use((_req, res) => res.status(404).json({ error: "We couldn't find what you were looking for." }));
