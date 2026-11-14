@@ -132,6 +132,8 @@ env_del() { { grep -vE "^$1=" .env || true; } > .env.tmp && mv .env.tmp .env; }
 for old in SHOW_CODES_IN_APP SEED_DEMO RATE_LIMITS LAN_IP; do env_del "$old"; done
 
 [ -n "$(env_get DOMAINS)" ] || env_set DOMAINS "alibe.online, www.alibe.online, beta.alibe.online"
+# "Continue with Google" (public OAuth client id; set GOOGLE_CLIENT_ID= to turn it off).
+grep -qE '^GOOGLE_CLIENT_ID=' .env || env_set GOOGLE_CLIENT_ID "660515526310-csake8e57vh3eqk8glqf60vbls8admlk.apps.googleusercontent.com"
 domains=$(env_get DOMAINS)
 first_domain=$(printf '%s' "$domains" | cut -d, -f1 | tr -d ' ')
 env_set PUBLIC_URL "https://$first_domain"
