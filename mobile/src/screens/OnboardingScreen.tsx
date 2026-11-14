@@ -26,6 +26,7 @@ import { askNotificationPermission, notificationPermissionState } from "../api/p
 import { categoryIcons, AllCategoriesIcon } from "../theme/categoryIcons";
 import { ATOLL_GEO, ISLAND_GEO } from "../data/maldives";
 import { AVATAR_COLORS } from "../theme/theme";
+import GoogleButton from "../components/GoogleButton";
 
 const useNativeDriver = Platform.OS !== "web";
 
@@ -357,12 +358,14 @@ export default function OnboardingScreen() {
       .authMethods()
       .then((m) => {
         setMethods(m);
+        setGoogleClientId(m.googleClientId ?? null);
         if (!m.phone && m.email) setMethod("email");
         if (!m.email && m.phone) setMethod("phone");
       })
       .catch(() => {});
   }, []);
   const bothMethods = methods.email && methods.phone;
+  const [googleClientId, setGoogleClientId] = useState<string | null>(null);
   const cardUp = step !== "welcome";
 
   const moveTo = (next: Step) => {
@@ -508,6 +511,16 @@ export default function OnboardingScreen() {
       const updated = await api.updateProfile(session.user.id, { name: trimmedName });
       setSession({ ...session, user: updated });
       Keyboard.dismiss();
+      await beginSetup(updated);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  });
+
+  // The rest of first-time setup (photo, island, interests, notifications),
+  // after the name step or straight after a new Google sign-in.
+  const beginSetup = async (updated: User) => {
+    {
       const [list, cats, permission] = await Promise.all([
         api.atolls().catch(() => [] as Atoll[]),
         api.categories().catch(() => [] as Category[]),
@@ -522,6 +535,22 @@ export default function OnboardingScreen() {
       const steps: Step[] = ["name", "photo", ...(list.length ? (["island"] as Step[]) : []), ...(cats.length ? (["interests"] as Step[]) : []), ...(permission === "undecided" ? (["notify"] as Step[]) : [])];
       setSetupSteps(steps);
       moveTo(steps[1]);
+    }
+  };
+
+  // Google said who this is. New people go through setup (their name comes
+  // from Google); everyone else is straight in.
+  const [googleSignIn, signingInWithGoogle] = useSingleFlight(async (credential: string) => {
+    try {
+      const result = await api.googleSignIn(credential, accent);
+      if (result.isNew) {
+        setAuthToken(result.token);
+        setSession(result);
+        setName(result.user.name);
+        await beginSetup(result.user);
+        return;
+      }
+      await enter(result);
     } catch (e) {
       toast.error(errorMessage(e));
     }
@@ -752,6 +781,17 @@ export default function OnboardingScreen() {
                 .
               </Text>
             </>
+          )}
+
+          {(step === "enter" || step === "welcome") && googleClientId && Platform.OS === "web" && !pendingLink && (
+            <View style={styles.googleWrap}>
+              <View style={styles.orRow}>
+                <View style={styles.orLine} />
+                <Text style={styles.orText}>or</Text>
+                <View style={styles.orLine} />
+              </View>
+              {signingInWithGoogle ? <ActivityIndicator color={colors.primary} style={{ height: 44 }} /> : <GoogleButton clientId={googleClientId} onCredential={(c) => googleSignIn(c)} />}
+            </View>
           )}
 
           {step === "staff" && (
@@ -1103,6 +1143,10 @@ const useStyles = makeStyles((colors) => ({
   resendText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.textMuted },
   spamHint: { fontSize: fontSize.caption, color: colors.textMuted, textAlign: "center", marginTop: spacing.sm },
 
+  googleWrap: { marginTop: spacing.md, alignItems: "center" },
+  orRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, alignSelf: "stretch", marginBottom: spacing.md },
+  orLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  orText: { fontSize: fontSize.sm, color: colors.textMuted },
   secondaryButton: { backgroundColor: colors.primaryTint, marginTop: spacing.sm },
   linkNotice: { backgroundColor: colors.primaryTint, borderRadius: radius.md, padding: spacing.sm + 4, marginBottom: spacing.sm },
   linkNoticeText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.primary },

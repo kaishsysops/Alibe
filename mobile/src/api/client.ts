@@ -561,7 +561,10 @@ export const api = {
       body: JSON.stringify({ email, code, themeColor, linkToken }),
     }),
   // Which sign-in methods can deliver a code right now (no SMS gateway yet = email only).
-  authMethods: () => request<{ email: boolean; phone: boolean }>("/auth/methods"),
+  authMethods: () => request<{ email: boolean; phone: boolean; googleClientId: string | null }>("/auth/methods"),
+  // "Sign in with Google": Google's ID token from the button.
+  googleSignIn: (credential: string, themeColor?: string) =>
+    request<SignedIn & { isNew: boolean }>("/auth/google", { method: "POST", body: JSON.stringify({ credential, themeColor }) }),
   createAccount: (linkToken: string, themeColor?: string) => request<SignedIn>("/auth/create", { method: "POST", body: JSON.stringify({ linkToken, themeColor }) }),
 
   user: (id: string) => request<PublicUser>(`/users/${id}`),

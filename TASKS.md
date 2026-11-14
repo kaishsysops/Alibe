@@ -20,7 +20,8 @@ Built 2026-11-02: email sign-in, real one-time codes, new onboarding, report que
 - [x] Domain + HTTPS (alibe.online, www, beta): automatic in `./deploy.sh` (adds an nginx site + certbot on this VPS). After the first setup, deploys don't need sudo.
 - [x] Production sign-in switch is automatic: with RESEND_API_KEY in `.env` and the MAIL_FROM domain verified in Resend, `./deploy.sh` turns test mode off and codes go by email. Sign-in is email only (2026-11-14): phone sign-in, adding a phone number and the phone-before-selling rule are off until an SMS gateway is connected in `sendSmsCode` and `PHONE_SIGN_IN=true` is set. Accounts made with only a phone number during testing can't sign in until then.
 - [ ] Uploaded files live in the `alibe-uploads` Docker volume on one machine. Move to object storage (e.g. Cloudflare R2) before hosting.
-- [ ] Later: Google sign-in ("Continue with Google"), and an SMS gateway in `backend/src/messaging.ts` + `PHONE_SIGN_IN=true` to bring phone sign-in back.
+- [x] Google sign-in on the web (2026-11-15): add `GOOGLE_CLIENT_ID` to the VPS `.env` (steps in README) and deploy. Phone apps: needs iOS/Android client ids once the store builds exist.
+- [ ] Later: an SMS gateway in `backend/src/messaging.ts` + `PHONE_SIGN_IN=true` to bring phone sign-in back.
 - [ ] Email sending: set `RESEND_API_KEY` and verify the `MAIL_FROM` domain. Never exercised against the real service yet.
 - [x] Per-IP limits (`backend/src/rateLimit.ts`): 10 code requests / 15 min, uploads, new listings, all writes. Set `TRUST_PROXY=1` once behind nginx.
 - [ ] Copy `./backups` off the VPS regularly (another machine or object storage).

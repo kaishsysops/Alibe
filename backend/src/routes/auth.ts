@@ -10,6 +10,7 @@ import { DECOY_HASH, verifyPassword } from "../password.js";
 import { isStaffCode } from "../staffEntry.js";
 import { promoteIfStaff } from "../staff.js";
 import crypto from "node:crypto";
+import { googleClientIds, verifyGoogleToken } from "../google.js";
 
 export const authRouter = safeRouter();
 
@@ -98,9 +99,43 @@ authRouter.post("/otp/verify", async (req, res) => {
   res.json({ ...(await signedIn(linked ? (await prisma.user.findUnique({ where: { id: user.id } }))! : user)), linked });
 });
 
-// What the sign-in screen should offer.
+// What the sign-in screen should offer. The Google client id is public (it's
+// in every Google sign-in page); the app needs it to show the button.
 authRouter.get("/methods", (_req, res) => {
-  res.json(deliveryMethods());
+  res.json({ ...deliveryMethods(), googleClientId: googleClientIds()[0] ?? null });
+});
+
+// "Sign in with Google": the browser sends Google's ID token. The same person
+// is matched by Google account first, then by email (Google has verified it),
+// so someone who signed up with an emailed code gets the same account.
+const googleSchema = z.object({ credential: z.string().min(20).max(5000), themeColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional() });
+
+authRouter.post("/google", async (req, res) => {
+  if (!googleClientIds().length) return res.status(404).json({ error: "Google sign-in isn't set up." });
+  const parsed = googleSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Google sign-in didn't work. Please try again." });
+  const google = await verifyGoogleToken(parsed.data.credential).catch((e) => {
+    console.error("Google sign-in:", e);
+    return null;
+  });
+  if (!google) return res.status(401).json({ error: "Google sign-in didn't work. Please try again." });
+  if (await isBannedContact(google.email)) return res.status(403).json({ error: CLOSED_ACCOUNT_ERROR });
+
+  let user = (await prisma.user.findUnique({ where: { googleId: google.sub } })) ?? (await prisma.user.findUnique({ where: { email: google.email } }));
+  const isNew = !user;
+  if (user) {
+    if (user.bannedAt) return res.status(403).json({ error: CLOSED_ACCOUNT_ERROR });
+    if (!user.googleId) user = await prisma.user.update({ where: { id: user.id }, data: { googleId: google.sub } });
+  } else {
+    try {
+      user = await prisma.user.create({ data: { email: google.email, googleId: google.sub, name: google.name, themeColor: parsed.data.themeColor } });
+    } catch (e) {
+      // Double tap: the first request already created it.
+      if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")) throw e;
+      user = await prisma.user.findUniqueOrThrow({ where: { googleId: google.sub } });
+    }
+  }
+  res.json({ ...(await signedIn(user)), isNew });
 });
 
 const emailRequestSchema = z.object({ email: z.string().transform(normalizeEmail).pipe(z.string().email()) });

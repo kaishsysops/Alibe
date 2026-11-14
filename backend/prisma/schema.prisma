@@ -63,6 +63,9 @@ model User {
   avatarColor            String?
   // Profile photo: a server path from /uploads. Initials on avatarColor when null.
   avatarUrl              String?
+  // "Sign in with Google": the Google account's id, so it stays linked even if
+  // the email changes.
+  googleId               String?        @unique
   // Category slugs picked in onboarding/profile; their rows lead Home.
   interests              String[]       @default([])
   islandId               String?

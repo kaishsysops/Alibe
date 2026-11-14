@@ -97,6 +97,7 @@ after that, deploys don't need it.
 | `MAIL_FROM` | Sender, defaults to `Alibe <no-reply@alibe.online>` (domain verified in Resend) |
 | `DOMAINS` | The site's domains; the first is the main address |
 | `BACKEND_REPLICAS` | How many API replicas to run (about one per spare CPU core) |
+| `GOOGLE_CLIENT_ID` | Optional: shows "Continue with Google" on the web (Google Cloud OAuth client id) |
 | `CERTBOT_EMAIL` | Optional: certificate expiry notices |
 | `POSTGRES_PASSWORD`, `SLIP_LINK_SECRET` | Generated on the first deploy |
 
@@ -129,7 +130,7 @@ IP. Set `CLOUDFLARE_ONLY=false` in `.env` if the DNS records are ever
 grey-clouded for long. Every container has a memory cap, so Alibe can't take
 the RAM the server's other sites need.
 
-**Sign-in is email only** for now. Phone sign-in comes back with an SMS
+**Sign-in is by emailed code or "Continue with Google"** (web; the phone apps need their own Google client ids later). Phone sign-in comes back with an SMS
 gateway in `backend/src/messaging.ts` and `PHONE_SIGN_IN=true`.
 
 **Database changes use migrations.** After editing `backend/prisma/schema.prisma`:

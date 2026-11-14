@@ -33,6 +33,7 @@ services:
       PORT: 4000
       # Leave empty in development: codes then appear in the app and the backend log.
       RESEND_API_KEY: ${RESEND_API_KEY:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       MAIL_FROM: ${MAIL_FROM:-Alibe <no-reply@alibe.mv>}
       STAFF_EMAILS: ${STAFF_EMAILS:-}
       CF_ACCOUNT_ID: ${CF_ACCOUNT_ID:-}
