@@ -330,6 +330,8 @@ export type Order = {
 export type DispatchDetails = { method: DeliveryOption; boatName?: string; boatDeparture?: string; cargoReference?: string; courierName?: string; pickupNote?: string; cargoReceiptUrl?: string };
 export type DisputeEvidence = { id: string; text: string; photoUrl: string | null; createdAt: string; by: { id: string; name: string }; role: "BUYER" | "SELLER" | "STAFF" };
 export type DisputeInfo = { status: OrderStatus; problem: string | null; outcome: "DELIVERED" | "CANCELLED" | null; note: string | null; resolvedAt: string | null; evidence: DisputeEvidence[] };
+export type StaffMember = { id: string; name: string; email: string | null; username: string | null; avatarColor: string | null; avatarUrl: string | null; fixed: boolean };
+
 export type AdminDispute = {
   id: string;
   amount: number;
@@ -577,6 +579,10 @@ export const api = {
   addDisputeEvidence: (id: string, userId: string, text: string, photoUrl?: string) =>
     request<{ ok: true }>(`/orders/${id}/evidence`, { method: "POST", body: JSON.stringify({ userId, text, photoUrl }) }),
   resolveDispute: (id: string, outcome: "DELIVERED" | "CANCELLED", note: string) => request<void>(`/orders/${id}/resolve`, { method: "POST", body: JSON.stringify({ outcome, note }) }),
+  adminStaff: () => request<{ staff: StaffMember[]; invites: string[] }>("/admin/staff"),
+  addStaff: (email: string) => request<{ added: "now" | "invite"; name?: string }>("/admin/staff", { method: "POST", body: JSON.stringify({ email }) }),
+  removeStaff: (id: string) => request<void>(`/admin/staff/${id}`, { method: "DELETE" }),
+  cancelStaffInvite: (email: string) => request<void>(`/admin/staff/invites/${encodeURIComponent(email)}`, { method: "DELETE" }),
   adminDisputes: () => request<AdminDispute[]>("/admin/disputes"),
   dispatchOrder: (id: string, userId: string, details: DispatchDetails) =>
     request<Order>(`/orders/${id}/dispatch`, { method: "POST", body: JSON.stringify({ userId, ...details }) }),

@@ -8,6 +8,7 @@ import { deliveryMethods, sendEmailCode, sendSmsCode } from "../messaging.js";
 import { CLOSED_ACCOUNT_ERROR, isBannedContact } from "../moderation.js";
 import { DECOY_HASH, verifyPassword } from "../password.js";
 import { isStaffCode } from "../staffEntry.js";
+import { promoteIfStaff } from "../staff.js";
 import crypto from "node:crypto";
 
 export const authRouter = safeRouter();
@@ -57,11 +58,11 @@ async function linkContact(userId: string, token: string | undefined) {
 // New accounts start with this name until the welcome flow asks for a real one.
 const DEFAULT_NAME = "New Seller";
 
-const signedIn = async (user: Prisma.UserGetPayload<object>) => ({
-  token: await createSession(user.id),
-  user,
-  needsName: user.name === DEFAULT_NAME,
-});
+const signedIn = async (signedInUser: Prisma.UserGetPayload<object>) => {
+  // Staff emails (STAFF_EMAILS, or added in Profile > Staff) get staff access here.
+  const user = await promoteIfStaff(signedInUser);
+  return { token: await createSession(user.id), user, needsName: user.name === DEFAULT_NAME };
+};
 
 const requestSchema = z.object({ phone: z.string().transform(normalizePhone) });
 

@@ -18,6 +18,11 @@ x-backend-env: &backend-env
   MAIL_FROM: "${MAIL_FROM:-Alibe <no-reply@alibe.mv>}"
   # Shared by all replicas so a slip link made by one opens on another.
   SLIP_LINK_SECRET: "${SLIP_LINK_SECRET:?missing - run ./deploy.sh to create it}"
+  # Emails that are staff as soon as they sign in (comma-separated).
+  STAFF_EMAILS: ${STAFF_EMAILS:-}
+  # Cloudflare Workers AI (free tier): auto categories and smarter search.
+  CF_ACCOUNT_ID: ${CF_ACCOUNT_ID:-}
+  CF_AI_TOKEN: ${CF_AI_TOKEN:-}
 
 services:
   postgres:

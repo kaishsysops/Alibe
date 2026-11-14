@@ -1,7 +1,8 @@
 import { NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../db.js";
-import { safeRouter } from "../http.js";
+import { safeRouter, normalizeEmail } from "../http.js";
+import { envStaffEmails, saveStaffInvites, staffInvites } from "../staff.js";
 import { notifyUser } from "../push.js";
 import { SHOWCASE_KEY, isShowcaseOn } from "./ibay.js";
 import { MONEY_KEY, moneySettings } from "../money.js";
@@ -333,4 +334,60 @@ adminRouter.get("/disputes", async (_req, res) => {
     orderBy: { updatedAt: "asc" },
   });
   res.json(orders.map((o) => ({ id: o.id, amount: o.amount, problem: o.problem, updatedAt: o.updatedAt, conversationId: o.conversationId, deliveryMethod: o.deliveryMethod, cargoReceiptUrl: o.cargoReceiptUrl, listing: o.listing, buyer: o.buyer, seller: o.seller, evidenceCount: o._count.evidence })));
+});
+
+// ---- staff -----------------------------------------------------------------
+// Staff are ordinary accounts with isAdmin. Adding an email that has an account
+// makes it staff now; otherwise it waits as an invite until that email signs in.
+
+adminRouter.get("/staff", async (_req, res) => {
+  const fromEnv = envStaffEmails();
+  const [staff, invites] = await Promise.all([
+    prisma.user.findMany({
+      where: { isAdmin: true, isSystem: false },
+      select: { id: true, name: true, email: true, username: true, avatarColor: true, avatarUrl: true },
+      orderBy: { name: "asc" },
+    }),
+    staffInvites(),
+  ]);
+  res.json({
+    // fixed: listed in the server's STAFF_EMAILS, so removing them here wouldn't stick.
+    staff: staff.map((s) => ({ ...s, fixed: !!s.email && fromEnv.includes(s.email.toLowerCase()) })),
+    invites,
+  });
+});
+
+const staffEmailSchema = z.object({ email: z.string().transform(normalizeEmail).pipe(z.string().email()) });
+
+adminRouter.post("/staff", async (req, res) => {
+  const parsed = staffEmailSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Please enter a valid email address." });
+  const { email } = parsed.data;
+  const user = await prisma.user.findUnique({ where: { email } });
+  if (user?.bannedAt) return res.status(400).json({ error: "That account is banned. Unban it first." });
+  if (user) {
+    await prisma.user.update({ where: { id: user.id }, data: { isAdmin: true } });
+    return res.json({ added: "now", name: user.name });
+  }
+  await saveStaffInvites([...(await staffInvites()), email]);
+  res.json({ added: "invite" });
+});
+
+adminRouter.delete("/staff/invites/:email", async (req, res) => {
+  const email = normalizeEmail(String(req.params.email));
+  await saveStaffInvites((await staffInvites()).filter((e) => e !== email));
+  res.json({ ok: true });
+});
+
+adminRouter.delete("/staff/:id", async (req, res) => {
+  if (req.params.id === req.userId) return res.status(400).json({ error: "You can't remove yourself. Ask another staff member." });
+  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  if (!user?.isAdmin) return res.status(404).json({ error: "That person isn't staff." });
+  if (user.email && envStaffEmails().includes(user.email.toLowerCase())) {
+    return res.status(400).json({ error: "This email is set as staff on the server (STAFF_EMAILS). Remove it there." });
+  }
+  const others = await prisma.user.count({ where: { isAdmin: true, isSystem: false, id: { not: user.id } } });
+  if (others === 0) return res.status(400).json({ error: "Alibe needs at least one staff member." });
+  await prisma.user.update({ where: { id: user.id }, data: { isAdmin: false } });
+  res.json({ ok: true });
 });

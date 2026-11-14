@@ -143,6 +143,16 @@ fi
 # Signs staff links to payment slips; shared by every API replica.
 [ -n "$(env_get SLIP_LINK_SECRET)" ] || env_set SLIP_LINK_SECRET "$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
 [ -n "$(env_get MAIL_FROM)" ] || env_set MAIL_FROM "Alibe <no-reply@$first_domain>"
+# The first staff account: that email gets staff access when it signs in. More
+# staff are added in the app (Profile > Staff).
+if [ -z "$(env_get STAFF_EMAILS)" ] && [ -t 0 ]; then
+  printf '  %s👤%s Email for the first staff account (Enter to skip): ' "$ORANGE" "$R"
+  read -r staff_email || staff_email=""
+  if [ -n "$staff_email" ]; then
+    env_set STAFF_EMAILS "$staff_email"
+    info "Staff: $staff_email (sign in with it to get staff access)"
+  fi
+fi
 chmod 600 .env
 
 # ---- sign-in emails ----
