@@ -37,7 +37,6 @@ Built 2026-11-02: email sign-in, real one-time codes, new onboarding, report que
 - [ ] Expo account + `npx eas-cli init` (also enables real push), Apple Developer and Google Play accounts. Steps in README > Releasing the phone apps.
 - [ ] Decide the app id (`com.alibe.app` now; permanent after first upload).
 - [ ] Review the Privacy policy and Terms text (drafts in `mobile/src/screens/LegalScreen.tsx`); get legal advice before launch.
-- [ ] Real support email: Profile > Help says help@alibe.mv, but the domain is alibe.online.
 - [ ] Store screenshots and description.
 
 ## Launch blockers
