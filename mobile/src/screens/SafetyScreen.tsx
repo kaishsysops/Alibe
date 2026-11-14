@@ -91,7 +91,7 @@ const useStyles = makeStyles((colors) => ({
   heroText: { fontSize: fontSize.md, color: colors.textMuted, marginTop: spacing.sm, textAlign: "center", lineHeight: fontSize.md * 1.45 },
   rules: { padding: spacing.md + 4, borderRadius: radius.lg, backgroundColor: colors.card, ...cardShadow, gap: spacing.sm + 4 },
   rulesTitle: { fontSize: fontSize.lg, fontWeight: fontWeight.bold, color: colors.text },
-  ruleRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 4 },
+  ruleRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm + 4 },
   ruleCheck: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.success, alignItems: "center", justifyContent: "center" },
   ruleText: { flex: 1, fontSize: fontSize.md, color: colors.text, fontWeight: fontWeight.semibold },
   item: { flexDirection: "row", gap: spacing.md, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.card, ...cardShadow },

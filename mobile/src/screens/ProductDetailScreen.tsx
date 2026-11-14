@@ -371,22 +371,26 @@ export default function ProductDetailScreen() {
       {(specs.length > 0 || categoryPath.length > 0) && (
         <>
           <Text style={styles.sectionTitle}>Details</Text>
-          <View style={styles.specs}>
-            {categoryPath.length > 0 && (
-              <Tap style={styles.specRow} onPress={() => navigation.navigate("Tabs", { screen: "SearchTab", params: { categorySlug: listing.category.slug } })} scaleTo={0.99} accessibilityLabel={`More in ${listing.category.name}`}>
-                <Text style={styles.specLabel}>Category</Text>
-                <Text style={[styles.specValue, { color: colors.primary }]} numberOfLines={1}>
-                  {categoryPath.map((c) => c.name).join(" › ")}
-                </Text>
-              </Tap>
-            )}
-            {specs.map((sp) => (
-              <View key={sp.label} style={styles.specRow}>
-                <Text style={styles.specLabel}>{sp.label}</Text>
-                <Text style={styles.specValue}>{sp.value}</Text>
-              </View>
-            ))}
-          </View>
+          {categoryPath.length > 0 && (
+            <Tap style={styles.pathChip} onPress={() => navigation.navigate("Tabs", { screen: "SearchTab", params: { categorySlug: listing.category.slug } })} scaleTo={0.97} accessibilityLabel={`See more in ${listing.category.name}`}>
+              <Text style={styles.pathText} numberOfLines={1}>
+                {categoryPath.map((c) => c.name).join("  ›  ")}
+              </Text>
+              <ChevronRight size={16} color={colors.primary} />
+            </Tap>
+          )}
+          {specs.length > 0 && (
+            <View style={styles.specGrid}>
+              {specs.map((sp) => (
+                <View key={sp.label} style={styles.specTile}>
+                  <Text style={styles.specLabel}>{sp.label}</Text>
+                  <Text style={styles.specValue} numberOfLines={1}>
+                    {sp.value}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
         </>
       )}
 
@@ -522,10 +526,12 @@ const useStyles = makeStyles((colors) => ({
   thumbActive: { opacity: 1, borderWidth: 2, borderColor: colors.primary },
   // Stays in view while the photos scroll, so Chat and Offer are always there.
   desktopInfo: { width: 420, ...(Platform.OS === "web" ? ({ position: "sticky", top: spacing.md, alignSelf: "flex-start" } as object) : {}) },
-  specs: { backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
-  specRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2, borderBottomWidth: 1, borderBottomColor: colors.border },
-  specLabel: { width: 110, fontSize: fontSize.sm, color: colors.textMuted },
-  specValue: { flex: 1, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text, textAlign: "right" },
+  pathChip: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", maxWidth: "100%", gap: 4, minHeight: 44, paddingHorizontal: spacing.md, borderRadius: radius.pill, backgroundColor: colors.primaryTint, marginBottom: spacing.sm },
+  pathText: { flexShrink: 1, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.primary },
+  specGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  specTile: { flexBasis: "48%", flexGrow: 1, backgroundColor: colors.card, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 4, ...cardShadow },
+  specLabel: { fontSize: fontSize.caption, color: colors.textMuted, fontWeight: fontWeight.semibold },
+  specValue: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.text, marginTop: 2 },
   desktopInfoCard: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.lg, ...cardShadow },
   desktopActions: { flexDirection: "row", gap: spacing.sm, alignItems: "center", marginTop: spacing.md },
   dotsRow: { position: "absolute", bottom: spacing.md, left: 0, right: 0, flexDirection: "row", justifyContent: "center", gap: 5 },

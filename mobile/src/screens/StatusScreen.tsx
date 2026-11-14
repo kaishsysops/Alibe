@@ -129,7 +129,8 @@ export default function StatusScreen() {
               const color = !l ? colors.border : l === "ok" ? colors.success : l === "down" ? colors.danger : colors.gold;
               // Taller bar = slower answer (capped), so slowdowns show too.
               const ms = c?.status.roundTripMs ?? 0;
-              const h = !c ? 10 : Math.max(10, Math.min(34, 10 + ms / 25));
+              // Normal answers and empty slots share one height; only slow ones grow.
+              const h = !c ? 24 : Math.max(24, Math.min(36, 24 + (ms - 300) / 60));
               return <View key={i} style={[styles.bar, { backgroundColor: color, height: h }]} />;
             })}
           </View>

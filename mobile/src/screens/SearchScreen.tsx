@@ -42,6 +42,8 @@ const POSTED: Array<{ days: string; label: string }> = [
   { days: "30", label: "Last 30 days" },
 ];
 const FILTER_PANEL_WIDTH = 280;
+// Options shown before "Show all" in a category filter.
+const OPTIONS_PREVIEW = 8;
 // Starting points for people who don't know what to type.
 const POPULAR = ["iPhone", "Scooter", "Sofa", "Laptop", "Bicycle", "Fridge", "PlayStation", "Fishing rod"];
 const DEBOUNCE_MS = 350;
@@ -407,6 +409,7 @@ export default function SearchScreen() {
   );
 
   // The category's own filters (brand, year, bedrooms...).
+  const [expandedAttrs, setExpandedAttrs] = useState<string[]>([]);
   const setAttrOption = (def: AttributeDef, option: string) =>
     setAttrs((prev) => {
       const current = Array.isArray(prev[def.key]) ? (prev[def.key] as string[]) : [];
@@ -434,9 +437,15 @@ export default function SearchScreen() {
             </Text>
             {def.type === "select" ? (
               <View style={styles.wrapRow}>
-                {(def.options ?? []).map((o) => (
-                  <Chip key={o} label={o} active={Array.isArray(value) && value.includes(o)} onPress={() => setAttrOption(def, o)} />
-                ))}
+                {/* Long lists start short; chosen options always stay visible. */}
+                {(def.options ?? [])
+                  .filter((o, i) => expandedAttrs.includes(def.key) || i < OPTIONS_PREVIEW || (Array.isArray(value) && value.includes(o)))
+                  .map((o) => (
+                    <Chip key={o} label={o} active={Array.isArray(value) && value.includes(o)} onPress={() => setAttrOption(def, o)} />
+                  ))}
+                {(def.options?.length ?? 0) > OPTIONS_PREVIEW && !expandedAttrs.includes(def.key) && (
+                  <Chip label={`Show all ${def.options!.length}`} active={false} onPress={() => setExpandedAttrs((k) => [...k, def.key])} />
+                )}
               </View>
             ) : (
               <View style={styles.priceRow}>
@@ -464,12 +473,12 @@ export default function SearchScreen() {
             ))}
           </View>
         )}
-        <View style={styles.wrapRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false} style={styles.hRow} contentContainerStyle={{ gap: spacing.sm }} keyboardShouldPersistTaps="handled">
           {tree.childrenOf(categorySlug).map((c) => {
             const { Icon, color } = categoryLook(c, tree);
             return <Chip key={c.id} label={c.name} active={false} icon={<Icon size={14} color={color} strokeWidth={2.2} />} onPress={() => setCategorySlug(c.slug)} />;
           })}
-        </View>
+        </ScrollView>
       </View>
       {attributeFilters && (
         <View style={styles.detailsBox}>
@@ -741,7 +750,7 @@ export default function SearchScreen() {
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={styles.understandTitle}>Narrow this down?</Text>
-        <Text style={styles.understandText} numberOfLines={2}>
+        <View style={styles.understandChips}>
           {[
             understanding.categoryPath?.[understanding.categoryPath.length - 1],
             understanding.filters.condition && conditionLabel(understanding.filters.condition),
@@ -752,9 +761,15 @@ export default function SearchScreen() {
               : understanding.filters.minPrice !== undefined && `from MVR ${understanding.filters.minPrice.toLocaleString()}`,
             understanding.atollName,
           ]
-            .filter(Boolean)
-            .join(" · ")}
-        </Text>
+            .filter((x): x is string => !!x)
+            .map((label) => (
+              <View key={label} style={styles.understandChip}>
+                <Text style={styles.understandChipText} numberOfLines={1}>
+                  {label}
+                </Text>
+              </View>
+            ))}
+        </View>
       </View>
       <Tap style={styles.understandApply} onPress={applyUnderstanding} scaleTo={0.94} accessibilityLabel="Apply these filters">
         <Text style={styles.understandApplyText}>Apply</Text>
@@ -922,8 +937,8 @@ const useStyles = makeStyles((colors) => ({
   desktopTop: { flexDirection: "row", alignItems: "center", gap: spacing.lg, marginBottom: spacing.lg },
   hRow: { flexGrow: 0, flexShrink: 0 },
   crumbs: { flexDirection: "row", alignItems: "center", gap: 6 },
-  crumb: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.textMuted, paddingVertical: 6 },
-  crumbCurrent: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: spacing.md, height: 34 },
+  crumb: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.textMuted, paddingVertical: 12, paddingHorizontal: 2 },
+  crumbCurrent: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: spacing.md, height: 44 },
   crumbCurrentText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.inverseText },
   subCard: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.card, borderRadius: radius.md, paddingVertical: spacing.sm, paddingLeft: spacing.sm, paddingRight: spacing.md, ...cardShadow },
   subIcon: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center" },
@@ -933,7 +948,9 @@ const useStyles = makeStyles((colors) => ({
   understandCard: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 2, backgroundColor: colors.primaryTint, borderRadius: radius.lg, padding: spacing.sm + 4, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.primaryLight },
   understandIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
   understandTitle: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.text },
-  understandText: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 1 },
+  understandChips: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4 },
+  understandChip: { backgroundColor: colors.card, borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 3 },
+  understandChipText: { fontSize: fontSize.caption, fontWeight: fontWeight.semibold, color: colors.text },
   understandApply: { backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: spacing.md + 2, height: 38, alignItems: "center", justifyContent: "center" },
   understandApplyText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.sm },
   detailsBox: { gap: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.primaryTint },

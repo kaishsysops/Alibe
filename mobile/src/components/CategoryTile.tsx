@@ -52,13 +52,11 @@ export default function CategoryTile({
   const hasPhoto = !!image && !failed;
   return (
     <Tap style={[styles.tile, { width: size, height: height ?? size, backgroundColor: color }]} onPress={onPress} scaleTo={0.93} accessibilityLabel={name}>
-      {hasPhoto ? (
-        <Image source={{ uri: mediaUrl(image) }} style={styles.photo} onError={() => setFailed(true)} />
-      ) : (
-        <View style={styles.iconWrap}>
-          <Icon size={Math.round(Math.min(size, height ?? size) * 0.3)} color="#fff" strokeWidth={2} />
-        </View>
-      )}
+      {/* The icon sits under the photo, so a slow or broken photo never leaves a blank tile. */}
+      <View style={styles.iconWrap}>
+        <Icon size={Math.round(Math.min(size, height ?? size) * 0.3)} color="#fff" strokeWidth={2} />
+      </View>
+      {hasPhoto && <Image source={{ uri: mediaUrl(image) }} style={styles.photo} resizeMode="cover" onError={() => setFailed(true)} />}
       {/* Bottom fade so white text is readable on any photo. */}
       <View style={styles.fade} pointerEvents="none">
         <Fade strength={hasPhoto ? 0.7 : 0.3} />
