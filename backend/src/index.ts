@@ -21,6 +21,7 @@ import { uploadsRouter, UPLOAD_DIR } from "./routes/uploads.js";
 import { ordersRouter } from "./routes/orders.js";
 import { startReminders } from "./reminders.js";
 import { authenticate } from "./auth.js";
+import { shareRouter } from "./routes/share.js";
 import { ipCeiling, accountLimits } from "./rateLimit.js";
 import { slipsRouter, moveSlipsOutOfPublicUploads } from "./routes/slips.js";
 
@@ -84,6 +85,7 @@ app.use("/saved-searches", savedSearchesRouter);
 app.use("/notifications", notificationsRouter);
 app.use("/orders", ordersRouter);
 app.use("/slips", slipsRouter);
+app.use("/share", shareRouter);
 // The logo in emails (email apps need a plain PNG at a public address).
 app.use("/brand", express.static(path.resolve("assets"), { maxAge: "30d" }));
 app.use("/uploads", uploadsRouter, express.static(UPLOAD_DIR, { maxAge: "30d", immutable: true }));

@@ -48,6 +48,8 @@ const PUBLIC: Array<[string, RegExp]> = [
   ["GET", /^\/health$/],
   ["GET", /^\/status$/],
   ["GET", /^\/brand\/[\w.-]+$/],
+  // Link previews and the sitemap (bots, never signed in).
+  ["GET", /^\/share\/(listing\/[^/]+|sitemap\.xml)$/],
   ["GET", /^\/categories\/?$/],
   ["GET", /^\/atolls\/?$/],
   ["GET", /^\/listings\/?$/],

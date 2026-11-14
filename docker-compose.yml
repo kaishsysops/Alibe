@@ -45,6 +45,7 @@ services:
     volumes:
       - ./backend/src:/app/src
       - ./backend/prisma:/app/prisma
+      - ./backend/assets:/app/assets
       - alibe-uploads:/app/uploads
       - alibe-private:/app/private
 

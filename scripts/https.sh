@@ -44,6 +44,17 @@ https_prepare() {
 
 # ---- nginx route ---------------------------------------------------------------
 
+# Cloudflare's published edge addresses (fetched fresh, with a fallback).
+cloudflare_ranges() {
+  local fresh
+  fresh=$( (curl -fsS --max-time 8 https://www.cloudflare.com/ips-v4; echo; curl -fsS --max-time 8 https://www.cloudflare.com/ips-v6) 2>/dev/null | grep -E '^[0-9a-f:.]+/[0-9]+$' || true)
+  if [ "$(printf '%s\n' "$fresh" | grep -c .)" -ge 10 ]; then
+    printf '%s\n' "$fresh"
+  else
+    printf '%s\n' 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+  fi
+}
+
 nginx_site_path() {
   if [ -d /etc/nginx/sites-available ]; then echo "/etc/nginx/sites-available/$NGINX_SITE_NAME"; else echo "/etc/nginx/conf.d/$NGINX_SITE_NAME.conf"; fi
 }
@@ -91,6 +102,17 @@ server {
     ssl_certificate /etc/letsencrypt/live/$CERT_NAME/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/$CERT_NAME/privkey.pem;
 NGINX
+    # Only Cloudflare (and this server) may use the HTTPS site, so nobody can
+    # skip Cloudflare's protection by going to the server's IP, or fake their
+    # address. Port 80 stays open: it only redirects and renews certificates.
+    # CLOUDFLARE_ONLY=false in .env turns this off (e.g. while records are
+    # grey-clouded).
+    if [ "$(env_get CLOUDFLARE_ONLY)" != false ]; then
+      echo "    allow 127.0.0.1;"
+      echo "    allow ::1;"
+      for range in $(cloudflare_ranges); do echo "    allow $range;"; done
+      echo "    deny all;"
+    fi
     [ -f /etc/letsencrypt/options-ssl-nginx.conf ] && echo "    include /etc/letsencrypt/options-ssl-nginx.conf;"
   fi
   printf '%s\n}\n' "$proxy"

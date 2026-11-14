@@ -110,6 +110,25 @@ old ones and the old ones are retired once the new ones are healthy. If every
 replica is down at once, the app shows an "Alibe is updating" screen that
 reloads itself.
 
+**Checks on every push.** GitHub Actions (`.github/workflows/checks.yml`)
+type-checks the backend and app, builds the web app, applies all migrations
+to an empty database and checks they match `schema.prisma`, and validates the
+deploy scripts, compose file and nginx config. Deploy only when it's green.
+
+**Link previews and search engines.** Bots opening `/listing/<id>` (WhatsApp,
+Viber, Facebook, X, Google...) get a small page with the title, price, island
+and photo (`backend/src/routes/share.ts`); people get the app. `/sitemap.xml`
+lists every active listing, `/robots.txt` points to it.
+
+**Installable.** `/manifest.json` and the icons let people "Add to Home
+Screen" and open Alibe full screen.
+
+**Protection.** Alibe's HTTPS site in the server's nginx only accepts
+Cloudflare (and the server itself), so nobody can skip Cloudflare by using the
+IP. Set `CLOUDFLARE_ONLY=false` in `.env` if the DNS records are ever
+grey-clouded for long. Every container has a memory cap, so Alibe can't take
+the RAM the server's other sites need.
+
 **Sign-in is email only** for now. Phone sign-in comes back with an SMS
 gateway in `backend/src/messaging.ts` and `PHONE_SIGN_IN=true`.
 

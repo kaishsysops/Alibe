@@ -1,0 +1,81 @@
+# Runs on every push and pull request. A red result means "don't deploy this":
+# it catches type errors, broken builds, migrations that don't match the
+# schema, and broken deploy scripts before they reach alibe.online.
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (types + migrations)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: alibe
+          POSTGRES_PASSWORD: alibe
+          POSTGRES_DB: alibe
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U alibe" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://alibe:alibe@localhost:5432/alibe
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-audit --no-fund
+      - run: npx prisma generate
+      - name: Type check
+        run: npx tsc --noEmit -p tsconfig.json
+      - name: Migrations apply to an empty database
+        run: npx prisma migrate deploy
+      - name: Migrations match schema.prisma
+        run: npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+      - name: Seed runs
+        run: npx tsx prisma/seed.ts
+
+  app:
+    name: App (types + web build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Web build (same as the server's)
+        env:
+          EXPO_PUBLIC_API_BASE_URL: /api
+        run: npx expo export --platform web --output-dir dist
+
+  deploy-files:
+    name: Deploy scripts and config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell scripts parse
+        run: for f in deploy.sh scripts/*.sh; do bash -n "$f" && echo "ok $f"; done
+      - name: Compose file is valid
+        run: PUBLIC_URL=https://example.com POSTGRES_PASSWORD=x SLIP_LINK_SECRET=y docker compose -f docker-compose.prod.yml config -q
+      - name: nginx config is valid
+        run: docker run --rm -v "$PWD/mobile/nginx.conf:/etc/nginx/conf.d/default.conf:ro" nginx:1.28-alpine nginx -t

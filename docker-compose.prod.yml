@@ -26,6 +26,8 @@ x-backend-env: &backend-env
 
 services:
   postgres:
+    # Memory caps: the VPS also runs other sites, so no part of Alibe can take all its RAM.
+    mem_limit: 1g
     image: postgres:16-alpine
     container_name: alibe-postgres
     restart: unless-stopped
@@ -46,6 +48,8 @@ services:
 
   # Runs once per deploy: database migrations and seed data, then exits.
   migrate:
+    # Runs briefly each deploy.
+    mem_limit: 512m
     build:
       context: ./backend
       target: prod
@@ -64,6 +68,8 @@ services:
   # (round robin, failover). BACKEND_REPLICAS in .env sets how many; about one
   # per CPU core the VPS can spare. Admin commands: ./scripts/admin.sh ...
   backend:
+    # Per replica (normal use is ~80-130 MB).
+    mem_limit: 512m
     build:
       context: ./backend
       target: prod
@@ -90,6 +96,8 @@ services:
       retries: 3
 
   web:
+    # nginx serving files and proxying: needs very little.
+    mem_limit: 192m
     build:
       context: ./mobile
       dockerfile: Dockerfile.web
@@ -107,6 +115,8 @@ services:
       - "${WEB_PUBLISH:-8081:80}"
 
   backup:
+    # pg_dump and tar once a day.
+    mem_limit: 256m
     image: postgres:16-alpine
     container_name: alibe-backup
     restart: unless-stopped
