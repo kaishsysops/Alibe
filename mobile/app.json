@@ -15,14 +15,26 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.alibe.app"
+      "bundleIdentifier": "com.alibe.app",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Alibe uses your photos so you can add pictures to your listings and profile.",
+        "NSCameraUsageDescription": "Alibe uses the camera so you can take photos of what you're selling.",
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "icon": "./assets/icon-ios.png"
     },
     "android": {
       "package": "com.alibe.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FF6A00"
-      }
+      },
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -37,8 +49,19 @@
       ],
       "expo-status-bar",
       "expo-video",
-      "expo-image"
+      "expo-image",
+      [
+        "expo-notifications",
+        {
+          "color": "#FF6A00"
+        }
+      ]
     ],
-    "icon": "./assets/icon.png"
+    "icon": "./assets/icon.png",
+    "scheme": "alibe",
+    "description": "Buy and sell anything across the Maldives, safely.",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }

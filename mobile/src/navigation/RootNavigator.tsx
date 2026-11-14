@@ -32,6 +32,7 @@ import AdminDisputesScreen from "../screens/AdminDisputesScreen";
 import AdminStaffScreen from "../screens/AdminStaffScreen";
 import AdminCategoriesScreen from "../screens/AdminCategoriesScreen";
 import CategoriesScreen from "../screens/CategoriesScreen";
+import LegalScreen from "../screens/LegalScreen";
 import StatusScreen from "../screens/StatusScreen";
 import IbayBrowseScreen from "../screens/IbayBrowseScreen";
 import IbayItemScreen from "../screens/IbayItemScreen";
@@ -53,7 +54,8 @@ const Stack = createNativeStackNavigator();
 
 // URL paths for web (and shared links): /listing/abc opens that listing.
 const linking = {
-  prefixes: [],
+  // alibe://listing/123 from other apps, and alibe.online links on the web.
+  prefixes: ["alibe://", "https://alibe.online", "https://www.alibe.online"],
   config: {
     screens: {
       Tabs: { screens: { HomeTab: "", SearchTab: "search", SellTab: "sell", ChatsTab: "chats", ProfileTab: "profile" } },
@@ -62,6 +64,8 @@ const linking = {
       ChatThread: "chat/:id",
       OrderDetail: "order/:id",
       Safety: "safety",
+      Privacy: "privacy",
+      Terms: "terms",
       MyListings: "my-listings",
       Favorites: "saved",
       Notifications: "notifications",
@@ -186,8 +190,10 @@ export default function RootNavigator() {
             <Stack.Screen name="Safety" component={SafetyScreen} />
           </>
         )}
-        {/* alibe.online/status works signed in or out. */}
+        {/* alibe.online/status, /privacy and /terms work signed in or out (the app stores link to them). */}
         <Stack.Screen name="Status" component={StatusScreen} />
+        <Stack.Screen name="Privacy" component={LegalScreen} />
+        <Stack.Screen name="Terms" component={LegalScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -1,3 +1,4 @@
+import { useNavigation } from "@react-navigation/native";
 import React, { useContext, useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, ActivityIndicator, KeyboardAvoidingView, Keyboard, Platform, Animated, Easing, StyleSheet, useWindowDimensions, ScrollView } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -298,6 +299,7 @@ function SetupProgress({ index, total }: { index: number; total: number }) {
 }
 
 export default function OnboardingScreen() {
+  const navigation = useNavigation<any>();
   const styles = useStyles();
   const { colors, accent } = useTheme();
   const { signIn } = useAuth();
@@ -738,6 +740,17 @@ export default function OnboardingScreen() {
               <Tap style={[styles.button, !entryValid && styles.buttonDisabled]} onPress={() => requestCode()} disabled={requesting} scaleTo={0.97}>
                 {requesting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Continue</Text>}
               </Tap>
+              <Text style={styles.legal}>
+                By continuing you agree to the{" "}
+                <Text style={styles.legalLink} onPress={() => navigation.navigate("Terms")} accessibilityRole="link">
+                  Terms
+                </Text>{" "}
+                and{" "}
+                <Text style={styles.legalLink} onPress={() => navigation.navigate("Privacy")} accessibilityRole="link">
+                  Privacy policy
+                </Text>
+                .
+              </Text>
             </>
           )}
 
@@ -1040,6 +1053,8 @@ export default function OnboardingScreen() {
 }
 
 const useStyles = makeStyles((colors) => ({
+  legal: { fontSize: fontSize.caption, color: colors.textMuted, textAlign: "center", marginTop: spacing.sm + 2, lineHeight: 18 },
+  legalLink: { color: colors.primary, fontWeight: fontWeight.semibold },
   container: { flex: 1, overflow: "hidden" },
   brand: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm + 2, paddingBottom: spacing.sm },
   logo: { width: 44, height: 44, borderRadius: 14, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 4 },

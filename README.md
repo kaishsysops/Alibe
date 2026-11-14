@@ -139,6 +139,41 @@ STAFF_CODE=12345678  ./scripts/admin.sh set-staff-code
 
 Staff sign-in: type the 8-digit staff code into the email field.
 
+## Releasing the phone apps
+
+The app is built in the cloud with Expo's EAS (free tier is enough). Builds talk
+to the live server at https://alibe.online/api (set in `mobile/eas.json`).
+
+**One-time setup (needs your accounts):**
+1. Expo account (free): `cd mobile && npx eas-cli login`, then `npx eas-cli init`.
+   This adds the project id to `app.json`, which also turns on real push
+   notifications (lock-screen alerts).
+2. Apple Developer Program (USD 99/year) for the App Store, and a Google Play
+   developer account (USD 25 once) for Android.
+3. Confirm the app id before the first upload; it can never change afterwards.
+   It is `com.alibe.app` now (iOS bundle id and Android package).
+
+**Try it on phones first (no store needed):**
+- Android: `npx eas-cli build --platform android --profile preview` gives an
+  APK link you can install on any Android phone.
+- iPhone: `npx eas-cli build --platform ios --profile preview` (register test
+  iPhones with `npx eas-cli device:create` first), or use TestFlight below.
+
+**Store builds:**
+- `npx eas-cli build --platform all --profile production`
+- `npx eas-cli submit --platform ios` (goes to TestFlight, then App Store review)
+- `npx eas-cli submit --platform android` (first upload: do it by hand in the
+  Play Console, then this command works for later ones)
+- Version numbers go up automatically on every production build.
+
+**Store listing needs:** app name and short description, screenshots
+(iPhone 6.7" and 6.5", Android phone), privacy policy URL
+https://alibe.online/privacy, terms https://alibe.online/terms, a support email
+that really exists, the data-safety / privacy questionnaire (answers follow the
+privacy policy in `mobile/src/screens/LegalScreen.tsx`), and a demo account for
+the reviewers (sign-in is by email code, so give them a test inbox or ask them
+to use their own email).
+
 ## Useful commands
 
 ```bash

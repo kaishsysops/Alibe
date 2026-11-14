@@ -32,6 +32,14 @@ Built 2026-11-02: email sign-in, real one-time codes, new onboarding, report que
 - [ ] AI (optional, free tier): add `CF_ACCOUNT_ID` and `CF_AI_TOKEN` (Cloudflare dashboard > My Profile > API Tokens > "Workers AI" template) to the VPS `.env`, then `./deploy.sh`. Without them, auto-categorise and search understanding use keyword rules.
 - [ ] Ferry: link "Check ferry times" to https://followme.mv on ferry listings/orders (user shared the site; confirm what they want).
 
+## Phone app release (prepared 2026-11-14)
+- Done: `mobile/eas.json` (development / preview / production builds pointing at alibe.online), store-ready `app.json` (deep links `alibe://`, permission texts, no-encryption flag, microphone blocked, iOS icon without transparency), Privacy policy and Terms pages (in app, /privacy and /terms, linked from sign-in and Profile).
+- [ ] Expo account + `npx eas-cli init` (also enables real push), Apple Developer and Google Play accounts. Steps in README > Releasing the phone apps.
+- [ ] Decide the app id (`com.alibe.app` now; permanent after first upload).
+- [ ] Review the Privacy policy and Terms text (drafts in `mobile/src/screens/LegalScreen.tsx`); get legal advice before launch.
+- [ ] Real support email: Profile > Help says help@alibe.mv, but the domain is alibe.online.
+- [ ] Store screenshots and description.
+
 ## Launch blockers
 - [ ] SMS gateway, email provider, hosting and photo storage (see Housekeeping). Nobody outside the network can use the app without them.
 - [x] Second, empty accounts (2026-11-14): a code for an unknown phone/email no longer creates an account. The app asks "new, or used Alibe before?" and links the new contact to the existing account.
