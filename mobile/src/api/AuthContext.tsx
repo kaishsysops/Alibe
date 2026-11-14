@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api, setAuthToken, setSignedOutHandler, User } from "./client";
 import { useTheme } from "../theme/ThemeContext";
+import { DEFAULT_ACCENT } from "../theme/theme";
 
 type AuthState = {
   user: User | null;
@@ -57,7 +58,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)).catch(() => {});
           return next;
         });
-        if (fresh.themeColor) setAccent(fresh.themeColor);
+        // The colour belongs to the account (changed on another device too).
+        setAccent(fresh.themeColor ?? DEFAULT_ACCENT);
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -67,7 +69,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (u: User, token: string) => {
       setAuthToken(token);
       setUser(u);
-      if (u.themeColor) setAccent(u.themeColor);
+      // This account's colour, not whoever used the device before.
+      setAccent(u.themeColor ?? DEFAULT_ACCENT);
       await AsyncStorage.multiSet([
         [STORAGE_KEY, JSON.stringify(u)],
         [TOKEN_KEY, token],
@@ -80,9 +83,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clearSession = useCallback(async () => {
     setAuthToken(null);
     setUser(null);
+    // Signed out: back to Alibe's own colour, so the next person doesn't get yours.
+    setAccent(DEFAULT_ACCENT);
     await AsyncStorage.multiRemove([STORAGE_KEY, TOKEN_KEY]);
     await clearDrafts();
-  }, []);
+  }, [setAccent]);
 
   const signOut = useCallback(async () => {
     // Tell the server first (revokes the token and this phone's push token);

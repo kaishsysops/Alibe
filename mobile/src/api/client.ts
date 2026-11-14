@@ -177,7 +177,33 @@ export function newClientId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export type Category = { id: string; name: string; slug: string; icon: string | null; listingCount?: number; photo?: string | null };
+// A question a category asks (Sell) and filters by (Search). Children inherit them.
+export type AttributeDef = { key: string; label: string; type: "select" | "number"; options?: string[]; unit?: string };
+export type Category = {
+  id: string;
+  name: string;
+  slug: string;
+  icon: string | null;
+  // The tree: any depth. Siblings are shown in sortOrder.
+  parentId?: string | null;
+  sortOrder?: number;
+  keywords?: string[];
+  attributes?: AttributeDef[] | null;
+  // Everything for sale in this category and all its subcategories.
+  listingCount?: number;
+  photo?: string | null;
+};
+export type AdminCategory = Category & { hidden: boolean; ownCount: number };
+export type CategorySuggestion = { slug: string; id: string; path: Array<{ slug: string; name: string }>; leaf: boolean; attributes: ListingAttributes };
+export type ListingAttributes = Record<string, string | number>;
+// {"brand":["Apple"],"year":{"min":2015}}
+export type AttrFilters = Record<string, string[] | { min?: number; max?: number }>;
+export type SearchUnderstanding = {
+  filters: { q?: string; categorySlug?: string; atollId?: string; minPrice?: number; maxPrice?: number; condition?: Listing["condition"] } | null;
+  categoryPath: string[] | null;
+  atollName: string | null;
+  source: "ai" | "rules";
+};
 export type HomeFeed = { latest: Listing[]; rails: Array<{ category: Category; items: Listing[] }> };
 export type Island = { id: string; name: string; atollId: string };
 export type Atoll = { id: string; name: string; code: string; islands: Island[] };
@@ -218,6 +244,8 @@ export type Listing = {
   ibayItemId?: string;
   // Paid placement, always shown to buyers as "Featured".
   boosted?: boolean;
+  // Answers to the category's questions (brand, year, bedrooms...).
+  attributes?: ListingAttributes;
 };
 export type PaymentMethod = "CASH" | "BANK_TRANSFER";
 export type User = {
@@ -364,6 +392,8 @@ export type ListingFilters = Partial<{
   minPrice: string;
   maxPrice: string;
   delivery: DeliveryOption;
+  islandId: string;
+  attrs: AttrFilters;
 }>;
 export type SavedSearch = { id: string; label: string; params: ListingFilters; newCount: number; createdAt: string };
 export type NotificationItem =
@@ -476,11 +506,21 @@ export type ListingInput = {
   images: string[];
   deliveryOptions: DeliveryOption[];
   deliveryNote: string | null;
+  attributes?: ListingAttributes;
 };
 
 export const api = {
   health: () => request<{ ok: boolean }>("/health"),
   categories: () => request<Category[]>("/categories"),
+  suggestCategory: (title: string, description = "") =>
+    request<{ suggestions: CategorySuggestion[]; source: "ai" | "keywords" | "none" }>("/categories/suggest", { method: "POST", body: JSON.stringify({ title, description }) }),
+  understandSearch: (q: string) => request<SearchUnderstanding>(`/categories/understand?${query({ q })}`),
+  adminCategories: () => request<AdminCategory[]>("/admin/categories"),
+  addCategory: (name: string, parentId: string | null) => request<AdminCategory>("/admin/categories", { method: "POST", body: JSON.stringify({ name, parentId }) }),
+  updateCategory: (id: string, data: Partial<{ name: string; keywords: string[]; hidden: boolean; parentId: string | null }>) =>
+    request<AdminCategory>(`/admin/categories/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  moveCategory: (id: string, direction: "up" | "down") => request<void>(`/admin/categories/${id}/move`, { method: "POST", body: JSON.stringify({ direction }) }),
+  deleteCategory: (id: string) => request<{ ok: boolean; movedTo: string | null }>(`/admin/categories/${id}`, { method: "DELETE" }),
   atolls: () => request<Atoll[]>("/atolls"),
   // One page of listings (40 by default). `page` counts from 0.
   listingsPage: (params: Record<string, string | undefined> = {}, page = 0, limit?: number) =>

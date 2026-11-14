@@ -50,7 +50,8 @@ export function serializeConversation<T extends { seller: User; buyer: User }>(c
 }
 
 export const listingInclude = {
-  category: true,
+  // Feeds send many listings: just what cards and breadcrumbs need.
+  category: { select: { id: true, name: true, slug: true, icon: true, parentId: true } },
   island: { include: { atoll: true } },
   seller: true,
 } as const;

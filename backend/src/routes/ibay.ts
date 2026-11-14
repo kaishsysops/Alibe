@@ -7,7 +7,10 @@ import { safeRouter } from "../http.js";
 import { listingBlock, prohibitedReason } from "../moderation.js";
 import { listingInclude, serializeListing } from "../serializers.js";
 import { UPLOAD_DIR } from "./uploads.js";
+import { Prisma } from "@prisma/client";
 import { NOT_FOR_SALE } from "../ibayCategories.js";
+import { categoryIndex, categoriesMatchingQuery, descendants } from "../categories.js";
+import { ibayIdsForText, searchWords } from "../filters.js";
 import { alibePrice, moneySettings, sellerPriceBound, MoneySettings } from "../money.js";
 
 // iBay items shown to everyone in the app, always labelled as iBay's. These
@@ -97,16 +100,16 @@ ibayRouter.get("/items", async (req, res) => {
   const parsed = itemsQuerySchema.safeParse(req.query);
   if (!parsed.success) return res.status(400).json({ error: "Please check your filters and try again." });
   const { q, page = 0, limit: take = PAGE_SIZE, categorySlug, condition, minPrice, maxPrice } = parsed.data;
-  const m = await moneySettings();
+  const [m, index] = await Promise.all([moneySettings(), categoryIndex()]);
   const rows = await prisma.ibayItem.findMany({
     where: {
       hiddenAt: null,
       claimedListingId: null,
       OR: recentPhotoFilter(),
-      alibeCategory: categorySlug && categorySlug !== NOT_FOR_SALE ? categorySlug : { notIn: [NOT_FOR_SALE] },
+      alibeCategory: categorySlug && categorySlug !== NOT_FOR_SALE ? { in: descendants(index, categorySlug).map((c) => c.slug) } : { notIn: [NOT_FOR_SALE] },
       conditionKey: condition,
       price: priceFilter(m, minPrice, maxPrice),
-      title: q ? { contains: q, mode: "insensitive" } : undefined,
+      id: q ? { in: await ibayIdsForText(searchWords(q).length ? searchWords(q) : [q.toLowerCase()], 2000) } : undefined,
     },
     orderBy: { id: "desc" },
     skip: page * take,
@@ -115,33 +118,43 @@ ibayRouter.get("/items", async (req, res) => {
   res.json({ items: rows.filter((r) => !prohibitedReason(r.title) && withinPrice(m, r.price, minPrice, maxPrice)).map((r) => summary(m, r)), hasMore: rows.length === take });
 });
 
-type MixFilters = { q?: string; categorySlug?: string; condition?: "NEW" | "LIKE_NEW" | "GOOD" | "FAIR"; minPrice?: number; maxPrice?: number; islandId?: string; atollId?: string; delivery?: string };
+type MixFilters = { attrs?: object; postedWithin?: number; reduced?: string; alibeOnly?: string; q?: string; categorySlug?: string; condition?: "NEW" | "LIKE_NEW" | "GOOD" | "FAIR"; minPrice?: number; maxPrice?: number; islandId?: string; atollId?: string; delivery?: string };
 
 // iBay items in the shape the app's listing cards use, for feeds that mix them
 // with Alibe's own, at Alibe's price. `ibayItemId` is what keeps them identifiable:
 // cards badge them "From iBay" and open the iBay item page. Location and delivery filters leave
 // them out, because iBay's cards don't say where an item is or how it ships.
 export async function mixedIbayListings(f: MixFilters, sort?: string) {
-  if (f.islandId || f.atollId || f.delivery || !(await isShowcaseOn())) return [];
-  const m = await moneySettings();
-  const categories = await prisma.category.findMany();
-  const bySlug = new Map(categories.map((c) => [c.slug, c]));
-  const base = {
+  // iBay's cards don't say where an item is, how it ships, or its details.
+  // Nor do they have price-drop history; and some searches ask for Alibe sellers only.
+  if (f.islandId || f.atollId || f.delivery || f.reduced || f.alibeOnly || (f.attrs && Object.keys(f.attrs).length) || !(await isShowcaseOn())) return [];
+  const [m, index] = await Promise.all([moneySettings(), categoryIndex()]);
+  const bySlug = new Map(index.rows.map((c) => [c.slug, { id: c.id, name: c.name, slug: c.slug, icon: c.icon, parentId: c.parentId }]));
+  const under = (slug: string) => descendants(index, slug).map((c) => c.slug);
+  // A search matches iBay titles (typos allowed) or the categories it names.
+  let textMatch: Prisma.IbayItemWhereInput | undefined;
+  if (f.q) {
+    const words = searchWords(f.q);
+    const named = categoriesMatchingQuery(index, f.q).flatMap((c) => under(c.slug));
+    textMatch = { OR: [{ id: { in: await ibayIdsForText(words.length ? words : [f.q.toLowerCase()], MIXED_MATCHES * 4) } }, ...(named.length ? [{ alibeCategory: { in: named } }] : [])] };
+  }
+  const base: Prisma.IbayItemWhereInput = {
     hiddenAt: null,
     claimedListingId: null,
-    OR: recentPhotoFilter(),
+    AND: [{ OR: recentPhotoFilter() }, ...(textMatch ? [textMatch] : [])],
     conditionKey: f.condition,
+    firstSeenAt: f.postedWithin ? { gte: new Date(Date.now() - f.postedWithin * 86_400_000) } : undefined,
     // A price sort or filter has nothing to go on without a price.
     price: priceFilter(m, f.minPrice, f.maxPrice) ?? (sort?.startsWith("price") ? { not: null } : undefined),
-    title: f.q ? { contains: f.q, mode: "insensitive" as const } : undefined,
   };
-  const find = (alibeCategory: string, take: number) => prisma.ibayItem.findMany({ where: { ...base, alibeCategory }, orderBy: { id: "desc" }, take });
-  // Without a search, every category gets its share so Home's rows all fill up.
+  const find = (slugs: string[], take: number) => prisma.ibayItem.findMany({ where: { ...base, alibeCategory: { in: slugs } }, orderBy: { id: "desc" }, take });
+  const tops = (index.children.get(null) ?? []).filter((c) => !c.hidden);
+  // Without a search, every top category gets its share so Home's rows all fill up.
   const rows = f.categorySlug
-    ? await find(f.categorySlug, MIXED_MATCHES)
+    ? await find(under(f.categorySlug), MIXED_MATCHES)
     : f.q
     ? await prisma.ibayItem.findMany({ where: { ...base, alibeCategory: { notIn: [NOT_FOR_SALE] } }, orderBy: { id: "desc" }, take: MIXED_MATCHES })
-    : (await Promise.all(categories.map((c) => find(c.slug, MIXED_PER_CATEGORY)))).flat();
+    : (await Promise.all(tops.map((c) => find(under(c.slug), MIXED_PER_CATEGORY)))).flat();
   return rows
     .filter((r) => !prohibitedReason(r.title) && r.alibeCategory && bySlug.has(r.alibeCategory) && withinPrice(m, r.price, f.minPrice, f.maxPrice))
     .map((r) => ({

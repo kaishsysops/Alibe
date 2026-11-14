@@ -27,6 +27,11 @@ Built 2026-11-02: email sign-in, real one-time codes, new onboarding, report que
 
 - [x] Demo/test data (2026-11-14): demo seeding is gone; the first deploy on a server removes the old demo accounts with their listings/orders/reviews (`prisma/remove-demo.ts`, by their known phone numbers) and sign-ups that never got past the code step. Test mode (codes shown in the app) no longer exists in production: deploys require a working Resend key. Status page at /status.
 
+## Categories, search and AI (2026-11-14)
+- Category tree: 15 main categories, ~200 subcategories, any depth, fixed order (`backend/src/categoryTree.ts` is the starting set; staff edit it in Profile > Categories afterwards). Bump `TREE_VERSION` to push a new starting set; existing listings and iBay items are re-placed automatically.
+- [ ] AI (optional, free tier): add `CF_ACCOUNT_ID` and `CF_AI_TOKEN` (Cloudflare dashboard > My Profile > API Tokens > "Workers AI" template) to the VPS `.env`, then `./deploy.sh`. Without them, auto-categorise and search understanding use keyword rules.
+- [ ] Ferry: link "Check ferry times" to https://followme.mv on ferry listings/orders (user shared the site; confirm what they want).
+
 ## Launch blockers
 - [ ] SMS gateway, email provider, hosting and photo storage (see Housekeeping). Nobody outside the network can use the app without them.
 - [x] Second, empty accounts (2026-11-14): a code for an unknown phone/email no longer creates an account. The app asks "new, or used Alibe before?" and links the new contact to the existing account.

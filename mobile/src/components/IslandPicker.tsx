@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, TextInput, ScrollView, LayoutChangeEvent } from "react-native";
-import { Search, X, Check, ChevronUp, ChevronDown, ChevronRight, MapPin, Globe2 } from "lucide-react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { View, Text, TextInput, ScrollView, LayoutChangeEvent, Animated } from "react-native";
+import * as Haptics from "expo-haptics";
+import { Search, X, Check, ChevronUp, ChevronDown, ChevronRight, MapPin, Globe2, Maximize2 } from "lucide-react-native";
 import { Atoll, Island } from "../api/client";
 import { ATOLL_GEO, ATOLL_ORDER, DEFAULT_ISLAND, ISLAND_GEO, POPULAR_ISLANDS } from "../data/maldives";
 import MaldivesMap, { AtollDetailMap } from "./MaldivesMap";
@@ -165,7 +166,7 @@ export default function IslandPicker(props: Props) {
       ) : (
         <>
           {!atollMode && popular.length > 0 && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.popular} keyboardShouldPersistTaps="handled">
+            <ScrollView showsVerticalScrollIndicator={false} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.popular} keyboardShouldPersistTaps="handled">
               {popular.map(({ atoll, island }) => {
                 const on = island.id === props.value;
                 return (
@@ -185,7 +186,7 @@ export default function IslandPicker(props: Props) {
 
             <View style={styles.side}>
               {atollMode ? (
-                <ScrollView style={{ maxHeight: mapHeight }} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+                <ScrollView showsHorizontalScrollIndicator={false} style={{ maxHeight: mapHeight }} showsVerticalScrollIndicator={false} nestedScrollEnabled>
                   <Tap style={[styles.atollRow, !props.value && styles.atollRowOn]} onPress={() => pickAtoll(undefined)} scaleTo={0.97}>
                     <Globe2 size={15} color={!props.value ? colors.primary : colors.textMuted} />
                     <Text style={[styles.atollRowText, !props.value && { color: colors.primary }]}>Anywhere</Text>
@@ -224,7 +225,7 @@ export default function IslandPicker(props: Props) {
                     {/* The atoll up close: tap an island's dot to choose it. */}
                     <AtollDetailMap width={Math.max(140, width - mapWidth - spacing.md)} height={detailHeight} code={viewAtoll.code} islands={viewAtoll.islands} selectedId={props.value} onSelectIsland={pickIsland} />
                     <Text style={styles.orList}>or pick from the list</Text>
-                    <ScrollView style={{ maxHeight: Math.max(96, mapHeight - 64 - detailHeight - 28) }} contentContainerStyle={styles.islands} showsVerticalScrollIndicator={false} nestedScrollEnabled>
+                    <ScrollView showsHorizontalScrollIndicator={false} style={{ maxHeight: Math.max(96, mapHeight - 64 - detailHeight - 28) }} contentContainerStyle={styles.islands} showsVerticalScrollIndicator={false} nestedScrollEnabled>
                       {viewAtoll.islands.map((i) => {
                         const on = i.id === props.value;
                         return (
@@ -254,16 +255,42 @@ export default function IslandPicker(props: Props) {
 // (they'd fight the panel's scrolling). A small map shows the choice; the list
 // does the choosing.
 
+// Search filters: a small map beside the atoll list. Double-tap the map (or
+// tap its expand button) to open it big and interactive: tap or drag along the
+// chain to choose an atoll.
+const DOUBLE_TAP_MS = 320;
+
 export function AtollFilter({ atolls: unsorted, value, onChange }: { atolls: Atoll[]; value?: string | null; onChange: (atollId: string | undefined) => void }) {
   const styles = useStyles();
   const { colors } = useTheme();
   const atolls = useMemo(() => sortAtolls(unsorted), [unsorted]);
   const selected = atolls.find((a) => a.id === value);
   const g = selected ? ATOLL_GEO[selected.code] : undefined;
+  const [big, setBig] = useState(false);
+  const lastTap = useRef(0);
+  const hint = useRef(new Animated.Value(0)).current;
+  const onMapTap = () => {
+    const now = Date.now();
+    if (now - lastTap.current < DOUBLE_TAP_MS) {
+      lastTap.current = 0;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      return setBig(true);
+    }
+    lastTap.current = now;
+    // One tap: a quick nudge of the expand button says "there's more here".
+    hint.setValue(0);
+    Animated.sequence([Animated.timing(hint, { toValue: 1, duration: 140, useNativeDriver: true }), Animated.spring(hint, { toValue: 0, friction: 4, useNativeDriver: true })]).start();
+  };
+  const hintScale = hint.interpolate({ inputRange: [0, 1], outputRange: [1, 1.35] });
   return (
     <View style={styles.filterWrap}>
-      <MaldivesMap width={56} height={150} thumbnail codes={atolls.map((a) => a.code)} selected={selected?.code} pin={g ? { lat: g.lat, lng: g.lng } : null} />
-      <ScrollView style={styles.filterList} nestedScrollEnabled showsVerticalScrollIndicator>
+      <Tap onPress={onMapTap} scaleTo={0.96} accessibilityLabel="Map of the Maldives. Double-tap to open it big" accessibilityHint="Opens a bigger map to choose an atoll">
+        <MaldivesMap width={56} height={150} thumbnail codes={atolls.map((a) => a.code)} selected={selected?.code} pin={g ? { lat: g.lat, lng: g.lng } : null} />
+        <Animated.View style={[styles.expandBadge, { transform: [{ scale: hintScale }] }]} pointerEvents="none">
+          <Maximize2 size={12} color="#fff" strokeWidth={2.6} />
+        </Animated.View>
+      </Tap>
+      <ScrollView showsHorizontalScrollIndicator={false} style={styles.filterList} nestedScrollEnabled showsVerticalScrollIndicator={false}>
         {[{ id: undefined as string | undefined, label: "Anywhere" }, ...atolls.map((a) => ({ id: a.id as string | undefined, label: ATOLL_GEO[a.code]?.short ?? a.name }))].map((row) => {
           const on = row.id === (value ?? undefined);
           return (
@@ -277,6 +304,22 @@ export function AtollFilter({ atolls: unsorted, value, onChange }: { atolls: Ato
           );
         })}
       </ScrollView>
+      <Sheet visible={big} onClose={() => setBig(false)} title="Where to look">
+        <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} style={{ maxHeight: 680 }} contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.sm }} keyboardShouldPersistTaps="handled">
+          <Text style={styles.bigHint}>Tap an atoll on the map, or drag along it to look through them.</Text>
+          <IslandPicker mode="atoll" atolls={atolls} value={value} onChange={onChange} mapHeight={460} />
+        </ScrollView>
+        <View style={{ paddingHorizontal: spacing.lg, flexDirection: "row", gap: spacing.sm }}>
+          {!!value && (
+            <Tap style={[styles.done, styles.anywhere]} onPress={() => onChange(undefined)} scaleTo={0.97}>
+              <Text style={[styles.doneText, { color: colors.primary }]}>Anywhere</Text>
+            </Tap>
+          )}
+          <Tap style={[styles.done, { flex: 1 }]} onPress={() => setBig(false)} scaleTo={0.97}>
+            <Text style={styles.doneText}>{selected ? `Show ${ATOLL_GEO[selected.code]?.short ?? selected.name}` : "Done"}</Text>
+          </Tap>
+        </View>
+      </Sheet>
     </View>
   );
 }
@@ -287,7 +330,7 @@ export function IslandPickerSheet({ visible, onClose, title = "Choose your islan
   const styles = useStyles();
   return (
     <Sheet visible={visible} onClose={onClose} title={title}>
-      <ScrollView style={{ maxHeight: 640 }} contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.sm }} keyboardShouldPersistTaps="handled">
+      <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} style={{ maxHeight: 640 }} contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.sm }} keyboardShouldPersistTaps="handled">
         <IslandPicker {...(picker as Props)} mapHeight={340} />
       </ScrollView>
       <View style={{ paddingHorizontal: spacing.lg }}>
@@ -358,6 +401,9 @@ const useStyles = makeStyles((colors) => ({
   atollRowText: { flex: 1, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text },
   hint: { fontSize: fontSize.caption, color: colors.textMuted, marginTop: spacing.sm },
   filterWrap: { flexDirection: "row", gap: spacing.sm, alignItems: "flex-start" },
+  expandBadge: { position: "absolute", right: -4, bottom: -4, width: 22, height: 22, borderRadius: 11, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.card },
+  bigHint: { fontSize: fontSize.sm, color: colors.textMuted, marginBottom: spacing.sm },
+  anywhere: { paddingHorizontal: spacing.lg, backgroundColor: colors.primaryTint },
   filterList: { flex: 1, maxHeight: 150, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border },
   filterRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.sm + 2, height: 34 },
   orList: { fontSize: fontSize.caption, color: colors.textMuted, textAlign: "center", marginTop: spacing.sm, marginBottom: 6 },

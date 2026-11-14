@@ -7,15 +7,26 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// A tree of any depth (parentId). Shown in sortOrder at every level, never
+// alphabetically. See src/categoryTree.ts for the starting set.
 model Category {
-  id       String     @id @default(cuid())
-  name     String
-  slug     String     @unique
-  icon     String?
-  parentId String?
-  parent   Category?  @relation("CategoryToCategory", fields: [parentId], references: [id])
-  children Category[] @relation("CategoryToCategory")
-  listings Listing[]
+  id         String     @id @default(cuid())
+  name       String
+  slug       String     @unique
+  icon       String?
+  parentId   String?
+  parent     Category?  @relation("CategoryToCategory", fields: [parentId], references: [id])
+  children   Category[] @relation("CategoryToCategory")
+  listings   Listing[]
+  sortOrder  Int        @default(0)
+  // Other words for this category: search synonyms and auto-categorising.
+  keywords   String[]   @default([])
+  // Questions/filters for this category and its children (AttributeDef[]).
+  attributes Json?
+  // Taken out by staff: not offered for new listings or shown in browsing.
+  hidden     Boolean    @default(false)
+
+  @@index([parentId, sortOrder])
 }
 
 model Atoll {
@@ -147,6 +158,8 @@ model Listing {
   previousPrice Int?
   priceDroppedAt DateTime?
   priceRaisedAt DateTime?
+  // Answers to the category's questions, e.g. {"brand":"Apple","storage":"128 GB"}.
+  attributes    Json           @default("{}")
   imageHashes   ImageHash[]
   favoritedBy   Favorite[]
   conversations Conversation[]
@@ -159,6 +172,9 @@ model Listing {
   @@index([status, hiddenAt, createdAt])
   @@index([categoryId, status, createdAt])
   @@index([sellerId, status])
+  @@index([attributes], type: Gin)
+  // Typo-tolerant title search (pg_trgm).
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "Listing_title_trgm_idx")
 }
 
 model Favorite {
@@ -486,6 +502,7 @@ model IbayItem {
 
   @@index([lastSeenAt])
   @@index([alibeCategory])
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "IbayItem_title_trgm_idx")
 }
 
 model IbayReport {

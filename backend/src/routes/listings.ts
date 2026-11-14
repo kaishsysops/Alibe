@@ -9,6 +9,7 @@ import { notifyUser } from "../push.js";
 import { mixedIbayListings } from "./ibay.js";
 import { boostedListingIds } from "./purchases.js";
 import { cached } from "../cache.js";
+import { categoryIndex, cleanAttributes, descendants, effectiveAttributes } from "../categories.js";
 import { checkListingPhotosLater } from "../photoHash.js";
 
 const DEFAULT_LIMIT = 40;
@@ -77,7 +78,7 @@ listingsRouter.get("/", async (req, res) => {
     return res.json(wanted.map((id) => byId.get(id)).filter(Boolean));
   }
 
-  const where = listingWhere(filters, hidden);
+  const where = await listingWhere(filters, hidden);
   const scoped: Prisma.ListingWhereInput = seller ? { AND: [where, { sellerId: seller }] } : where;
   if (count) res.setHeader("X-Total", String(await prisma.listing.count({ where: scoped })));
   const order = sort ?? "newest";
@@ -128,16 +129,21 @@ const HOME_RAIL = 12;
 const HOME_LATEST = 24;
 
 async function buildHome(signedIn: boolean) {
-  const [categories, boosted] = await Promise.all([prisma.category.findMany(), boostedIds()]);
+  // One row per top-level category, holding everything under it.
+  const [index, boosted] = await Promise.all([categoryIndex(), boostedIds()]);
+  const categories = (index.children.get(null) ?? []).filter((c) => !c.hidden);
   const active = { status: "ACTIVE" as const, hiddenAt: null };
   const leadBoosted = <T extends { id: string }>(list: T[]) => [...list.filter((l) => boosted.has(l.id)), ...list.filter((l) => !boosted.has(l.id))];
   const [latestRows, ...railRows] = await Promise.all([
     prisma.listing.findMany({ where: active, include: listingInclude, orderBy: SORTS.newest, take: HOME_LATEST }),
-    ...categories.map((c) => prisma.listing.findMany({ where: { ...active, categoryId: c.id }, include: listingInclude, orderBy: SORTS.newest, take: HOME_RAIL })),
+    ...categories.map((c) => prisma.listing.findMany({ where: { ...active, categoryId: { in: descendants(index, c.slug).map((d) => d.id) } }, include: listingInclude, orderBy: SORTS.newest, take: HOME_RAIL })),
   ]);
   const serialize = async (rows: typeof latestRows) => leadBoosted((await serializeListings(rows)).map((l) => ({ ...l, description: undefined, boosted: boosted.has(l.id) })));
   const ibay = signedIn ? await ibayFor({}, undefined) : [];
-  const ibayBy = (slug: string) => ibay.filter((i) => i.category.slug === slug);
+  const ibayBy = (slug: string) => {
+    const slugs = new Set(descendants(index, slug).map((d) => d.slug));
+    return ibay.filter((i) => slugs.has(i.category.slug));
+  };
   const rails = (
     await Promise.all(
       categories.map(async (c, i) => ({ category: c, items: mergeFeeds<{ price: number }>(await serialize(railRows[i]), ibayBy(c.slug)).slice(0, HOME_RAIL) }))
@@ -195,7 +201,16 @@ const createListingSchema = z.object({
   deliveryOptions: deliveryField.default(["PICKUP"]),
   deliveryNote: z.string().trim().max(200).nullable().optional(),
   clientRequestId: z.string().max(64).optional(),
+  // Answers to the category's questions; anything it doesn't ask is dropped.
+  attributes: z.record(z.string().max(40), z.union([z.string().max(60), z.number()])).optional(),
 });
+
+// Only answers the listing's category asks for, cleaned up.
+async function listingAttributes(categoryId: string, raw: unknown) {
+  const index = await categoryIndex();
+  if (!index.byId.has(categoryId)) return null;
+  return cleanAttributes(effectiveAttributes(index, categoryId), raw);
+}
 
 listingsRouter.post("/", async (req, res) => {
   const parsed = createListingSchema.safeParse(req.body);
@@ -213,7 +228,9 @@ listingsRouter.post("/", async (req, res) => {
   const block = await listingBlock(parsed.data.sellerId);
   if (block) return res.status(block.status).json({ error: block.error, code: block.code });
   try {
-    const listing = await prisma.listing.create({ data: parsed.data, include: listingInclude });
+    const attributes = await listingAttributes(parsed.data.categoryId, parsed.data.attributes);
+    if (!attributes) return res.status(400).json({ error: "Please pick a category." });
+    const listing = await prisma.listing.create({ data: { ...parsed.data, attributes }, include: listingInclude });
     checkListingPhotosLater(listing.id);
     res.status(201).json(serializeListing(listing));
   } catch (e) {
@@ -261,7 +278,11 @@ listingsRouter.patch("/:id", async (req, res) => {
   const banned = prohibitedReason(`${data.title ?? ""} ${data.description ?? ""}`);
   if (banned) return res.status(400).json({ error: prohibitedMessage(banned) });
   const { fields, alert } = priceChange(existing, data.price, new Date());
-  const listing = await prisma.listing.update({ where: { id: req.params.id }, data: { ...data, ...fields }, include: listingInclude });
+  // A new category re-checks the answers against its own questions.
+  const categoryId = data.categoryId ?? existing.categoryId;
+  const attributes = data.attributes !== undefined || data.categoryId ? await listingAttributes(categoryId, data.attributes ?? existing.attributes) : undefined;
+  if (attributes === null) return res.status(400).json({ error: "Please pick a category." });
+  const listing = await prisma.listing.update({ where: { id: req.params.id }, data: { ...data, ...fields, attributes }, include: listingInclude });
   if (alert && listing.status === "ACTIVE" && !listing.hiddenAt) {
     const savers = await prisma.favorite.findMany({ where: { listingId: listing.id }, select: { userId: true } });
     for (const { userId } of savers) {

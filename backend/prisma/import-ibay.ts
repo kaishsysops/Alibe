@@ -1,5 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { IbayCategoryPage, conditionKeyFor, parseCategoryMenu } from "../src/ibayCategories.js";
+import { categoryIndex } from "../src/categories.js";
+import { refineIbayCategory } from "../src/categorySync.js";
 
 // Copies iBay's public category pages into IbayItem, for admins only. Run with:
 //   npx tsx prisma/import-ibay.ts [--categories=N]
@@ -63,7 +65,11 @@ const owner = await prisma.user.upsert({
 });
 
 const home = await get("");
-const categories = parseCategoryMenu(home).slice(0, categoryLimit);
+// Each iBay page goes to the most specific Alibe category its name fits.
+const index = await categoryIndex();
+const categories = parseCategoryMenu(home)
+  .slice(0, categoryLimit)
+  .map((page) => ({ ...page, alibeCategory: refineIbayCategory(index, page.alibeCategory, page.label) ?? page.alibeCategory }));
 console.log(`${categories.length} categories to read`);
 
 let saved = 0;

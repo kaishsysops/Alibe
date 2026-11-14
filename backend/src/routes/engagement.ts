@@ -9,7 +9,7 @@ export const notificationsRouter = safeRouter();
 
 async function newMatchCount(userId: string, params: ListingFilters, since: Date, hidden: string[]) {
   return prisma.listing.count({
-    where: { ...listingWhere(params, hidden), createdAt: { gt: since }, sellerId: { notIn: [...hidden, userId] } },
+    where: { ...(await listingWhere(params, hidden)), createdAt: { gt: since }, sellerId: { notIn: [...hidden, userId] } },
   });
 }
 

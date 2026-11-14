@@ -1,22 +1,8 @@
 import { PrismaClient } from "@prisma/client";
+import { syncCategoryTree } from "../src/categorySync.js";
 
 const prisma = new PrismaClient();
 
-const CATEGORIES = [
-  { name: "Electronics", slug: "electronics", icon: "smartphone" },
-  { name: "Vehicles", slug: "vehicles", icon: "car" },
-  { name: "Furniture", slug: "furniture", icon: "sofa" },
-  { name: "Fashion", slug: "fashion", icon: "shirt" },
-  { name: "Property", slug: "property", icon: "home" },
-  { name: "Jobs", slug: "jobs", icon: "briefcase" },
-  { name: "Services", slug: "services", icon: "wrench" },
-  { name: "Home & Garden", slug: "home-garden", icon: "flower" },
-  { name: "Health & Beauty", slug: "health-beauty", icon: "heart-pulse" },
-  { name: "Sports & Hobbies", slug: "sports-hobbies", icon: "trophy" },
-  { name: "Baby & Kids", slug: "baby-kids", icon: "baby" },
-  { name: "Books & Office", slug: "books-office", icon: "book-open" },
-  { name: "Other", slug: "other", icon: "package" },
-];
 
 // Every administrative atoll, north to south, with its main inhabited islands.
 // The first five keep the codes they were created with (the first three letters
@@ -49,14 +35,9 @@ const ATOLLS: Array<{ code: string; name: string; islands: string[] }> = [
 // Reference data every Alibe needs: categories, and the atolls and islands.
 // Safe to run on every start (upserts). No demo users or listings.
 async function main() {
+  // The category tree, once per version (staff edit it in the app after that).
   console.log("Seeding categories...");
-  for (const c of CATEGORIES) {
-    await prisma.category.upsert({
-      where: { slug: c.slug },
-      update: {},
-      create: c,
-    });
-  }
+  await syncCategoryTree();
 
   console.log("Seeding atolls & islands...");
   for (const { code, name: atollName, islands } of ATOLLS) {

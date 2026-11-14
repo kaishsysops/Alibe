@@ -1,5 +1,6 @@
-// How iBay's catalogue lines up with Alibe's. An item takes its Alibe category
-// from its top-level iBay section, so "Other" under Books and "Other" under
+// How iBay's catalogue lines up with Alibe's. An item takes its broad Alibe
+// category from its top-level iBay section (the import then narrows it to a
+// subcategory by the section's own name, see refineIbayCategory), so "Other" under Books and "Other" under
 // Tools land in the right places.
 export const NOT_FOR_SALE = "excluded";
 
@@ -14,10 +15,10 @@ const SECTION_TO_ALIBE: Record<string, string> = {
   "213": "furniture", // Furniture & Storage
   "111": "health-beauty", // Health & Beauty
   "69": "home-garden", // Home & Garden
-  "198": "other", // Industrial & Business
+  "198": "business", // Industrial & Business
   "3": "electronics", // Mobile Phones & Accessories
   "4": "vehicles", // Motorcycle, Cars & Vehicles
-  "72": "other", // Pets and Pet Supplies
+  "72": "pets", // Pets and Pet Supplies
   "56": "sports-hobbies", // Sports, Fitness & Recreation
   "211": "books-office", // Stationery & Office Supplies
   "77": "sports-hobbies", // Toys & Hobbies
@@ -26,7 +27,7 @@ const SECTION_TO_ALIBE: Record<string, string> = {
   "19": "property", // Housing & Real Estate
   "55": "jobs", // Jobs
   "28": "services", // Services
-  "176": "other", // Business Opportunities
+  "176": "business", // Business Opportunities
   "451": "other", // Free Stuff
   // People asking for things or posting notices: nothing here is for sale.
   "87": NOT_FOR_SALE, // Wanted

@@ -9,6 +9,8 @@ import { MONEY_KEY, moneySettings } from "../money.js";
 import { ratingsFor } from "../serializers.js";
 import { signedSlipUrl } from "./slips.js";
 import { invalidate } from "../cache.js";
+import { Prisma } from "@prisma/client";
+import { categoryIndex, clearCategoryCaches, descendants } from "../categories.js";
 
 // Feeds are cached for up to a minute; staff changes show at once on the
 // server that handled them (other replicas catch up within the minute).
@@ -390,4 +392,106 @@ adminRouter.delete("/staff/:id", async (req, res) => {
   if (others === 0) return res.status(400).json({ error: "Alibe needs at least one staff member." });
   await prisma.user.update({ where: { id: user.id }, data: { isAdmin: false } });
   res.json({ ok: true });
+});
+
+// ---- categories ---------------------------------------------------------------
+// Staff own the tree after the first seed (src/categoryTree.ts is only the
+// starting set). Depth is unlimited; order is whatever staff set.
+
+const slugify = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 50) || "category";
+
+async function uniqueSlug(name: string) {
+  const base = slugify(name);
+  for (let i = 0; ; i++) {
+    const slug = i ? `${base}-${i + 1}` : base;
+    if (!(await prisma.category.findUnique({ where: { slug } }))) return slug;
+  }
+}
+
+// Staff see hidden ones too, with how many items sit directly in each.
+adminRouter.get("/categories", async (_req, res) => {
+  const [rows, counts] = await Promise.all([
+    prisma.category.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
+    prisma.listing.groupBy({ by: ["categoryId"], where: { status: "ACTIVE", hiddenAt: null }, _count: { _all: true } }),
+  ]);
+  const countBy = new Map(counts.map((c) => [c.categoryId, c._count._all]));
+  res.json(rows.map((c) => ({ ...c, ownCount: countBy.get(c.id) ?? 0 })));
+});
+
+const categoryNameField = z.string().trim().min(2, "name").max(60);
+const keywordsField = z.array(z.string().trim().toLowerCase().min(2).max(40)).max(60);
+
+adminRouter.post("/categories", async (req, res) => {
+  const parsed = z.object({ name: categoryNameField, parentId: z.string().nullable() }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Give the category a name (2 to 60 letters)." });
+  const { name, parentId } = parsed.data;
+  if (parentId && !(await prisma.category.findUnique({ where: { id: parentId } }))) return res.status(404).json({ error: "That category no longer exists." });
+  const last = await prisma.category.findFirst({ where: { parentId }, orderBy: { sortOrder: "desc" } });
+  const created = await prisma.category.create({ data: { name, parentId, slug: await uniqueSlug(name), sortOrder: (last?.sortOrder ?? -1) + 1 } });
+  clearCategoryCaches();
+  res.status(201).json(created);
+});
+
+adminRouter.patch("/categories/:id", async (req, res) => {
+  const parsed = z
+    .object({ name: categoryNameField.optional(), keywords: keywordsField.optional(), hidden: z.boolean().optional(), icon: z.string().max(40).nullable().optional(), parentId: z.string().nullable().optional() })
+    .safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Please check the name and search words." });
+  const category = await prisma.category.findUnique({ where: { id: req.params.id } });
+  if (!category) return res.status(404).json({ error: "That category no longer exists." });
+  const data: Prisma.CategoryUncheckedUpdateInput = { ...parsed.data };
+  if (parsed.data.parentId !== undefined && parsed.data.parentId !== category.parentId) {
+    // Moving under itself or one of its own subcategories would make a loop.
+    const index = await categoryIndex();
+    if (parsed.data.parentId && descendants(index, category.slug).some((c) => c.id === parsed.data.parentId)) {
+      return res.status(400).json({ error: "A category can't go inside one of its own subcategories." });
+    }
+    const last = await prisma.category.findFirst({ where: { parentId: parsed.data.parentId }, orderBy: { sortOrder: "desc" } });
+    data.sortOrder = (last?.sortOrder ?? -1) + 1;
+  }
+  const updated = await prisma.category.update({ where: { id: category.id }, data });
+  clearCategoryCaches();
+  res.json(updated);
+});
+
+// Swaps with the neighbour above or below, after making the order 0..n-1.
+adminRouter.post("/categories/:id/move", async (req, res) => {
+  const direction = req.body?.direction === "up" ? -1 : 1;
+  const category = await prisma.category.findUnique({ where: { id: req.params.id } });
+  if (!category) return res.status(404).json({ error: "That category no longer exists." });
+  const siblings = await prisma.category.findMany({ where: { parentId: category.parentId }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
+  const i = siblings.findIndex((s) => s.id === category.id);
+  const j = i + direction;
+  if (j < 0 || j >= siblings.length) return res.json({ ok: true });
+  [siblings[i], siblings[j]] = [siblings[j], siblings[i]];
+  await prisma.$transaction(siblings.map((s, order) => prisma.category.update({ where: { id: s.id }, data: { sortOrder: order } })));
+  clearCategoryCaches();
+  res.json({ ok: true });
+});
+
+// Only categories without subcategories. Their items move up to the parent,
+// so nothing disappears; a top category with items can't be deleted (hide it).
+adminRouter.delete("/categories/:id", async (req, res) => {
+  const category = await prisma.category.findUnique({ where: { id: req.params.id }, include: { _count: { select: { children: true, listings: true } } } });
+  if (!category) return res.json({ ok: true });
+  if (category._count.children) return res.status(400).json({ error: "Delete or move its subcategories first." });
+  const parent = category.parentId ? await prisma.category.findUnique({ where: { id: category.parentId } }) : null;
+  if (!parent && category._count.listings) return res.status(400).json({ error: "This top category still has listings. Hide it instead." });
+  await prisma.$transaction([
+    ...(parent
+      ? [
+          prisma.listing.updateMany({ where: { categoryId: category.id }, data: { categoryId: parent.id } }),
+          prisma.ibayItem.updateMany({ where: { alibeCategory: category.slug }, data: { alibeCategory: parent.slug } }),
+        ]
+      : []),
+    prisma.category.delete({ where: { id: category.id } }),
+  ]);
+  clearCategoryCaches();
+  res.json({ ok: true, movedTo: parent?.name ?? null });
 });
