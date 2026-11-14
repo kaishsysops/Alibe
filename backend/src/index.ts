@@ -5,6 +5,7 @@ import { prisma } from "./db.js";
 import { deliveryMethods } from "./messaging.js";
 import cors from "cors";
 import { categoriesRouter } from "./routes/categories.js";
+import { searchRouter, pruneSearchEvents } from "./routes/search.js";
 import { atollsRouter } from "./routes/atolls.js";
 import { listingsRouter } from "./routes/listings.js";
 import { authRouter } from "./routes/auth.js";
@@ -65,6 +66,7 @@ app.get("/status", async (_req, res) => {
   });
 });
 app.use("/categories", categoriesRouter);
+app.use("/search", searchRouter);
 app.use("/atolls", atollsRouter);
 app.use("/listings", listingsRouter);
 app.use("/auth", authRouter);
@@ -98,6 +100,8 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 const port =process.env.PORT ? Number(process.env.PORT) : 4000;
 const server = app.listen(port, "0.0.0.0", () => {
   startReminders();
+  // Search words older than a month aren't needed for "Popular right now".
+  setInterval(() => pruneSearchEvents().catch(() => {}), 24 * 60 * 60_000).unref();
   moveSlipsOutOfPublicUploads().catch((e) => console.error("Couldn't move payment slips:", e));
   console.log(`Alibe backend listening on http://0.0.0.0:${port}`);
 });

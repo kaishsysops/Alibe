@@ -514,6 +514,9 @@ export const api = {
   categories: () => request<Category[]>("/categories"),
   suggestCategory: (title: string, description = "") =>
     request<{ suggestions: CategorySuggestion[]; source: "ai" | "keywords" | "none" }>("/categories/suggest", { method: "POST", body: JSON.stringify({ title, description }) }),
+  popularSearches: () => request<{ terms: string[]; source: "searches" | "listings" }>("/search/popular"),
+  // Counts a search towards "Popular right now" (only searches that found something).
+  logSearch: (q: string) => request<void>("/search/log", { method: "POST", body: JSON.stringify({ q }) }),
   understandSearch: (q: string) => request<SearchUnderstanding>(`/categories/understand?${query({ q })}`),
   adminCategories: () => request<AdminCategory[]>("/admin/categories"),
   addCategory: (name: string, parentId: string | null) => request<AdminCategory>("/admin/categories", { method: "POST", body: JSON.stringify({ name, parentId }) }),

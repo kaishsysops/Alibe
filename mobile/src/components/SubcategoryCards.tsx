@@ -12,7 +12,7 @@ const HEIGHT = 96;
 
 // A category's subcategories as a row of photo cards (a real photo from each,
 // its count, and "+N" when it has more inside). Empty ones are left out.
-export default function SubcategoryCards({ tree, slug, onPress, horizontalPadding = 0 }: { tree: CategoryTree; slug: string; onPress: (c: Category) => void; horizontalPadding?: number }) {
+export default function SubcategoryCards({ tree, slug, onPress, horizontalPadding = 0, large }: { tree: CategoryTree; slug: string; onPress: (c: Category) => void; horizontalPadding?: number; large?: boolean }) {
   const children = tree.childrenOf(slug).filter((c) => (c.listingCount ?? 0) > 0);
   if (!children.length) return null;
   return (
@@ -35,8 +35,8 @@ export default function SubcategoryCards({ tree, slug, onPress, horizontalPaddin
               image={c.photo ?? undefined}
               Icon={Icon}
               color={color}
-              size={WIDTH}
-              height={HEIGHT}
+              size={large ? 180 : WIDTH}
+              height={large ? 120 : HEIGHT}
               onPress={() => onPress(c)}
             />
           </FadeIn>

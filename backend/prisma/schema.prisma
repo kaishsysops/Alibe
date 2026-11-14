@@ -573,3 +573,16 @@ model ImageHash {
   @@unique([listingId, imageUrl])
   @@index([sellerId])
 }
+
+// One row per person per search word per day (only searches that found
+// something). Powers "Popular right now"; userKey is a hash, not the user id.
+model SearchEvent {
+  id      String   @id @default(cuid())
+  term    String
+  userKey String
+  day     DateTime @db.Date
+  createdAt DateTime @default(now())
+
+  @@unique([term, userKey, day])
+  @@index([day])
+}

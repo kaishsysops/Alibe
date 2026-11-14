@@ -44,8 +44,6 @@ const POSTED: Array<{ days: string; label: string }> = [
 const FILTER_PANEL_WIDTH = 280;
 // Options shown before "Show all" in a category filter.
 const OPTIONS_PREVIEW = 8;
-// Starting points for people who don't know what to type.
-const POPULAR = ["iPhone", "Scooter", "Sofa", "Laptop", "Bicycle", "Fridge", "PlayStation", "Fishing rod"];
 const DEBOUNCE_MS = 350;
 
 const conditionLabel = (c: string) => c.replace("_", " ").toLowerCase().replace(/^\w/, (m) => m.toUpperCase());
@@ -97,12 +95,21 @@ export default function SearchScreen() {
   useEffect(() => {
     if (user) getRecentSearches(user.id).then(setRecent);
   }, [user]);
+  // What people really searched this week (or, early on, what's being listed most).
+  const [popular, setPopular] = useState<string[]>([]);
+  useEffect(() => {
+    api.popularSearches().then((p) => setPopular(p.terms)).catch(() => {});
+  }, []);
   const remember = (q: string) => {
     if (user && q.trim()) addRecentSearch(user.id, q).then(setRecent);
+    // Only searches that found something count towards "Popular right now".
+    if (q.trim() && resultsRef.current > 0) api.logSearch(q.trim()).catch(() => {});
   };
   const [filtersOpen, setFiltersOpen] = useState(false);
   // Results arrive a page at a time; more load as the person scrolls.
   const [results, setResults] = useState<Listing[]>([]);
+  const resultsRef = useRef(0);
+  resultsRef.current = results.length;
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const page = useRef(0);
@@ -396,13 +403,14 @@ export default function SearchScreen() {
         </Tap>
       </View>
       <View style={{ paddingTop: spacing.sm }}>
-        <SubcategoryCards tree={tree} slug={categorySlug} onPress={(c) => setCategorySlug(c.slug)} horizontalPadding={isDesktopWeb ? 0 : gutter} />
+        <SubcategoryCards tree={tree} slug={categorySlug} onPress={(c) => setCategorySlug(c.slug)} horizontalPadding={isDesktopWeb ? 0 : gutter} large={isDesktopWeb} />
       </View>
     </View>
   );
 
   // The category's own filters (brand, year, bedrooms...).
   const [expandedAttrs, setExpandedAttrs] = useState<string[]>([]);
+  const [showAllFilterCats, setShowAllFilterCats] = useState(false);
   const setAttrOption = (def: AttributeDef, option: string) =>
     setAttrs((prev) => {
       const current = Array.isArray(prev[def.key]) ? (prev[def.key] as string[]) : [];
@@ -458,20 +466,57 @@ export default function SearchScreen() {
     <View style={{ gap: spacing.md }}>
       <View>
         <Text style={styles.filterLabel}>Category</Text>
-        {crumbs.length > 0 && (
-          <View style={[styles.wrapRow, { marginBottom: spacing.sm }]}>
-            <Chip label="Any" active={false} onPress={() => setCategorySlug(undefined)} />
-            {crumbs.map((c, i) => (
-              <Chip key={c.id} label={c.name} active={i === crumbs.length - 1} onPress={() => setCategorySlug(i === crumbs.length - 1 ? crumbs[i - 1]?.slug : c.slug)} />
-            ))}
+        {/* Where you are: a step back and the current category (X = any category). */}
+        {activeCategory && (
+          <View style={styles.filterPath}>
+            <Tap style={styles.filterBack} onPress={() => setCategorySlug(crumbs[crumbs.length - 2]?.slug)} scaleTo={0.94} accessibilityLabel={`Back to ${crumbs[crumbs.length - 2]?.name ?? "all categories"}`}>
+              <ChevronLeft size={16} color={colors.text} strokeWidth={2.4} />
+              <Text style={styles.filterBackText} numberOfLines={1}>
+                {crumbs[crumbs.length - 2]?.name ?? "All categories"}
+              </Text>
+            </Tap>
+            <Tap style={styles.filterCurrent} onPress={() => setCategorySlug(undefined)} scaleTo={0.96} accessibilityLabel={`Clear ${activeCategory.name}`}>
+              {(() => {
+                const { Icon } = categoryLook(activeCategory, tree);
+                return <Icon size={16} color={colors.inverseText} strokeWidth={2.4} />;
+              })()}
+              <Text style={styles.filterCurrentText} numberOfLines={1}>
+                {activeCategory.name}
+              </Text>
+              <X size={15} color={colors.inverseText} strokeWidth={2.8} />
+            </Tap>
           </View>
         )}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} showsVerticalScrollIndicator={false} style={styles.hRow} contentContainerStyle={{ gap: spacing.sm }} keyboardShouldPersistTaps="handled">
-          {tree.childrenOf(categorySlug).map((c) => {
-            const { Icon, color } = categoryLook(c, tree);
-            return <Chip key={c.id} label={c.name} active={false} icon={<Icon size={14} color={color} strokeWidth={2.2} />} onPress={() => setCategorySlug(c.slug)} />;
-          })}
-        </ScrollView>
+        {/* What's inside, as a readable list: icon, name, how many, and a > when there's more inside. */}
+        {(() => {
+          const options = tree.childrenOf(categorySlug).filter((c) => (c.listingCount ?? 0) > 0);
+          const shown = showAllFilterCats ? options : options.slice(0, 6);
+          return (
+            <View style={styles.filterCatList}>
+              {shown.map((c) => {
+                const { Icon, color } = categoryLook(c, tree);
+                const deeper = tree.childrenOf(c.slug).some((k) => (k.listingCount ?? 0) > 0);
+                return (
+                  <Tap key={c.id} style={styles.filterCatRow} onPress={() => (setShowAllFilterCats(false), setCategorySlug(c.slug))} scaleTo={0.98} accessibilityLabel={`${c.name}, ${c.listingCount ?? 0} items`}>
+                    <View style={[styles.filterCatIcon, { backgroundColor: color + "1F" }]}>
+                      <Icon size={16} color={color} strokeWidth={2.2} />
+                    </View>
+                    <Text style={styles.filterCatName} numberOfLines={1}>
+                      {c.name}
+                    </Text>
+                    <Text style={styles.filterCatCount}>{(c.listingCount ?? 0).toLocaleString()}</Text>
+                    {deeper && <ChevronRight size={16} color={colors.textMuted} />}
+                  </Tap>
+                );
+              })}
+              {options.length > 6 && !showAllFilterCats && (
+                <Tap style={styles.filterCatMore} onPress={() => setShowAllFilterCats(true)} scaleTo={0.97}>
+                  <Text style={styles.filterCatMoreText}>Show all {options.length}</Text>
+                </Tap>
+              )}
+            </View>
+          );
+        })()}
       </View>
       {attributeFilters && (
         <View style={styles.detailsBox}>
@@ -620,10 +665,11 @@ export default function SearchScreen() {
           </View>
         </FadeIn>
       )}
+      {popular.length > 0 && (
       <FadeIn delay={60} style={{ marginBottom: spacing.lg }}>
         <Text style={styles.sectionTitle}>Popular right now</Text>
         <View style={styles.wrapRow}>
-          {POPULAR.map((q) => (
+          {popular.map((q) => (
             <Tap key={q} style={styles.suggestion} onPress={() => setQuery(q)} scaleTo={0.94}>
               <TrendingUp size={14} color={colors.primary} />
               <Text style={styles.suggestionText}>{q}</Text>
@@ -631,6 +677,7 @@ export default function SearchScreen() {
           ))}
         </View>
       </FadeIn>
+      )}
     </View>
   );
 
@@ -858,12 +905,14 @@ export default function SearchScreen() {
                 subcategories get their own row below, so this row never changes height. */}
             <View style={{ flex: 1, minWidth: 0 }}>{!isBrowsing && !categorySlug && categoryChips}</View>
           </View>
-          {!!categorySlug && <View style={{ marginLeft: FILTER_PANEL_WIDTH + spacing.lg, marginBottom: spacing.md }}>{categoryChips}</View>}
+
           <View style={{ flexDirection: "row", flex: 1, gap: spacing.lg }}>
             <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} style={{ width: FILTER_PANEL_WIDTH, flexGrow: 0 }} contentContainerStyle={styles.filterCard}>
               {filterControls}
             </ScrollView>
             <View style={{ flex: 1, minWidth: 0 }}>
+              {/* Inside the results column, so the filter panel never moves. */}
+              {!!categorySlug && <View style={{ marginBottom: spacing.md }}>{categoryChips}</View>}
               <ProductGrid
                 data={results}
                 loading={loading && results.length === 0}
@@ -950,6 +999,19 @@ const useStyles = makeStyles((colors) => ({
   understandChipText: { fontSize: fontSize.caption, fontWeight: fontWeight.semibold, color: colors.text },
   understandApply: { backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: spacing.md + 2, height: 38, alignItems: "center", justifyContent: "center" },
   understandApplyText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.sm },
+  // Stacked so long names fit even in the narrow desktop panel.
+  filterPath: { gap: spacing.xs, marginBottom: spacing.sm, alignItems: "flex-start" },
+  filterBack: { flexDirection: "row", alignItems: "center", gap: 2, maxWidth: "100%", height: 32, paddingRight: spacing.sm },
+  filterBackText: { flexShrink: 1, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.textMuted },
+  filterCurrent: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "stretch", height: 44, paddingHorizontal: spacing.sm + 4, borderRadius: radius.md, backgroundColor: colors.primary },
+  filterCurrentText: { flex: 1, fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.inverseText },
+  filterCatList: { borderRadius: radius.md, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
+  filterCatRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 2, minHeight: 48, paddingHorizontal: spacing.sm + 2 },
+  filterCatIcon: { width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  filterCatName: { flex: 1, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text },
+  filterCatCount: { fontSize: fontSize.caption, color: colors.textMuted, fontWeight: fontWeight.semibold },
+  filterCatMore: { minHeight: 44, alignItems: "center", justifyContent: "center", borderTopWidth: 1, borderTopColor: colors.border },
+  filterCatMoreText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.primary },
   detailsBox: { gap: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.primaryTint },
   detailsTitle: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.text },
   pageTitle: { fontSize: fontSize.display, fontWeight: fontWeight.extrabold, color: colors.text, letterSpacing: -0.5, marginBottom: spacing.sm + 4 },

@@ -14,9 +14,13 @@ const MAX_COLUMNS = 6;
 // silently lose its scrollbar's worth of width and wrap to one column.
 const WEB_SCROLLBAR_BUFFER = Platform.OS === "web" ? 18 : 0;
 
+// Wide web screens get fewer, bigger cards: photos are what people shop by.
+const CARD_MIN_WIDTH_WIDE = 230;
+
 export function computeGrid(width: number, horizontalPadding = spacing.md) {
   const usable = width - horizontalPadding * 2 - WEB_SCROLLBAR_BUFFER;
-  const numColumns = Math.min(MAX_COLUMNS, Math.max(2, Math.floor((usable + GRID_GAP) / (CARD_MIN_WIDTH + GRID_GAP))));
+  const minWidth = Platform.OS === "web" && usable >= 700 ? CARD_MIN_WIDTH_WIDE : CARD_MIN_WIDTH;
+  const numColumns = Math.min(MAX_COLUMNS, Math.max(2, Math.floor((usable + GRID_GAP) / (minWidth + GRID_GAP))));
   const cardWidth = Math.floor((usable - GRID_GAP * (numColumns - 1)) / numColumns);
   return { numColumns, cardWidth, usable };
 }
