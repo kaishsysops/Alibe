@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db.js";
-import { CATEGORY_TREE, TREE_VERSION, flattenTree } from "./categoryTree.js";
+import { CATEGORY_TREE, EXTRA_KEYWORDS, TREE_VERSION, flattenTree } from "./categoryTree.js";
 import { CategoryIndex, bestCategory, categoryIndex, clearCategoryCaches, descendants, effectiveAttributes, guessAttributes, isLeaf, topLevelOf } from "./categories.js";
 import { NOT_FOR_SALE } from "./ibayCategories.js";
 
@@ -14,19 +14,29 @@ export async function syncCategoryTree(log = console.log) {
   if (Number(row?.value ?? 0) >= TREE_VERSION) return false;
 
   const nodes = flattenTree(CATEGORY_TREE);
+  const firstSetup = Number(row?.value ?? 0) < 1;
   const idBySlug = new Map<string, string>();
   // Parents come before their children in the flattened list.
+  const existing = new Map((await prisma.category.findMany({ select: { slug: true, keywords: true } })).map((c) => [c.slug, c.keywords]));
   for (const n of nodes) {
+    // Keywords only ever grow: the template's plus any staff added.
+    const keywords = [...new Set([...(n.keywords ?? []), ...(EXTRA_KEYWORDS[n.slug] ?? []), ...(existing.get(n.slug) ?? [])].map((k) => k.toLowerCase().trim()).filter(Boolean))];
     const data = {
       name: n.name,
       icon: n.icon ?? null,
       sortOrder: n.sortOrder,
-      keywords: n.keywords ?? [],
+      keywords,
       attributes: n.attributes ? (n.attributes as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
       parentId: n.parentSlug ? idBySlug.get(n.parentSlug)! : null,
       hidden: false,
     };
-    const c = await prisma.category.upsert({ where: { slug: n.slug }, update: data, create: { slug: n.slug, ...data } });
+    // First setup writes the whole tree. After that staff own names, order and
+    // placement: later versions only add new categories and new words.
+    const c = await prisma.category.upsert({
+      where: { slug: n.slug },
+      update: firstSetup ? data : { keywords, attributes: data.attributes },
+      create: { slug: n.slug, ...data },
+    });
     idBySlug.set(n.slug, c.id);
   }
   await prisma.appSetting.upsert({ where: { key: VERSION_KEY }, update: { value: String(TREE_VERSION) }, create: { key: VERSION_KEY, value: String(TREE_VERSION) } });

@@ -66,6 +66,32 @@ const choosable = (index: CategoryIndex) => index.rows.filter((c) => !c.hidden &
 
 // ---- auto category for Sell ------------------------------------------------------
 
+// Categories of the most similar titles already on Alibe (and iBay items,
+// where those exist), best first. Each match votes by how close it is.
+async function categoriesOfSimilarTitles(index: CategoryIndex, title: string): Promise<string[]> {
+  const q = title.toLowerCase().slice(0, 120);
+  const [own, ibay] = await prisma.$transaction([
+    prisma.$executeRawUnsafe(`SET LOCAL pg_trgm.similarity_threshold = 0.3`),
+    prisma.$queryRaw<{ categoryId: string; score: number }[]>`
+      SELECT "categoryId", similarity(title, ${q}) AS score FROM "Listing"
+      WHERE title % ${q} AND "hiddenAt" IS NULL
+      ORDER BY score DESC LIMIT 25`,
+    prisma.$queryRaw<{ slug: string; score: number }[]>`
+      SELECT "alibeCategory" AS slug, similarity(title, ${q}) AS score FROM "IbayItem"
+      WHERE title % ${q} AND "alibeCategory" IS NOT NULL AND "alibeCategory" <> 'excluded'
+      ORDER BY score DESC LIMIT 25`,
+  ]).then(([, a, b]) => [a, b] as const);
+  const votes = new Map<string, number>();
+  const vote = (slug: string | undefined, score: number) => {
+    // Only categories that can take a listing (not the top level).
+    const c = slug ? index.bySlug.get(slug) : undefined;
+    if (c && c.parentId && !c.hidden) votes.set(c.slug, (votes.get(c.slug) ?? 0) + Number(score));
+  };
+  for (const r of own) vote(index.byId.get(r.categoryId)?.slug, r.score);
+  for (const r of ibay) vote(r.slug, r.score);
+  return [...votes.entries()].sort((a, b) => b[1] - a[1]).map(([slug]) => slug);
+}
+
 const suggestSchema = z.object({ title: z.string().trim().min(2).max(120), description: z.string().max(2000).optional().default("") });
 
 // Up to three likely categories for what's being sold, best first, with the
@@ -85,6 +111,11 @@ categoriesRouter.post("/suggest", async (req, res) => {
     source = "ai";
   }
   for (const s of scored) if (picks.length < 3 && !picks.includes(s.category.slug)) picks.push(s.category.slug);
+  // Nothing matched the words: learn from similar things already listed.
+  if (picks.length === 0) {
+    for (const slug of await categoriesOfSimilarTitles(index, title)) if (picks.length < 2 && !picks.includes(slug)) picks.push(slug);
+    if (source === "none" && picks.length) source = "keywords";
+  }
 
   const suggestions = await Promise.all(
     picks.map(async (slug, i) => {

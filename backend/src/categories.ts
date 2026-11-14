@@ -126,7 +126,15 @@ export type Scored = { category: CategoryRow; score: number };
 export function scoreCategories(index: CategoryIndex, title: string, description = "", within?: string): Scored[] {
   const t = normalise(title);
   const d = normalise(description.slice(0, 600));
-  const lead = ` ${t.trim().split(" ").slice(0, 3).join(" ")} `;
+  // The core name is everything before "with", "for", "-", "(" or a comma.
+  const coreText = title.toLowerCase().split(/\s+(?:with|for|from|in|at|incl|including|and)\s+|\s+-\s+|[(,|/]/)[0];
+  const core = normalise(coreText);
+  // Its main word: the last real word (not a size, count or model number).
+  const head = core
+    .trim()
+    .split(" ")
+    .filter((w) => /^[a-z]{3,}$/.test(w) && !["new", "used", "sale", "good", "brand", "original", "set", "pcs", "pack", "size"].includes(w))
+    .pop();
   const pool = within ? descendants(index, within) : index.rows;
   const own = new Map<string, number>();
   for (const c of pool) {
@@ -137,7 +145,12 @@ export function scoreCategories(index: CategoryIndex, title: string, description
       // Longer phrases are more specific: "screen protector" beats "screen".
       const weight = 1 + normalise(p).trim().split(" ").length * 0.6;
       // What a title starts with is what it is: "iPad Pro with Apple Pencil".
-      if (hasPhrase(lead, p)) s += 4.5 * weight;
+      // The main word ("case" in "iPhone 13 case") says what it is; the rest of
+      // the core name says what kind; words after "with/for/..." matter least.
+      const np = normalise(p).trim();
+      const endsOnHead = head && (np === head || np.endsWith(` ${head}`) || `${np}s` === head || `${np}es` === head);
+      if (endsOnHead && hasPhrase(core, p)) s += 5 * weight;
+      else if (hasPhrase(core, p)) s += 4 * weight;
       else if (hasPhrase(t, p)) s += 3 * weight;
       else if (d.length > 2 && hasPhrase(d, p)) s += weight;
     }
