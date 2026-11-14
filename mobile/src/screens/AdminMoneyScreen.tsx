@@ -153,7 +153,7 @@ export default function AdminMoneyScreen() {
         </View>
       ) : (
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <ScrollView contentContainerStyle={[styles.scroll, { paddingHorizontal: gutter }]} keyboardShouldPersistTaps="handled">
+          <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.scroll, { paddingHorizontal: gutter }]} keyboardShouldPersistTaps="handled">
             <Text style={styles.section}>To check</Text>
             {purchases.length ? purchases.map(renderPurchase) : <EmptyState compact icon={CheckCircle2} title="All caught up" message="New purchases appear here." />}
 

@@ -98,7 +98,7 @@ export default function AdminStaffScreen() {
   return (
     <View style={styles.container}>
       {isDesktopWeb ? <WebNavBar active="profile" /> : <ScreenHeader title="Staff" />}
-      <ScrollView
+      <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}
         contentContainerStyle={[styles.list, { paddingHorizontal: gutter }]}
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => (setRefreshing(true), load())} tintColor={colors.primary} />}

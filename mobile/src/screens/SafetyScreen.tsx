@@ -34,7 +34,7 @@ export default function SafetyScreen() {
   return (
     <View style={styles.container}>
       {isDesktopWeb ? <WebNavBar /> : <ScreenHeader title="Staying safe" />}
-      <ScrollView contentContainerStyle={[styles.content, { paddingHorizontal: gutter, paddingBottom: insets.bottom + spacing.xl }, isDesktopWeb && styles.desktop]}>
+      <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingHorizontal: gutter, paddingBottom: insets.bottom + spacing.xl }, isDesktopWeb && styles.desktop]}>
         <FadeIn>
           <View style={styles.hero}>
             <View style={styles.heroIcon}>

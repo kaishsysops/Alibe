@@ -14,6 +14,8 @@ import HomeSearchBar from "../components/HomeSearchBar";
 import EmptyState from "../components/EmptyState";
 import OrderNudge from "../components/OrderNudge";
 import CategoryTile from "../components/CategoryTile";
+import SubcategoryCards from "../components/SubcategoryCards";
+import { buildCategoryTree } from "../utils/categoryTree";
 import { CountBadge } from "../components/Badges";
 import { useNotifications } from "../api/NotificationsContext";
 import { getRecentlyViewed } from "../utils/recentlyViewed";
@@ -40,6 +42,9 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const { isDesktopWeb, width, gutter, contentWidth } = useResponsive();
   const [categories, setCategories] = useState<Category[]>([]);
+  // The whole tree too, for a category's subcategory cards.
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
+  const tree = useMemo(() => buildCategoryTree(allCategories), [allCategories]);
   // Built by the server: newest items plus a short row per category. Home never
   // downloads the whole marketplace.
   const [latest, setLatest] = useState<Listing[]>([]);
@@ -66,7 +71,11 @@ export default function HomeScreen() {
     try {
       // Loaded independently: if listings fail, the categories still show.
       const [cats, home] = await Promise.allSettled([api.categories(), api.home()]);
-      if (cats.status === "fulfilled") setCategories(cats.value);
+      // Home shows the main categories; their subcategories open from there.
+      if (cats.status === "fulfilled") {
+        setAllCategories(cats.value);
+        setCategories(cats.value.filter((c) => !c.parentId));
+      }
       if (home.status === "fulfilled") {
         setLatest(home.value.latest);
         setRails(home.value.rails);
@@ -179,7 +188,7 @@ export default function HomeScreen() {
     return (
       <View style={styles.container}>
         <WebNavBar active="home" />
-        <ScrollView>
+        <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}>
           <View style={[styles.desktopColumn, { paddingHorizontal: gutter }]}>
             <View style={styles.banner}>
               <View style={styles.bannerText}>
@@ -220,6 +229,9 @@ export default function HomeScreen() {
                         <Text style={styles.clearFilterText}>Clear</Text>
                       </Tap>
                     </View>
+                    <View style={{ marginBottom: spacing.md }}>
+                      <SubcategoryCards tree={tree} slug={activeCategory.slug} onPress={(c) => seeAllInCategory(c)} />
+                    </View>
                     <StaticProductGrid data={filtered} onPressItem={goToProduct} containerWidth={gridWidth} horizontalPadding={0} />
                   </>
                 ) : loading ? (
@@ -259,7 +271,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <PullRefreshBadge scrollY={scrollY} refreshing={refreshing} />
-      <ScrollView
+      <ScrollView showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -305,8 +317,8 @@ export default function HomeScreen() {
           {loading
             ? Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} width={categoryTile} height={categoryTile} rounded={radius.md} />)
             : [
-                ...gridCategories.map((c) => ({ key: c.id, name: c.name, slug: c.slug, onPress: () => seeAllInCategory(c) })),
-                ...(hasMoreCategories ? [{ key: "more", name: "More", slug: "", onPress: () => goToSearch({}) }] : []),
+                ...gridCategories.map((c) => ({ key: c.id, name: c.name, slug: c.slug, onPress: () => navigation.navigate("Categories", { slug: c.slug }) })),
+                ...(hasMoreCategories ? [{ key: "more", name: "More", slug: "", onPress: () => navigation.navigate("Categories") }] : []),
               ].map((c) => {
                 const meta = categoryIcons[c.slug];
                 return (

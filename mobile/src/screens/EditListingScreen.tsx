@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, TextInput, ScrollView, ActivityIndicator, Image, KeyboardAvoidingView, Platform } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
 import { Plus, Star, X, Trash2, Check, PackageSearch } from "lucide-react-native";
-import { api, Atoll, Category, DeliveryOption, errorMessage, Listing, mediaUrl, uploadMedia } from "../api/client";
+import { api, Atoll, Category, DeliveryOption, errorMessage, Listing, ListingAttributes, mediaUrl, uploadMedia } from "../api/client";
+import CategoryPicker, { AttributeFields } from "../components/CategoryPicker";
+import { buildCategoryTree } from "../utils/categoryTree";
 import { useAuth, DRAFT_PREFIX } from "../api/AuthContext";
 import ScreenHeader from "../components/ScreenHeader";
 import WebNavBar from "../components/WebNavBar";
@@ -41,6 +43,7 @@ type Form = {
   description: string;
   condition: Listing["condition"];
   categoryId: string;
+  attributes?: ListingAttributes;
   islandId: string;
   deliveryOptions: DeliveryOption[];
   deliveryNote: string;
@@ -64,6 +67,7 @@ export default function EditListingScreen() {
   const [missing, setMissing] = useState(false);
   // Unsaved edits survive leaving the screen; cleared once saved.
   const [form, setForm, { hydrated, clear }] = usePersistentState<Form>(`${DRAFT_PREFIX}edit.${id}`, EMPTY);
+  const tree = useMemo(() => buildCategoryTree(categories), [categories]);
   const set = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
 
   useEffect(() => {
@@ -84,6 +88,7 @@ export default function EditListingScreen() {
           description: l.description,
           condition: l.condition,
           categoryId: l.category.id,
+          attributes: l.attributes ?? {},
           islandId: l.island.id,
           deliveryOptions: l.deliveryOptions?.length ? l.deliveryOptions : ["PICKUP"],
           deliveryNote: l.deliveryNote ?? "",
@@ -122,6 +127,7 @@ export default function EditListingScreen() {
         description: form.description.trim() || "No description provided.",
         condition: form.condition,
         categoryId: form.categoryId,
+        attributes: form.attributes ?? {},
         islandId: form.islandId,
         images,
         deliveryOptions: form.deliveryOptions,
@@ -191,7 +197,7 @@ export default function EditListingScreen() {
     <View style={styles.container}>
       {header}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+        <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Photos</Text>
             <Text style={styles.helper}>The first photo is the cover. Tap a photo to make it the cover.</Text>
@@ -229,7 +235,16 @@ export default function EditListingScreen() {
 
           <View style={styles.card}>
             <Text style={styles.label}>Category</Text>
-            <View style={styles.chipGrid}>{categories.map((c) => chip(c.name, form.categoryId === c.id, () => set({ categoryId: c.id })))}</View>
+            <CategoryPicker
+              categories={categories}
+              value={form.categoryId || undefined}
+              onChange={(categoryId, suggested) => {
+                const keys = new Set(tree.attributesOf(tree.byId.get(categoryId)?.slug).map((a) => a.key));
+                const kept = Object.fromEntries(Object.entries(form.attributes ?? {}).filter(([k]) => keys.has(k)));
+                set({ categoryId, attributes: { ...(suggested ?? {}), ...kept } });
+              }}
+            />
+            <AttributeFields defs={tree.attributesOf(tree.byId.get(form.categoryId)?.slug)} value={form.attributes ?? {}} onChange={(attributes) => set({ attributes })} />
             <Text style={styles.label}>Condition</Text>
             <View style={styles.chipGrid}>{CONDITIONS.map((c) => chip(c.label, form.condition === c.value, () => set({ condition: c.value })))}</View>
             <Text style={styles.label}>Island</Text>

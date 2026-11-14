@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Image, ScrollView, ActivityIndicator, NativeSyntheticEvent, NativeScrollEvent, useWindowDimensions, Animated, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { MapPin, MessageCircle, Heart, CheckCircle2, RotateCcw, PackageSearch, ChevronRight, ChevronLeft, Clock, Tag, Share2, MoreHorizontal, Pencil, Truck, Ship, Hand, Flag, Ban, ShieldCheck, Rocket } from "lucide-react-native";
-import { api, errorMessage, Listing, newClientId, DeliveryOption } from "../api/client";
+import { api, Category, errorMessage, Listing, newClientId, DeliveryOption } from "../api/client";
+import { buildCategoryTree } from "../utils/categoryTree";
 import { VerifiedBadge } from "../components/Badges";
 import { OfferSheet, useTrustActions } from "../components/TrustSheets";
 import { useActionSheet } from "../components/Sheet";
@@ -18,7 +19,7 @@ import EmptyState from "../components/EmptyState";
 import HomeRail from "../components/HomeRail";
 import WebNavBar from "../components/WebNavBar";
 import ScreenHeader, { useGoBack } from "../components/ScreenHeader";
-import { ContactCard, ContactIconButtons } from "../components/ContactButtons";
+import { ContactIconButtons } from "../components/ContactButtons";
 import { ListingImage } from "../components/ListingCard";
 import { Skeleton, SkeletonGroup } from "../components/Skeleton";
 import Tap from "../components/Tap";
@@ -29,12 +30,6 @@ import { timeAgo } from "../utils/time";
 import TrustBadge from "../components/TrustBadge";
 import AvatarPhoto from "../components/AvatarPhoto";
 import ListingLocationCard from "../components/ListingLocationCard";
-
-const DELIVERY_META: Record<DeliveryOption, { label: string; icon: any }> = {
-  PICKUP: { label: "Pickup", icon: Hand },
-  FERRY: { label: "Ferry cargo", icon: Ship },
-  COURIER: { label: "Courier", icon: Truck },
-};
 
 const conditionLabel = (c: string) => c.replace("_", " ").toLowerCase().replace(/^\w/, (m) => m.toUpperCase());
 
@@ -48,7 +43,7 @@ function Gallery({ images, width, height }: { images: string[]; width: number; h
   };
   return (
     <View style={{ width, height }}>
-      <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={32}>
+      <ScrollView showsVerticalScrollIndicator={false} horizontal pagingEnabled showsHorizontalScrollIndicator={false} onScroll={onScroll} scrollEventThrottle={32}>
         {(images.length ? images : [""]).map((uri, i) => (
           <Tap key={i} onPress={() => uri && setViewing(i)} scaleTo={0.99} accessibilityLabel="Zoom photo">
             <ListingImage uri={uri} style={{ width, height }} />
@@ -140,6 +135,11 @@ export default function ProductDetailScreen() {
   const [offerOpen, setOfferOpen] = useState(false);
   const showSheet = useActionSheet();
   const trust = useTrustActions();
+  const [categories, setCategories] = useState<Category[]>([]);
+  const tree = useMemo(() => buildCategoryTree(categories), [categories]);
+  useEffect(() => {
+    api.categories().then(setCategories).catch(() => {});
+  }, []);
 
   useEffect(() => {
     setNotFound(false);
@@ -292,7 +292,15 @@ export default function ProductDetailScreen() {
   const isReserved = listing.status === "RESERVED";
   const available = listing.status === "ACTIVE";
 
-  const info = (
+  // Category path and the item's details (brand, storage, year...), labelled by its category.
+  const categoryPath = tree.pathOf(listing.category.slug);
+  const specs = tree
+    .attributesOf(listing.category.slug)
+    .filter((def) => listing.attributes?.[def.key] !== undefined)
+    .map((def) => ({ label: def.label, value: `${typeof listing.attributes![def.key] === "number" ? Number(listing.attributes![def.key]).toLocaleString() : listing.attributes![def.key]}${def.unit ? ` ${def.unit}` : ""}` }));
+
+  // What you need to decide: price, what it is, where and when.
+  const headline = (
     <>
       <View style={styles.priceRow}>
         <Text style={styles.price}>MVR {listing.price.toLocaleString()}</Text>
@@ -305,43 +313,26 @@ export default function ProductDetailScreen() {
       </View>
       <Text style={styles.title}>{listing.title}</Text>
       <View style={styles.metaRow}>
+        <View style={[styles.tag, { backgroundColor: `${conditionColors[listing.condition]}18`, borderColor: "transparent" }]}>
+          <Text style={[styles.tagText, { color: conditionColors[listing.condition] }]}>{conditionLabel(listing.condition)}</Text>
+        </View>
         <View style={styles.metaItem}>
           <MapPin size={14} color={colors.textMuted} />
-          <Text style={styles.metaText}>{location}</Text>
+          <Text style={styles.metaText} numberOfLines={1}>
+            {listing.island?.name ?? location}
+          </Text>
         </View>
         <View style={styles.metaItem}>
           <Clock size={14} color={colors.textMuted} />
           <Text style={styles.metaText}>{timeAgo(listing.createdAt, true)}</Text>
         </View>
       </View>
-      <View style={styles.tagRow}>
-        <View style={[styles.tag, { backgroundColor: `${conditionColors[listing.condition]}18` }]}>
-          <Text style={[styles.tagText, { color: conditionColors[listing.condition] }]}>{conditionLabel(listing.condition)}</Text>
-        </View>
-        <Tap style={styles.tag} onPress={() => navigation.navigate("Tabs", { screen: "SearchTab", params: { categorySlug: listing.category.slug } })} scaleTo={0.94}>
-          <Tag size={12} color={colors.textMuted} />
-          <Text style={styles.tagText}>{listing.category.name}</Text>
-        </Tap>
-      </View>
+    </>
+  );
 
-      {listing.deliveryOptions?.length > 0 && (
-        <View style={styles.deliveryCard}>
-          <Text style={styles.deliveryTitle}>Getting it</Text>
-          <View style={styles.deliveryRow}>
-            {listing.deliveryOptions.map((d) => {
-              const meta = DELIVERY_META[d];
-              return (
-                <View key={d} style={styles.deliveryChip}>
-                  <meta.icon size={14} color={colors.primary} />
-                  <Text style={styles.deliveryText}>{meta.label}</Text>
-                </View>
-              );
-            })}
-          </View>
-          {!!listing.deliveryNote && <Text style={styles.deliveryNote}>{listing.deliveryNote}</Text>}
-        </View>
-      )}
-
+  // Everything else, most useful first.
+  const details = (
+    <>
       <Tap style={styles.sellerCard} onPress={() => navigation.navigate("SellerProfile", { id: listing.seller.id })} scaleTo={0.98}>
         <View style={[styles.avatar, { backgroundColor: listing.seller.avatarColor ?? colors.primary }]}>
           <Text style={styles.avatarText}>{listing.seller.name.charAt(0).toUpperCase()}</Text>
@@ -352,12 +343,19 @@ export default function ProductDetailScreen() {
             <Text style={styles.sellerName}>{isOwner ? "You" : listing.seller.name}</Text>
             {listing.seller.verified && <VerifiedBadge size={15} />}
           </View>
-          <Text style={styles.sellerMeta}>{sellerDisplay}</Text>
           <TrustBadge userId={listing.seller.id} />
         </View>
-        <Text style={styles.sellerLink}>Profile</Text>
-        <ChevronRight size={16} color={colors.primary} />
+        <ChevronRight size={18} color={colors.textMuted} />
       </Tap>
+
+      {!isOwner && available && (
+        <Tap style={styles.safetyRow} onPress={() => navigation.navigate("Safety")} scaleTo={0.98} accessibilityLabel="How Alibe keeps you safe">
+          <ShieldCheck size={18} color={colors.success} />
+          <Text style={styles.safetyText} numberOfLines={1}>
+            Pay only when the item is in your hands.
+          </Text>
+        </Tap>
+      )}
 
       {isOwner && available && !listing.hiddenAt && (
         <Tap style={styles.boostRow} onPress={() => navigation.navigate("Boost", { id: listing.id })} scaleTo={0.98}>
@@ -369,20 +367,27 @@ export default function ProductDetailScreen() {
           <ChevronRight size={16} color={colors.textMuted} />
         </Tap>
       )}
-      {!isOwner && available && (
-        <View style={{ marginTop: spacing.md }}>
-          <ContactCard contact={listing.seller} listingTitle={listing.title} />
-        </View>
-      )}
 
-      {!isOwner && available && (
-        <Tap style={styles.safetyRow} onPress={() => navigation.navigate("Safety")} scaleTo={0.98}>
-          <ShieldCheck size={20} color={colors.success} />
-          <Text style={styles.safetyText}>
-            <Text style={{ fontWeight: fontWeight.bold }}>Protected by Alibe.</Text> Pay only when the item is in your hands.
-          </Text>
-          <ChevronRight size={16} color={colors.textMuted} />
-        </Tap>
+      {(specs.length > 0 || categoryPath.length > 0) && (
+        <>
+          <Text style={styles.sectionTitle}>Details</Text>
+          <View style={styles.specs}>
+            {categoryPath.length > 0 && (
+              <Tap style={styles.specRow} onPress={() => navigation.navigate("Tabs", { screen: "SearchTab", params: { categorySlug: listing.category.slug } })} scaleTo={0.99} accessibilityLabel={`More in ${listing.category.name}`}>
+                <Text style={styles.specLabel}>Category</Text>
+                <Text style={[styles.specValue, { color: colors.primary }]} numberOfLines={1}>
+                  {categoryPath.map((c) => c.name).join(" › ")}
+                </Text>
+              </Tap>
+            )}
+            {specs.map((sp) => (
+              <View key={sp.label} style={styles.specRow}>
+                <Text style={styles.specLabel}>{sp.label}</Text>
+                <Text style={styles.specValue}>{sp.value}</Text>
+              </View>
+            ))}
+          </View>
+        </>
       )}
 
       <Text style={styles.sectionTitle}>About this item</Text>
@@ -390,8 +395,9 @@ export default function ProductDetailScreen() {
 
       {listing.island?.atoll && (
         <>
-          <Text style={styles.sectionTitle}>Where it is</Text>
+          <Text style={styles.sectionTitle}>Where it is and how to get it</Text>
           <ListingLocationCard island={listing.island} deliveryOptions={listing.deliveryOptions} />
+          {!!listing.deliveryNote && <Text style={styles.deliveryNote}>{listing.deliveryNote}</Text>}
         </>
       )}
     </>
@@ -438,7 +444,7 @@ export default function ProductDetailScreen() {
     return (
       <View style={styles.container}>
         <WebNavBar />
-        <ScrollView>
+        <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}>
           <View style={[styles.desktopColumn, { paddingHorizontal: gutter }]}>
             <Tap style={styles.backLink} onPress={goBack} scaleTo={0.96}>
               <ChevronLeft size={18} color={colors.textMuted} />
@@ -448,12 +454,18 @@ export default function ProductDetailScreen() {
               <DesktopGallery images={listing.images} />
               <View style={styles.desktopInfo}>
                 <View style={styles.desktopInfoCard}>
-                  {info}
+                  {headline}
                   <View style={styles.desktopActions}>
                     <View style={{ flex: 1 }}>{primaryAction}</View>
                     {favoriteButton}
                     {headerActions}
                   </View>
+                  {!isOwner && available && (
+                    <View style={{ marginTop: spacing.sm }}>
+                      <ContactIconButtons contact={{ ...listing.seller, phone: null }} listingTitle={listing.title} size={44} />
+                    </View>
+                  )}
+                  {details}
                 </View>
               </View>
             </View>
@@ -477,11 +489,14 @@ export default function ProductDetailScreen() {
           </>
         }
       />
-      <ScrollView contentContainerStyle={{ paddingBottom: spacing.xl }} showsVerticalScrollIndicator={false}>
+      <ScrollView showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingBottom: spacing.xl }} showsVerticalScrollIndicator={false}>
         <View style={{ alignItems: "center", backgroundColor: colors.skeleton }}>
           <Gallery images={listing.images} width={imageSize} height={imageSize} />
         </View>
-        <View style={[styles.body, { paddingHorizontal: gutter }]}>{info}</View>
+        <View style={[styles.body, { paddingHorizontal: gutter }]}>
+          {headline}
+          {details}
+        </View>
         {similarRail && <View style={{ marginTop: spacing.lg }}>{similarRail}</View>}
       </ScrollView>
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, spacing.sm) + spacing.xs, paddingHorizontal: gutter }]}>
@@ -505,9 +520,14 @@ const useStyles = makeStyles((colors) => ({
   thumbRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
   thumb: { width: 76, height: 76, borderRadius: radius.sm, backgroundColor: colors.skeleton, opacity: 0.55 },
   thumbActive: { opacity: 1, borderWidth: 2, borderColor: colors.primary },
-  desktopInfo: { width: 420 },
+  // Stays in view while the photos scroll, so Chat and Offer are always there.
+  desktopInfo: { width: 420, ...(Platform.OS === "web" ? ({ position: "sticky", top: spacing.md, alignSelf: "flex-start" } as object) : {}) },
+  specs: { backgroundColor: colors.card, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
+  specRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 2, borderBottomWidth: 1, borderBottomColor: colors.border },
+  specLabel: { width: 110, fontSize: fontSize.sm, color: colors.textMuted },
+  specValue: { flex: 1, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text, textAlign: "right" },
   desktopInfoCard: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.lg, ...cardShadow },
-  desktopActions: { flexDirection: "row", gap: spacing.sm, alignItems: "center", marginTop: spacing.lg },
+  desktopActions: { flexDirection: "row", gap: spacing.sm, alignItems: "center", marginTop: spacing.md },
   dotsRow: { position: "absolute", bottom: spacing.md, left: 0, right: 0, flexDirection: "row", justifyContent: "center", gap: 5 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.6)" },
   dotActive: { backgroundColor: "#fff", width: 18 },
@@ -531,7 +551,7 @@ const useStyles = makeStyles((colors) => ({
   soldBadge: { paddingHorizontal: spacing.sm + 2, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: colors.danger },
   soldBadgeText: { color: "#fff", fontSize: fontSize.caption, fontWeight: fontWeight.bold },
   title: { fontSize: fontSize.xl, color: colors.text, marginTop: spacing.xs, fontWeight: fontWeight.semibold, lineHeight: fontSize.xl * 1.3 },
-  metaRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md, marginTop: spacing.sm },
+  metaRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: spacing.md, marginTop: spacing.sm },
   metaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   metaText: { fontSize: fontSize.sm, color: colors.textMuted },
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md },
@@ -560,7 +580,7 @@ const useStyles = makeStyles((colors) => ({
   deliveryRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   deliveryChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.sm + 4, height: 34, borderRadius: radius.pill, backgroundColor: colors.primaryTint },
   deliveryText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text },
-  deliveryNote: { fontSize: fontSize.sm, color: colors.textMuted, lineHeight: fontSize.sm * 1.45 },
+  deliveryNote: { marginTop: spacing.sm, fontSize: fontSize.sm, color: colors.textMuted, lineHeight: fontSize.sm * 1.45 },
   description: { color: colors.text, fontSize: fontSize.md, lineHeight: fontSize.md * 1.55 },
   footer: {
     flexDirection: "row",

@@ -108,7 +108,7 @@ export default function NotificationsScreen() {
       <RowSkeleton count={5} />
     </View>
   ) : (
-    <FlatList
+    <FlatList showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}
       data={data.items}
       keyExtractor={(i) => i.id}
       renderItem={renderItem}

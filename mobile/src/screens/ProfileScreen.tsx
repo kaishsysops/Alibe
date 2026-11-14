@@ -2,7 +2,7 @@ import React, { useCallback, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { LogOut, Archive, Heart, Phone, Mail, Palette, HelpCircle, Info, ChevronRight, Pencil, Trash2, MessageSquareText, Package, ShieldCheck, BellRing, Bell, Ban, SunMoon, Flag, Store, Megaphone, Wallet, Landmark, Users, Scale, Activity, UserCog } from "lucide-react-native";
+import { LogOut, Archive, Heart, Phone, Mail, Palette, HelpCircle, Info, ChevronRight, Pencil, Trash2, MessageSquareText, Package, ShieldCheck, BellRing, Bell, Ban, SunMoon, Flag, Store, Megaphone, Wallet, Landmark, Users, Scale, Activity, UserCog, FolderTree } from "lucide-react-native";
 import { api, errorMessage } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import { useFavorites } from "../api/FavoritesContext";
@@ -105,6 +105,7 @@ export default function ProfileScreen() {
             { icon: Store, label: "iBay items", onPress: () => navigation.navigate("AdminIbay") },
             { icon: Landmark, label: "Payments and prices", onPress: () => navigation.navigate("AdminMoney") },
             { icon: UserCog, label: "Staff", onPress: () => navigation.navigate("AdminStaff") },
+            { icon: FolderTree, label: "Categories", onPress: () => navigation.navigate("AdminCategories") },
           ]
         : []),
       { icon: ShieldCheck, label: "How Alibe keeps you safe", onPress: () => navigation.navigate("Safety") },
@@ -183,14 +184,14 @@ export default function ProfileScreen() {
     return (
       <View style={styles.container}>
         <WebNavBar active="profile" />
-        <ScrollView contentContainerStyle={{ padding: spacing.xl }}>{content}</ScrollView>
+        <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={{ padding: spacing.xl }}>{content}</ScrollView>
       </View>
     );
   }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: gutter, paddingTop: spacing.md, paddingBottom: tabBarClearance }}>{content}</ScrollView>
+      <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: gutter, paddingTop: spacing.md, paddingBottom: tabBarClearance }}>{content}</ScrollView>
     </View>
   );
 }

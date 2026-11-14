@@ -69,7 +69,7 @@ export default function SavedSearchesScreen() {
       <RowSkeleton count={4} />
     </View>
   ) : (
-    <FlatList
+    <FlatList showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}
       data={items}
       keyExtractor={(s) => s.id}
       contentContainerStyle={{ paddingHorizontal: isDesktopWeb ? 0 : gutter, paddingBottom: spacing.xl, gap: spacing.sm, flexGrow: 1 }}

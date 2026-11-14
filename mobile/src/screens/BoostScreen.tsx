@@ -40,7 +40,7 @@ export default function BoostScreen() {
   return (
     <View style={styles.container}>
       {isDesktopWeb ? <WebNavBar /> : <ScreenHeader title="Boost this item" />}
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>Get seen first</Text>
         <Text style={styles.text}>Your item appears at the top of its category and matching searches, with a "Featured" label. It starts once we've confirmed your payment.</Text>
         {config ? (

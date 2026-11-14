@@ -156,7 +156,7 @@ export default function PurchasesScreen() {
           <RowSkeleton count={4} />
         </View>
       ) : (
-        <FlatList
+        <FlatList showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}
           data={purchases}
           keyExtractor={(p) => p.id}
           renderItem={renderItem}

@@ -52,7 +52,7 @@ export default function BlockedUsersScreen() {
       <RowSkeleton count={3} />
     </View>
   ) : (
-    <FlatList
+    <FlatList showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}
       data={items}
       keyExtractor={(b) => b.id}
       contentContainerStyle={{ paddingHorizontal: isDesktopWeb ? 0 : gutter, paddingBottom: spacing.xl, gap: spacing.sm, flexGrow: 1 }}

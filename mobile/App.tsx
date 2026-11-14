@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Platform } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -25,6 +26,13 @@ function Screens() {
       <MaintenanceOverlay />
     </EntranceGate.Provider>
   );
+}
+
+// The web version: no scroll bars anywhere (the phone apps turn them off per list).
+if (Platform.OS === "web" && typeof document !== "undefined") {
+  const style = document.createElement("style");
+  style.textContent = "* { scrollbar-width: none; -ms-overflow-style: none; } *::-webkit-scrollbar { display: none; width: 0; height: 0; }";
+  document.head.appendChild(style);
 }
 
 function ThemedStatusBar() {

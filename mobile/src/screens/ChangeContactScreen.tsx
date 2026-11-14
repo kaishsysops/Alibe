@@ -85,7 +85,7 @@ function ChangeContact({ kind }: { kind: "phone" | "email" }) {
     <View style={styles.container}>
       {isDesktopWeb ? <WebNavBar active="profile" /> : <ScreenHeader title={title} />}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <View style={styles.card}>
             {!!current && (
               <>

@@ -39,7 +39,7 @@ export default function HomeRail({
           </Tap>
         )}
       </View>
-      <FlatList
+      <FlatList showsVerticalScrollIndicator={false}
         horizontal
         showsHorizontalScrollIndicator={false}
         data={data}

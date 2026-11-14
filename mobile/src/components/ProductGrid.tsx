@@ -54,7 +54,7 @@ export default function ProductGrid({
   const { numColumns, cardWidth } = computeGrid(width, horizontalPadding);
 
   return (
-    <FlatList
+    <FlatList showsHorizontalScrollIndicator={false}
       key={numColumns}
       // A desktop-style scrollbar would eat into the column width math.
       showsVerticalScrollIndicator={false}

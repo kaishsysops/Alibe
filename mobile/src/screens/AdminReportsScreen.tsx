@@ -129,7 +129,7 @@ export default function AdminReportsScreen() {
           <RowSkeleton count={5} />
         </View>
       ) : (
-        <FlatList
+        <FlatList showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}
           data={groups}
           keyExtractor={(g) => g.key}
           renderItem={renderItem}

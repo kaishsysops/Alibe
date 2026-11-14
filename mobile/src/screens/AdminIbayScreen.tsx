@@ -134,7 +134,7 @@ export default function AdminIbayScreen() {
           <RowSkeleton count={6} />
         </View>
       ) : (
-        <FlatList
+        <FlatList showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}
           data={items}
           keyExtractor={(i) => i.id}
           renderItem={renderItem}

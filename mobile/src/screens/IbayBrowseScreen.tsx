@@ -66,7 +66,7 @@ export default function IbayBrowseScreen() {
   }, [query, categorySlug, load]);
 
   useEffect(() => {
-    api.categories().then(setCategories).catch(() => {});
+    api.categories().then((list) => setCategories(list.filter((c) => !c.parentId))).catch(() => {});
   }, []);
 
   const loadMore = async () => {
@@ -85,7 +85,7 @@ export default function IbayBrowseScreen() {
           <TextInput style={styles.searchInput} value={query} onChangeText={setQuery} placeholder="Search iBay items" placeholderTextColor={colors.textMuted} autoCorrect={false} accessibilityLabel="Search iBay items" />
         </View>
         <Text style={styles.note}>Found on iBay. Buy through Alibe at the price shown, and we handle the rest.</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} keyboardShouldPersistTaps="handled">
+        <ScrollView showsVerticalScrollIndicator={false} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} keyboardShouldPersistTaps="handled">
           {[{ slug: undefined as string | undefined, name: "All" }, ...categories.map((c) => ({ slug: c.slug as string | undefined, name: c.name }))].map(({ slug, name }) => {
             const active = categorySlug === slug;
             const Icon = slug ? categoryIcons[slug]?.Icon ?? AllCategoriesIcon : AllCategoriesIcon;
@@ -107,7 +107,7 @@ export default function IbayBrowseScreen() {
           </View>
         </SkeletonGroup>
       ) : (
-        <FlatList
+        <FlatList showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}
           key={columns}
           data={items}
           numColumns={columns}

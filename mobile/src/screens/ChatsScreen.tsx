@@ -176,7 +176,7 @@ export default function ChatsScreen() {
               {loading ? (
                 <RowSkeleton count={6} />
               ) : (
-                <FlatList
+                <FlatList showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}
                   data={visible}
                   keyExtractor={(c) => c.id}
                   contentContainerStyle={{ padding: spacing.sm, gap: 2, flexGrow: 1 }}
@@ -207,7 +207,7 @@ export default function ChatsScreen() {
           <RowSkeleton count={7} />
         </View>
       ) : (
-        <FlatList
+        <FlatList showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}
           data={visible}
           keyExtractor={(c) => c.id}
           renderItem={({ item }) => <ConversationRow item={item} onPress={() => navigation.navigate("ChatThread", { id: item.id })} />}

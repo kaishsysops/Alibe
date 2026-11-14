@@ -95,7 +95,7 @@ export default function StatusScreen() {
   ];
 
   const body = (
-    <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}>
+    <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}>
       <FadeIn>
         <View style={[styles.banner, { backgroundColor: `${tone}18`, borderColor: `${tone}55` }]}>
           {checks.length === 0 ? <ActivityIndicator color={colors.primary} /> : <Banner size={30} color={tone} />}

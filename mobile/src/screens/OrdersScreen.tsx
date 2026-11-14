@@ -108,7 +108,7 @@ export default function OrdersScreen() {
       <RowSkeleton count={4} />
     </View>
   ) : (
-    <SectionList
+    <SectionList showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}
       sections={sections}
       keyExtractor={(o) => o.id}
       stickySectionHeadersEnabled={false}

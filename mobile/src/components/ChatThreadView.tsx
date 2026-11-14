@@ -467,7 +467,7 @@ export default function ChatThreadView({
         </View>
       )}
 
-      <FlatList
+      <FlatList showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}
         inverted
         data={rows}
         keyExtractor={(r) => r.key}

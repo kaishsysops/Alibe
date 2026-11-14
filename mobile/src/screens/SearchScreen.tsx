@@ -2,12 +2,14 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { View, Text, TextInput, ScrollView, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { Search as SearchIcon, X, SlidersHorizontal, SearchX, BellPlus, BellRing, Clock, TrendingUp, ArrowUpDown, Star } from "lucide-react-native";
-import { api, Atoll, Category, DeliveryOption, errorMessage, Listing, ListingSort, SellerSearchResult } from "../api/client";
+import { Search as SearchIcon, X, SlidersHorizontal, SearchX, BellPlus, BellRing, Clock, TrendingUp, ArrowUpDown, Star, ChevronRight, Sparkles, LayoutGrid } from "lucide-react-native";
+import { api, Atoll, AttrFilters, AttributeDef, Category, DeliveryOption, errorMessage, Listing, ListingSort, SearchUnderstanding, SellerSearchResult } from "../api/client";
+import { buildCategoryTree, matchCategories } from "../utils/categoryTree";
 import { VerifiedBadge } from "../components/Badges";
 import { useAuth } from "../api/AuthContext";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import CategoryTile from "../components/CategoryTile";
+import SubcategoryCards from "../components/SubcategoryCards";
 import { Sheet, useActionSheet } from "../components/Sheet";
 import { FadeIn } from "../components/Motion";
 import { addRecentSearch, clearRecentSearches, getRecentSearches } from "../utils/recentSearches";
@@ -18,7 +20,7 @@ import Tap from "../components/Tap";
 import { useToast } from "../components/Toast";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, conditionColors, cardShadow, fontSize, fontWeight, controlHeight } from "../theme/theme";
-import { categoryIcons, AllCategoriesIcon } from "../theme/categoryIcons";
+import { AllCategoriesIcon, categoryLook } from "../theme/categoryIcons";
 import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
 import AvatarPhoto from "../components/AvatarPhoto";
 import { AtollFilter } from "../components/IslandPicker";
@@ -33,6 +35,11 @@ const DELIVERIES: Array<{ key: DeliveryOption; label: string }> = [
   { key: "PICKUP", label: "Pickup" },
   { key: "FERRY", label: "Ferry" },
   { key: "COURIER", label: "Courier" },
+];
+const POSTED: Array<{ days: string; label: string }> = [
+  { days: "1", label: "Last 24 hours" },
+  { days: "7", label: "Last 7 days" },
+  { days: "30", label: "Last 30 days" },
 ];
 const FILTER_PANEL_WIDTH = 280;
 // Starting points for people who don't know what to type.
@@ -70,6 +77,14 @@ export default function SearchScreen() {
   const [maxPrice, setMaxPrice] = useState("");
   const [sort, setSort] = useState<ListingSort>("newest");
   const [delivery, setDelivery] = useState<DeliveryOption | undefined>();
+  // The category's own filters: {"brand":["Apple"],"year":{"min":2015}}.
+  const [attrs, setAttrs] = useState<AttrFilters>({});
+  const [islandId, setIslandId] = useState<string | undefined>();
+  const [postedWithin, setPostedWithin] = useState<string | undefined>();
+  const [reduced, setReduced] = useState(false);
+  const [alibeOnly, setAlibeOnly] = useState(false);
+  // "iphone under 5000 in addu" -> a one-tap filter suggestion.
+  const [understanding, setUnderstanding] = useState<SearchUnderstanding | null>(null);
   // Key of the filter combination the user last saved, so the button can
   // show "Saved" until they change something.
   const [savedKey, setSavedKey] = useState<string | null>(null);
@@ -96,7 +111,11 @@ export default function SearchScreen() {
   const [sellers, setSellers] = useState<SellerSearchResult[]>([]);
   const sellerRequestId = useRef(0);
 
-  const activeFilterCount = (atollId ? 1 : 0) + (condition ? 1 : 0) + (minPrice ? 1 : 0) + (maxPrice ? 1 : 0) + (delivery ? 1 : 0);
+  const tree = useMemo(() => buildCategoryTree(categories), [categories]);
+  const categoryAttributes = useMemo(() => tree.attributesOf(categorySlug), [tree, categorySlug]);
+  const attrCount = Object.values(attrs).filter((v) => (Array.isArray(v) ? v.length : v.min !== undefined || v.max !== undefined)).length;
+  const activeFilterCount =
+    (atollId ? 1 : 0) + (islandId ? 1 : 0) + (condition ? 1 : 0) + (minPrice ? 1 : 0) + (maxPrice ? 1 : 0) + (delivery ? 1 : 0) + (postedWithin ? 1 : 0) + (reduced ? 1 : 0) + (alibeOnly ? 1 : 0) + attrCount;
   const isBrowsing = !query.trim() && !categorySlug && activeFilterCount === 0;
 
   useEffect(() => {
@@ -118,9 +137,24 @@ export default function SearchScreen() {
       setMinPrice(p.minPrice ?? "");
       setMaxPrice(p.maxPrice ?? "");
       setDelivery(p.delivery);
+      setAttrs(p.attrs ?? {});
+      setIslandId(p.islandId);
+      setPostedWithin(p.postedWithin);
+      setReduced(!!p.reduced);
+      setAlibeOnly(!!p.alibeOnly);
       setQuery(p.q ?? "");
     }
   }, [route.params]);
+
+  // A different category asks different questions: drop answers it doesn't ask.
+  useEffect(() => {
+    const keys = new Set(categoryAttributes.map((a) => a.key));
+    setAttrs((prev) => {
+      const kept = Object.fromEntries(Object.entries(prev).filter(([k]) => keys.has(k)));
+      return Object.keys(kept).length === Object.keys(prev).length ? prev : kept;
+    });
+  }, [categoryAttributes]);
+  const attrsParam = attrCount ? JSON.stringify(attrs) : undefined;
 
   const searchParams = useCallback(
     () => ({
@@ -133,8 +167,13 @@ export default function SearchScreen() {
       maxPrice: maxPrice || undefined,
       delivery,
       sort,
+      attrs: attrsParam,
+      islandId,
+      postedWithin,
+      reduced: reduced ? "1" : undefined,
+      alibeOnly: alibeOnly ? "1" : undefined,
     }),
-    [query, atollId, categorySlug, condition, minPrice, maxPrice, delivery, sort]
+    [query, atollId, categorySlug, condition, minPrice, maxPrice, delivery, sort, attrsParam, islandId, postedWithin, reduced, alibeOnly]
   );
 
   const runSearch = useCallback(async () => {
@@ -203,6 +242,43 @@ export default function SearchScreen() {
     return () => clearTimeout(t);
   }, [query]);
 
+  // Longer searches may name a category, price or place: offer them as filters.
+  useEffect(() => {
+    const q = query.trim();
+    setUnderstanding(null);
+    if (q.split(/\s+/).length < 2 && !/\d/.test(q)) return;
+    let live = true;
+    const t = setTimeout(() => {
+      api
+        .understandSearch(q)
+        .then((u) => live && setUnderstanding(u.filters ? u : null))
+        .catch(() => {});
+    }, 700);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [query]);
+
+  const applyUnderstanding = () => {
+    const f = understanding?.filters;
+    if (!f) return;
+    setQuery(f.q ?? "");
+    if (f.categorySlug) setCategorySlug(f.categorySlug);
+    if (f.atollId) setAtollId(f.atollId);
+    if (f.minPrice !== undefined) setMinPrice(String(f.minPrice));
+    if (f.maxPrice !== undefined) setMaxPrice(String(f.maxPrice));
+    if (f.condition) setCondition(f.condition);
+    setUnderstanding(null);
+  };
+
+  // Typing a category's own name ("phones") opens that category instead of searching the word.
+  const openCategory = (c: Category) => {
+    const q = query.trim().toLowerCase();
+    if (q && (c.name.toLowerCase() === q || (c.keywords ?? []).includes(q))) setQuery("");
+    setCategorySlug(c.slug);
+  };
+
   const goToSeller = (s: SellerSearchResult) => {
     remember(query);
     navigation.navigate("SellerProfile", { id: s.id });
@@ -216,6 +292,12 @@ export default function SearchScreen() {
     setMinPrice("");
     setMaxPrice("");
     setDelivery(undefined);
+    setAttrs({});
+    setIslandId(undefined);
+    setPostedWithin(undefined);
+    setReduced(false);
+    setAlibeOnly(false);
+    setUnderstanding(null);
     setSort("newest");
     navigation.setParams({ q: undefined, categorySlug: undefined, categoryName: undefined });
   };
@@ -228,13 +310,18 @@ export default function SearchScreen() {
     minPrice: minPrice || undefined,
     maxPrice: maxPrice || undefined,
     delivery,
+    attrs: attrCount ? attrs : undefined,
+    islandId,
+    postedWithin,
+    reduced: reduced ? "1" : undefined,
+    alibeOnly: alibeOnly ? "1" : undefined,
   };
   const filtersKey = JSON.stringify(currentFilters);
   const isSaved = savedKey === filtersKey;
   const [saveSearch, saving] = useSingleFlight(async () => {
     if (!user || isSaved) return;
     const atoll = atolls.find((a) => a.id === atollId);
-    const what = query.trim() ? `"${query.trim()}"` : categories.find((c) => c.slug === categorySlug)?.name ?? "New listings";
+    const what = query.trim() ? `"${query.trim()}"` : tree.bySlug.get(categorySlug ?? "")?.name ?? "New listings";
     const label = atoll ? `${what} in ${atoll.name}` : what;
     setSavedKey(filtersKey);
     try {
@@ -250,7 +337,7 @@ export default function SearchScreen() {
     remember(query);
     navigation.navigate("ProductDetail", { id: l.id });
   };
-  const activeCategory = categories.find((c) => c.slug === categorySlug);
+  const activeCategory = categorySlug ? tree.bySlug.get(categorySlug) : undefined;
 
   const searchBar = (
     <View style={[styles.searchBar, focused && styles.searchBarFocused]}>
@@ -276,31 +363,154 @@ export default function SearchScreen() {
     </View>
   );
 
-  const categoryChips = (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hRow} contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: isDesktopWeb ? 0 : gutter }} keyboardShouldPersistTaps="handled">
-      <Chip label="All" active={!categorySlug} onPress={() => setCategorySlug(undefined)} />
-      {categories.map((c) => {
-        const meta = categoryIcons[c.slug];
-        const Icon = meta?.Icon ?? AllCategoriesIcon;
-        const active = categorySlug === c.slug;
-        return (
-          <Chip
-            key={c.id}
-            label={c.name}
-            active={active}
-            icon={<Icon size={15} color={active ? colors.inverseText : meta?.color ?? colors.primary} strokeWidth={2.2} />}
-            onPress={() => setCategorySlug(active ? undefined : c.slug)}
-          />
-        );
+  // No category: the top categories as chips. In a category: where you are
+  // (tap any step to go back up) and its subcategories, at any depth.
+  const crumbs = tree.pathOf(categorySlug);
+  const categoryChips = !categorySlug ? (
+    <ScrollView showsVerticalScrollIndicator={false} horizontal showsHorizontalScrollIndicator={false} style={styles.hRow} contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: isDesktopWeb ? 0 : gutter }} keyboardShouldPersistTaps="handled">
+      <Chip label="All" active onPress={() => setCategorySlug(undefined)} />
+      {tree.roots.map((c) => {
+        const { Icon, color } = categoryLook(c, tree);
+        return <Chip key={c.id} label={c.name} active={false} icon={<Icon size={15} color={color} strokeWidth={2.2} />} onPress={() => openCategory(c)} />;
       })}
+      <Chip label="All categories" active={false} icon={<LayoutGrid size={15} color={colors.primary} />} onPress={() => navigation.navigate("Categories")} />
     </ScrollView>
+  ) : (
+    <View>
+      <ScrollView showsVerticalScrollIndicator={false} horizontal showsHorizontalScrollIndicator={false} style={styles.hRow} contentContainerStyle={[styles.crumbs, { paddingHorizontal: isDesktopWeb ? 0 : gutter }]} keyboardShouldPersistTaps="handled">
+        <Tap onPress={() => setCategorySlug(undefined)} hitSlop={6} scaleTo={0.92} accessibilityLabel="All categories">
+          <Text style={styles.crumb}>All</Text>
+        </Tap>
+        {crumbs.map((c, i) => {
+          const last = i === crumbs.length - 1;
+          return (
+            <React.Fragment key={c.id}>
+              <ChevronRight size={14} color={colors.textMuted} />
+              {last ? (
+                <Tap style={styles.crumbCurrent} onPress={() => setCategorySlug(crumbs[i - 1]?.slug)} scaleTo={0.94} accessibilityLabel={`Remove ${c.name}`}>
+                  <Text style={styles.crumbCurrentText}>{c.name}</Text>
+                  <X size={13} color={colors.inverseText} strokeWidth={2.8} />
+                </Tap>
+              ) : (
+                <Tap onPress={() => setCategorySlug(c.slug)} hitSlop={6} scaleTo={0.92}>
+                  <Text style={styles.crumb}>{c.name}</Text>
+                </Tap>
+              )}
+            </React.Fragment>
+          );
+        })}
+      </ScrollView>
+      <View style={{ paddingTop: spacing.sm }}>
+        <SubcategoryCards tree={tree} slug={categorySlug} onPress={(c) => setCategorySlug(c.slug)} horizontalPadding={isDesktopWeb ? 0 : gutter} />
+      </View>
+    </View>
   );
 
+  // The category's own filters (brand, year, bedrooms...).
+  const setAttrOption = (def: AttributeDef, option: string) =>
+    setAttrs((prev) => {
+      const current = Array.isArray(prev[def.key]) ? (prev[def.key] as string[]) : [];
+      const next = current.includes(option) ? current.filter((o) => o !== option) : [...current, option];
+      const { [def.key]: _drop, ...rest } = prev;
+      return next.length ? { ...rest, [def.key]: next } : rest;
+    });
+  const setAttrRange = (def: AttributeDef, end: "min" | "max", text: string) =>
+    setAttrs((prev) => {
+      const current = prev[def.key] && !Array.isArray(prev[def.key]) ? (prev[def.key] as { min?: number; max?: number }) : {};
+      const digits = text.replace(/\D/g, "");
+      const next = { ...current, [end]: digits ? Number(digits) : undefined };
+      const { [def.key]: _drop, ...rest } = prev;
+      return next.min === undefined && next.max === undefined ? rest : { ...rest, [def.key]: next };
+    });
+  const attributeFilters = categoryAttributes.length > 0 && (
+    <View style={{ gap: spacing.md }}>
+      {categoryAttributes.map((def) => {
+        const value = attrs[def.key];
+        return (
+          <View key={def.key}>
+            <Text style={styles.filterLabel}>
+              {def.label}
+              {def.unit ? ` (${def.unit})` : ""}
+            </Text>
+            {def.type === "select" ? (
+              <View style={styles.wrapRow}>
+                {(def.options ?? []).map((o) => (
+                  <Chip key={o} label={o} active={Array.isArray(value) && value.includes(o)} onPress={() => setAttrOption(def, o)} />
+                ))}
+              </View>
+            ) : (
+              <View style={styles.priceRow}>
+                <TextInput style={styles.priceInput} placeholder="From" placeholderTextColor={colors.textMuted} keyboardType="number-pad" value={value && !Array.isArray(value) && value.min !== undefined ? String(value.min) : ""} onChangeText={(t) => setAttrRange(def, "min", t)} accessibilityLabel={`${def.label} from`} />
+                <Text style={styles.priceDash}>to</Text>
+                <TextInput style={styles.priceInput} placeholder="To" placeholderTextColor={colors.textMuted} keyboardType="number-pad" value={value && !Array.isArray(value) && value.max !== undefined ? String(value.max) : ""} onChangeText={(t) => setAttrRange(def, "max", t)} accessibilityLabel={`${def.label} to`} />
+              </View>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+
+  const filterAtoll = atolls.find((a) => a.id === atollId);
   const filterControls = (
     <View style={{ gap: spacing.md }}>
       <View>
+        <Text style={styles.filterLabel}>Category</Text>
+        {crumbs.length > 0 && (
+          <View style={[styles.wrapRow, { marginBottom: spacing.sm }]}>
+            <Chip label="Any" active={false} onPress={() => setCategorySlug(undefined)} />
+            {crumbs.map((c, i) => (
+              <Chip key={c.id} label={c.name} active={i === crumbs.length - 1} onPress={() => setCategorySlug(i === crumbs.length - 1 ? crumbs[i - 1]?.slug : c.slug)} />
+            ))}
+          </View>
+        )}
+        <View style={styles.wrapRow}>
+          {tree.childrenOf(categorySlug).map((c) => {
+            const { Icon, color } = categoryLook(c, tree);
+            return <Chip key={c.id} label={c.name} active={false} icon={<Icon size={14} color={color} strokeWidth={2.2} />} onPress={() => setCategorySlug(c.slug)} />;
+          })}
+        </View>
+      </View>
+      {attributeFilters && (
+        <View style={styles.detailsBox}>
+          <Text style={styles.detailsTitle}>{activeCategory?.name} details</Text>
+          {attributeFilters}
+        </View>
+      )}
+      <View>
         <Text style={styles.filterLabel}>Location</Text>
-        <AtollFilter atolls={atolls} value={atollId} onChange={setAtollId} />
+        <AtollFilter
+          atolls={atolls}
+          value={atollId}
+          onChange={(id) => {
+            setAtollId(id);
+            setIslandId(undefined);
+          }}
+        />
+        {filterAtoll && filterAtoll.islands.length > 1 && (
+          <View style={[styles.wrapRow, { marginTop: spacing.sm }]}>
+            <Chip label={`All of ${filterAtoll.name}`} active={!islandId} onPress={() => setIslandId(undefined)} />
+            {filterAtoll.islands.map((i) => (
+              <Chip key={i.id} label={i.name} active={islandId === i.id} onPress={() => setIslandId(islandId === i.id ? undefined : i.id)} />
+            ))}
+          </View>
+        )}
+      </View>
+      <View>
+        <Text style={styles.filterLabel}>Posted</Text>
+        <View style={styles.wrapRow}>
+          <Chip label="Any time" active={!postedWithin} onPress={() => setPostedWithin(undefined)} />
+          {POSTED.map((p) => (
+            <Chip key={p.days} label={p.label} active={postedWithin === p.days} onPress={() => setPostedWithin(postedWithin === p.days ? undefined : p.days)} />
+          ))}
+        </View>
+      </View>
+      <View>
+        <Text style={styles.filterLabel}>Deals and sellers</Text>
+        <View style={styles.wrapRow}>
+          <Chip label="Price dropped" active={reduced} onPress={() => setReduced(!reduced)} />
+          <Chip label="Alibe sellers only" active={alibeOnly} onPress={() => setAlibeOnly(!alibeOnly)} />
+        </View>
       </View>
       <View>
         <Text style={styles.filterLabel}>Condition</Text>
@@ -338,14 +548,26 @@ export default function SearchScreen() {
   // Every active filter as a removable pill, so it's obvious what's applied.
   const atollName = atolls.find((a) => a.id === atollId)?.name;
   const activePills: Array<{ key: string; label: string; clear: () => void }> = [
-    ...(atollName ? [{ key: "atoll", label: atollName, clear: () => setAtollId(undefined) }] : []),
+    ...(atollName ? [{ key: "atoll", label: atollName, clear: () => (setAtollId(undefined), setIslandId(undefined)) }] : []),
+    ...(islandId ? [{ key: "island", label: atolls.flatMap((a) => a.islands).find((i) => i.id === islandId)?.name ?? "Island", clear: () => setIslandId(undefined) }] : []),
+    ...(postedWithin ? [{ key: "posted", label: POSTED.find((p) => p.days === postedWithin)!.label, clear: () => setPostedWithin(undefined) }] : []),
+    ...(reduced ? [{ key: "reduced", label: "Price dropped", clear: () => setReduced(false) }] : []),
+    ...(alibeOnly ? [{ key: "alibeOnly", label: "Alibe sellers only", clear: () => setAlibeOnly(false) }] : []),
     ...(condition ? [{ key: "condition", label: conditionLabel(condition), clear: () => setCondition(undefined) }] : []),
     ...(minPrice ? [{ key: "min", label: `From MVR ${Number(minPrice).toLocaleString()}`, clear: () => setMinPrice("") }] : []),
     ...(maxPrice ? [{ key: "max", label: `Up to MVR ${Number(maxPrice).toLocaleString()}`, clear: () => setMaxPrice("") }] : []),
     ...(delivery ? [{ key: "delivery", label: DELIVERIES.find((d) => d.key === delivery)!.label, clear: () => setDelivery(undefined) }] : []),
+    ...categoryAttributes.flatMap((def) => {
+      const v = attrs[def.key];
+      if (!v) return [];
+      if (Array.isArray(v)) return v.map((o) => ({ key: `${def.key}:${o}`, label: o, clear: () => setAttrOption(def, o) }));
+      const unit = def.unit ? ` ${def.unit}` : "";
+      const label = v.min !== undefined && v.max !== undefined ? `${def.label} ${v.min}-${v.max}${unit}` : v.min !== undefined ? `${def.label} from ${v.min}${unit}` : `${def.label} up to ${v.max}${unit}`;
+      return [{ key: def.key, label, clear: () => setAttrs(({ [def.key]: _drop, ...rest }) => rest) }];
+    }),
   ];
   const pillsRow = activePills.length > 0 && (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hRow} contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: isDesktopWeb ? 0 : gutter, paddingTop: spacing.sm }}>
+    <ScrollView showsVerticalScrollIndicator={false} horizontal showsHorizontalScrollIndicator={false} style={styles.hRow} contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: isDesktopWeb ? 0 : gutter, paddingTop: spacing.sm }}>
       {activePills.map((p) => (
         <Tap key={p.key} style={styles.activePill} onPress={p.clear} scaleTo={0.92} accessibilityLabel={`Remove ${p.label}`}>
           <Text style={styles.activePillText}>{p.label}</Text>
@@ -416,14 +638,18 @@ export default function SearchScreen() {
   const resultCount = `${results.length}${hasMore ? "+" : ""}`;
   const latestPhoto = new Map<string, string>();
   for (const c of categories) if (c.photo) latestPhoto.set(c.slug, c.photo);
-  for (const l of results) if (l.images[0] && !latestPhoto.has(l.category.slug)) latestPhoto.set(l.category.slug, l.images[0]);
+  for (const l of results) {
+    const top = tree.topOf(l.category.slug);
+    if (l.images[0] && top && !latestPhoto.has(top.slug)) latestPhoto.set(top.slug, l.images[0]);
+  }
   const tileAreaWidth = isDesktopWeb ? contentWidth - FILTER_PANEL_WIDTH - spacing.lg : width - gutter * 2;
   const tileWidth = Math.floor((tileAreaWidth - spacing.sm * (tileColumns - 1)) / tileColumns);
   // Only categories with something in them, busiest first, in full rows:
   // 8 tiles on a phone (or 7 + "All categories"), so the grid stays balanced
   // and listings start within a scroll.
   const [allTiles, setAllTiles] = useState(false);
-  const stocked = [...categories].filter((c) => (c.listingCount ?? 0) > 0).sort((a, b) => (b.listingCount ?? 0) - (a.listingCount ?? 0));
+  // Top categories with something in them, in their set order.
+  const stocked = tree.roots.filter((c) => (c.listingCount ?? 0) > 0);
   const tileLimit = tileColumns * (isDesktopWeb || width >= 600 ? 2 : 4);
   const overflow = !allTiles && stocked.length > tileLimit;
   const shownTiles = overflow ? stocked.slice(0, tileLimit - 1) : stocked;
@@ -432,9 +658,7 @@ export default function SearchScreen() {
       <Text style={styles.sectionTitle}>Browse by category</Text>
       <View style={styles.tileGrid}>
         {shownTiles.map((c) => {
-          const meta = categoryIcons[c.slug];
-          const Icon = meta?.Icon ?? AllCategoriesIcon;
-          const tint = meta?.color ?? colors.primary;
+          const { Icon, color: tint } = categoryLook(c, tree);
           return (
             <CategoryTile
               key={c.id}
@@ -445,12 +669,12 @@ export default function SearchScreen() {
               color={tint}
               size={tileWidth}
               height={Math.round(tileWidth * 0.62)}
-              onPress={() => setCategorySlug(c.slug)}
+              onPress={() => openCategory(c)}
             />
           );
         })}
         {overflow && (
-          <Tap style={[styles.moreTile, { width: tileWidth, height: Math.round(tileWidth * 0.62) }]} onPress={() => setAllTiles(true)} scaleTo={0.96} accessibilityLabel="Show all categories">
+          <Tap style={[styles.moreTile, { width: tileWidth, height: Math.round(tileWidth * 0.62) }]} onPress={() => navigation.navigate("Categories")} scaleTo={0.96} accessibilityLabel="Show all categories">
             <AllCategoriesIcon size={22} color={colors.primary} />
             <Text style={styles.moreTileText}>All categories</Text>
             <Text style={styles.moreTileMeta}>+{stocked.length - shownTiles.length} more</Text>
@@ -463,7 +687,7 @@ export default function SearchScreen() {
   const sellersBlock = sellers.length > 0 && (
     <FadeIn style={{ marginBottom: spacing.lg }}>
       <Text style={styles.sectionTitle}>Sellers</Text>
-      <ScrollView
+      <ScrollView showsVerticalScrollIndicator={false}
         horizontal
         showsHorizontalScrollIndicator={false}
         style={[styles.hRow, !isDesktopWeb && { marginHorizontal: -gutter }]}
@@ -508,8 +732,70 @@ export default function SearchScreen() {
     </FadeIn>
   );
 
+  // Categories matching what's typed ("pho" -> Mobile phones, Phone accessories).
+  const typedCategories = query.trim() ? matchCategories(tree, query, 4).filter((c) => c.slug !== categorySlug) : [];
+  const understandingCard = understanding?.filters && (
+    <FadeIn style={styles.understandCard}>
+      <View style={styles.understandIcon}>
+        <Sparkles size={18} color={colors.primary} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={styles.understandTitle}>Narrow this down?</Text>
+        <Text style={styles.understandText} numberOfLines={2}>
+          {[
+            understanding.categoryPath?.[understanding.categoryPath.length - 1],
+            understanding.filters.condition && conditionLabel(understanding.filters.condition),
+            understanding.filters.minPrice !== undefined && understanding.filters.maxPrice !== undefined
+              ? `MVR ${understanding.filters.minPrice.toLocaleString()} to ${understanding.filters.maxPrice.toLocaleString()}`
+              : understanding.filters.maxPrice !== undefined
+              ? `up to MVR ${understanding.filters.maxPrice.toLocaleString()}`
+              : understanding.filters.minPrice !== undefined && `from MVR ${understanding.filters.minPrice.toLocaleString()}`,
+            understanding.atollName,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </Text>
+      </View>
+      <Tap style={styles.understandApply} onPress={applyUnderstanding} scaleTo={0.94} accessibilityLabel="Apply these filters">
+        <Text style={styles.understandApplyText}>Apply</Text>
+      </Tap>
+    </FadeIn>
+  );
+  const typedCategoriesBlock = typedCategories.length > 0 && (
+    <FadeIn style={{ marginBottom: spacing.md }}>
+      <Text style={styles.sectionTitle}>Categories</Text>
+      <View style={{ gap: spacing.xs }}>
+        {typedCategories.map((c) => {
+          const { Icon, color } = categoryLook(c, tree);
+          const parent = tree.pathOf(c.slug).slice(0, -1).map((p) => p.name).join(" › ");
+          return (
+            <Tap key={c.id} style={styles.typedRow} onPress={() => openCategory(c)} scaleTo={0.98} accessibilityLabel={`Open ${c.name}`}>
+              <View style={[styles.subIcon, { backgroundColor: color + "1F" }]}>
+                <Icon size={18} color={color} strokeWidth={2.2} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.subName} numberOfLines={1}>
+                  {c.name}
+                </Text>
+                {!!parent && (
+                  <Text style={styles.subMeta} numberOfLines={1}>
+                    in {parent}
+                  </Text>
+                )}
+              </View>
+              <Text style={styles.subMeta}>{(c.listingCount ?? 0).toLocaleString()}</Text>
+              <ChevronRight size={16} color={colors.textMuted} />
+            </Tap>
+          );
+        })}
+      </View>
+    </FadeIn>
+  );
+
   const resultsHeader = (
     <View style={{ paddingHorizontal: isDesktopWeb ? 0 : gutter }}>
+      {understandingCard}
+      {typedCategoriesBlock}
       {isBrowsing && startBlock}
       {sellersBlock}
       {isBrowsing && categories.length > 0 && categoryTiles}
@@ -563,7 +849,7 @@ export default function SearchScreen() {
             <View style={{ flex: 1, minWidth: 0 }}>{!isBrowsing && categoryChips}</View>
           </View>
           <View style={{ flexDirection: "row", flex: 1, gap: spacing.lg }}>
-            <ScrollView style={{ width: FILTER_PANEL_WIDTH, flexGrow: 0 }} contentContainerStyle={styles.filterCard}>
+            <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} style={{ width: FILTER_PANEL_WIDTH, flexGrow: 0 }} contentContainerStyle={styles.filterCard}>
               {filterControls}
             </ScrollView>
             <View style={{ flex: 1, minWidth: 0 }}>
@@ -617,7 +903,7 @@ export default function SearchScreen() {
       />
 
       <Sheet visible={filtersOpen} onClose={() => setFiltersOpen(false)} title="Filters">
-        <ScrollView style={{ maxHeight: height * 0.6 }} contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md }} keyboardShouldPersistTaps="handled">
+        <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} style={{ maxHeight: height * 0.6 }} contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md }} keyboardShouldPersistTaps="handled">
           {filterControls}
         </ScrollView>
         <View style={{ paddingHorizontal: spacing.lg }}>
@@ -635,6 +921,23 @@ const useStyles = makeStyles((colors) => ({
   desktopColumn: { maxWidth: MAX_CONTENT_WIDTH, width: "100%", alignSelf: "center", flex: 1, paddingTop: spacing.lg },
   desktopTop: { flexDirection: "row", alignItems: "center", gap: spacing.lg, marginBottom: spacing.lg },
   hRow: { flexGrow: 0, flexShrink: 0 },
+  crumbs: { flexDirection: "row", alignItems: "center", gap: 6 },
+  crumb: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.textMuted, paddingVertical: 6 },
+  crumbCurrent: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: spacing.md, height: 34 },
+  crumbCurrentText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.inverseText },
+  subCard: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.card, borderRadius: radius.md, paddingVertical: spacing.sm, paddingLeft: spacing.sm, paddingRight: spacing.md, ...cardShadow },
+  subIcon: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  subName: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.text },
+  subMeta: { fontSize: fontSize.caption, color: colors.textMuted, marginTop: 1 },
+  typedRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 2, backgroundColor: colors.card, borderRadius: radius.md, padding: spacing.sm, ...cardShadow },
+  understandCard: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 2, backgroundColor: colors.primaryTint, borderRadius: radius.lg, padding: spacing.sm + 4, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.primaryLight },
+  understandIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  understandTitle: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.text },
+  understandText: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 1 },
+  understandApply: { backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: spacing.md + 2, height: 38, alignItems: "center", justifyContent: "center" },
+  understandApplyText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.sm },
+  detailsBox: { gap: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.primaryTint },
+  detailsTitle: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.text },
   pageTitle: { fontSize: fontSize.display, fontWeight: fontWeight.extrabold, color: colors.text, letterSpacing: -0.5, marginBottom: spacing.sm + 4 },
   mobileTop: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.md },
   searchBar: {

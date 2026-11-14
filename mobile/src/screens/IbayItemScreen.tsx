@@ -123,9 +123,9 @@ export default function IbayItemScreen() {
   return (
     <View style={styles.container}>
       {header}
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={{ width: imageSize, height: imageSize }}>
-          <ScrollView
+          <ScrollView showsVerticalScrollIndicator={false}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}

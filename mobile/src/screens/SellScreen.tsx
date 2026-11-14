@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, TextInput, Image, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, BackHandler } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
 import { ImagePlus, ChevronLeft, Check, TrendingUp, Star, X, Plus, Phone } from "lucide-react-native";
-import { api, Category, Atoll, Island, newClientId, errorMessage, Listing, DeliveryOption, uploadMedia, mediaUrl } from "../api/client";
+import { api, Category, Atoll, Island, newClientId, errorMessage, Listing, ListingAttributes, DeliveryOption, uploadMedia, mediaUrl } from "../api/client";
 import { useAuth, DRAFT_PREFIX } from "../api/AuthContext";
 import { useToast } from "../components/Toast";
 import WebNavBar from "../components/WebNavBar";
@@ -13,7 +13,8 @@ import EmptyState from "../components/EmptyState";
 import { Skeleton, SkeletonGroup } from "../components/Skeleton";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, cardShadow, tabBarClearance, fontSize, fontWeight, controlHeight, contentWidth } from "../theme/theme";
-import { categoryIcons } from "../theme/categoryIcons";
+import CategoryPicker, { AttributeFields } from "../components/CategoryPicker";
+import { buildCategoryTree } from "../utils/categoryTree";
 import { useResponsive } from "../hooks/useResponsive";
 import { usePersistentState } from "../hooks/usePersistentState";
 import { useSingleFlight } from "../hooks/useSingleFlight";
@@ -45,6 +46,8 @@ type Draft = {
   price: string;
   condition: Listing["condition"];
   categoryId?: string;
+  // Answers to the category's questions (brand, storage, year...).
+  attributes?: ListingAttributes;
   islandId?: string;
   deliveryOptions: DeliveryOption[];
   deliveryNote: string;
@@ -105,6 +108,10 @@ function SellForm() {
   const [draft, setDraft, { hydrated, clear }] = usePersistentState<Draft>(`${DRAFT_PREFIX}sell.${user?.id}`, emptyDraft());
   const update = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }));
   const { step, images, coverIndex, title, description, price, condition, categoryId, islandId } = draft;
+  const attributes = draft.attributes ?? {};
+  const categoryTree = useMemo(() => buildCategoryTree(categories), [categories]);
+  const selectedPath = categoryTree.pathOf(categoryTree.byId.get(categoryId ?? "")?.slug);
+  const categoryQuestions = categoryTree.attributesOf(selectedPath[selectedPath.length - 1]?.slug);
 
   useEffect(() => {
     api.categories().then(setCategories).catch(() => toast.error("Couldn't load categories. Check your connection."));
@@ -199,6 +206,7 @@ function SellForm() {
         price: Number(price),
         condition,
         categoryId,
+        attributes,
         islandId,
         sellerId: user.id,
         images: uploaded,
@@ -310,19 +318,19 @@ function SellForm() {
         <Text style={styles.header}>Category and condition</Text>
         <Text style={styles.subheader}>Helps the right buyers find it.</Text>
         <Text style={styles.fieldLabel}>Category</Text>
-        <View style={styles.chipGrid}>
-          {categories.map((c) => {
-            const meta = categoryIcons[c.slug];
-            const Icon = meta?.Icon;
-            const active = categoryId === c.id;
-            return (
-              <Tap key={c.id} style={[styles.chip, active && styles.chipActive]} onPress={() => update({ categoryId: c.id })} scaleTo={0.92}>
-                {Icon && <Icon size={15} color={active ? "#fff" : meta.color} />}
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>{c.name}</Text>
-              </Tap>
-            );
-          })}
-        </View>
+        <CategoryPicker
+          categories={categories}
+          value={categoryId}
+          title={title}
+          description={description}
+          // A new category asks its own questions: keep only the answers it still asks.
+          onChange={(id, suggested) => {
+            const keys = new Set(categoryTree.attributesOf(categoryTree.byId.get(id)?.slug).map((a) => a.key));
+            const kept = Object.fromEntries(Object.entries(attributes).filter(([k]) => keys.has(k)));
+            update({ categoryId: id, attributes: { ...(suggested ?? {}), ...kept } });
+          }}
+        />
+        <AttributeFields defs={categoryQuestions} value={attributes} onChange={(next) => update({ attributes: next })} />
         {priceHint && selectedCategory && (
           <View style={styles.priceHintCard}>
             <TrendingUp size={16} color={colors.primary} />
@@ -412,7 +420,7 @@ function SellForm() {
             </View>
           )}
           {[
-            ["Category", selectedCategory?.name],
+            ["Category", selectedPath.map((c) => c.name).join(" › ") || undefined],
             ["Condition", CONDITIONS.find((c) => c.value === condition)?.label],
             ["Island", selectedIsland?.name],
             ["Delivery", draft.deliveryOptions.map((o) => DELIVERY.find((d) => d.value === o)?.label).join(", ")],
@@ -480,7 +488,7 @@ function SellForm() {
           <View key={label} style={[styles.progressSegment, i <= step && styles.progressSegmentDone]} />
         ))}
       </View>
-      <ScrollView contentContainerStyle={[styles.stepScroll, { paddingHorizontal: gutter }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+      <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.stepScroll, { paddingHorizontal: gutter }]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
         {stepContent}
       </ScrollView>
       {footer}

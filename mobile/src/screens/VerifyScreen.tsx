@@ -49,7 +49,7 @@ export default function VerifyScreen() {
   return (
     <View style={styles.container}>
       {isDesktopWeb ? <WebNavBar active="profile" /> : <ScreenHeader title="Verified seller" />}
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll}>
         <View style={styles.hero}>
           <View style={styles.heroIcon}>{verified ? <VerifiedBadge size={34} /> : <ShieldCheck size={30} color={colors.verified} />}</View>
           <Text style={styles.heroTitle}>{verified ? "You're a verified seller" : "Earn the verified tick"}</Text>

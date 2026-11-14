@@ -50,7 +50,7 @@ export default function BuyForYouScreen() {
     <View style={styles.container}>
       {isDesktopWeb ? <WebNavBar /> : <ScreenHeader title="Buy through Alibe" />}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           {!item ? (
             <SkeletonGroup>
               <Skeleton width="100%" height={150} rounded={radius.lg} />

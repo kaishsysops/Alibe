@@ -72,7 +72,7 @@ export default function BuyAdScreen() {
     <View style={styles.container}>
       {isDesktopWeb ? <WebNavBar /> : <ScreenHeader title="Advertise on Alibe" />}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Text style={styles.intro}>Your ad appears on the Alibe home page with an "Ad" label. We check each ad first, and it starts once your payment is confirmed.</Text>
 
           <Text style={styles.label}>Photo</Text>

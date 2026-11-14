@@ -174,7 +174,7 @@ function WelcomeCarousel({ active }: { active: boolean }) {
 
   return (
     <View style={{ flex: 1 }}>
-      <Animated.ScrollView
+      <Animated.ScrollView showsVerticalScrollIndicator={false}
         ref={scrollRef}
         style={{ flex: 1 }}
         horizontal
@@ -513,7 +513,8 @@ export default function OnboardingScreen() {
       ]);
       setAtolls(list);
       setIslandId(updated.islandId ?? defaultIslandId(list));
-      setCategories(cats);
+      // Follow main categories only: following one covers everything under it.
+      setCategories(cats.filter((c) => !c.parentId));
       setNotificationsOn(permission === "granted");
       // Steps with nothing to show (offline, already decided) are left out.
       const steps: Step[] = ["name", "photo", ...(list.length ? (["island"] as Step[]) : []), ...(cats.length ? (["interests"] as Step[]) : []), ...(permission === "undecided" ? (["notify"] as Step[]) : [])];
@@ -839,7 +840,7 @@ export default function OnboardingScreen() {
             <FadeIn key="island">
               <Text style={[styles.cardTitle, styles.noBackTop]}>Where are you?</Text>
               <Text style={[styles.cardText, { marginBottom: spacing.md }]}>We'll show what's nearby and fill in your island when you sell. Change it any time.</Text>
-              <ScrollView style={{ maxHeight: height * 0.58 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <ScrollView showsHorizontalScrollIndicator={false} style={{ maxHeight: height * 0.58 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 <IslandPicker atolls={atolls} value={islandId} onChange={setIslandId} mapHeight={Math.min(320, Math.round(height * 0.36))} />
               </ScrollView>
               <Tap style={[styles.button, !islandId && styles.buttonDisabled]} onPress={() => saveIsland()} disabled={savingIsland || !islandId} scaleTo={0.97}>
@@ -899,7 +900,7 @@ export default function OnboardingScreen() {
             <FadeIn key="interests">
               <Text style={styles.cardTitle}>What are you into?</Text>
               <Text style={styles.cardText}>Pick a few. They'll lead your Home, and you can change them any time.</Text>
-              <ScrollView style={{ maxHeight: height * 0.46 }} contentContainerStyle={styles.interestGrid} showsVerticalScrollIndicator={false}>
+              <ScrollView showsHorizontalScrollIndicator={false} style={{ maxHeight: height * 0.46 }} contentContainerStyle={styles.interestGrid} showsVerticalScrollIndicator={false}>
                 {categories.map((c, i) => {
                   const meta = categoryIcons[c.slug];
                   const Icon = meta?.Icon ?? AllCategoriesIcon;

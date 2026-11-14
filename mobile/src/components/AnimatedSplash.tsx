@@ -3,11 +3,13 @@ import { Animated, Easing, Platform, StyleSheet, View } from "react-native";
 import AlibeMark from "./AlibeMark";
 import { DEFAULT_ACCENT, fontWeight } from "../theme/theme";
 import { useReducedMotion } from "../hooks/useReducedMotion";
+import { useTheme } from "../theme/ThemeContext";
 
-// Launch animation drawn over the app while it starts. Always the Alibe brand
-// orange (not the user's accent) so it continues seamlessly from the native
-// splash in app.json. The intro always plays to its last frame, then holds for
-// a beat; it leaves once that and the sign-in state are both done.
+// Launch animation drawn over the app while it starts, in the colour of
+// whoever is signed in. The phone's own launch screen (app.json) can only be
+// Alibe orange, so this starts in that orange and blends into the person's
+// colour, with no jump. The intro always plays to its last frame, then holds
+// for a beat; it leaves once that and the sign-in state are both done.
 const useNativeDriver = Platform.OS !== "web";
 const BRAND = DEFAULT_ACCENT;
 const WORD = "Alibe".split("");
@@ -21,6 +23,14 @@ export default function AnimatedSplash({ ready, onExit }: { ready: boolean; onEx
   const ring = useRef(new Animated.Value(0)).current;
   const letters = useRef(WORD.map(() => new Animated.Value(0))).current;
   const exit = useRef(new Animated.Value(0)).current;
+  const { accent } = useTheme();
+  // 0 = the launch screen's orange, 1 = this person's colour. Colours can't use
+  // the native driver, so this lives on its own layer.
+  const tint = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(tint, { toValue: 1, duration: reduceMotion ? 0 : 260, easing: Easing.out(Easing.quad), useNativeDriver: false }).start();
+  }, [accent]);
+  const background = tint.interpolate({ inputRange: [0, 1], outputRange: [BRAND, accent] });
 
   useEffect(() => {
     let hold: ReturnType<typeof setTimeout>;
@@ -56,6 +66,7 @@ export default function AnimatedSplash({ ready, onExit }: { ready: boolean; onEx
       pointerEvents={ready && introDone ? "none" : "auto"}
       style={[StyleSheet.absoluteFill, styles.container, { opacity: exit.interpolate({ inputRange: [0, 0.6, 1], outputRange: [1, 1, 0] }) }]}
     >
+      <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: background }]} />
       <Animated.View style={{ alignItems: "center", transform: [{ scale: exit.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] }) }] }}>
         <View style={styles.logoWrap}>
           <Animated.View
@@ -73,7 +84,7 @@ export default function AnimatedSplash({ ready, onExit }: { ready: boolean; onEx
               },
             ]}
           >
-            <AlibeMark size={58} color={BRAND} />
+            <AlibeMark size={58} color={accent} />
           </Animated.View>
         </View>
         <View style={styles.word}>
@@ -95,7 +106,7 @@ export default function AnimatedSplash({ ready, onExit }: { ready: boolean; onEx
 }
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: BRAND, alignItems: "center", justifyContent: "center", zIndex: 1000 },
+  container: { alignItems: "center", justifyContent: "center", zIndex: 1000 },
   logoWrap: { width: 96, height: 96, alignItems: "center", justifyContent: "center" },
   ring: { position: "absolute", width: 96, height: 96, borderRadius: 30, borderWidth: 3, borderColor: "#fff" },
   logo: { width: 96, height: 96, borderRadius: 30, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 6 },

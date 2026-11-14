@@ -211,7 +211,7 @@ export default function AdminSellersScreen() {
           <RowSkeleton count={6} />
         </View>
       ) : (
-        <FlatList
+        <FlatList showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}
           data={sellers}
           keyExtractor={(s) => s.id}
           renderItem={renderItem}

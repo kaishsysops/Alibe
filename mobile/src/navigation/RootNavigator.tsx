@@ -30,6 +30,8 @@ import AdminIbayScreen from "../screens/AdminIbayScreen";
 import AdminSellersScreen from "../screens/AdminSellersScreen";
 import AdminDisputesScreen from "../screens/AdminDisputesScreen";
 import AdminStaffScreen from "../screens/AdminStaffScreen";
+import AdminCategoriesScreen from "../screens/AdminCategoriesScreen";
+import CategoriesScreen from "../screens/CategoriesScreen";
 import StatusScreen from "../screens/StatusScreen";
 import IbayBrowseScreen from "../screens/IbayBrowseScreen";
 import IbayItemScreen from "../screens/IbayItemScreen";
@@ -72,6 +74,8 @@ const linking = {
       AdminSellers: "admin/sellers",
       AdminDisputes: "admin/disputes",
       AdminStaff: "admin/staff",
+      AdminCategories: "admin/categories",
+      Categories: "categories/:slug?",
       Status: "status",
       AdminMoney: "admin/money",
       Purchases: "purchases",
@@ -163,6 +167,8 @@ export default function RootNavigator() {
             <Stack.Screen name="AdminSellers" component={AdminSellersScreen} />
             <Stack.Screen name="AdminDisputes" component={AdminDisputesScreen} />
             <Stack.Screen name="AdminStaff" component={AdminStaffScreen} />
+            <Stack.Screen name="AdminCategories" component={AdminCategoriesScreen} />
+            <Stack.Screen name="Categories" component={CategoriesScreen} />
             <Stack.Screen name="IbayBrowse" component={IbayBrowseScreen} />
             <Stack.Screen name="IbayItem" component={IbayItemScreen} />
             <Stack.Screen name="Purchases" component={PurchasesScreen} />

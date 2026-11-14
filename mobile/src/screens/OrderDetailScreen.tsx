@@ -196,7 +196,7 @@ export default function OrderDetailScreen() {
   return (
     <View style={styles.container}>
       {isDesktopWeb ? <WebNavBar /> : <ScreenHeader title={isSeller ? "Your sale" : "Your order"} />}
-      <ScrollView
+      <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={[
           styles.content,

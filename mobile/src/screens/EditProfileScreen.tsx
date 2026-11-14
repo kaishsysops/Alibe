@@ -104,7 +104,7 @@ export default function EditProfileScreen() {
       })
       .catch((e) => toast.error(errorMessage(e, "Couldn't load your profile.")));
     api.atolls().then(setAtolls).catch(() => {});
-    api.categories().then(setCategories).catch(() => {});
+    api.categories().then((list) => setCategories(list.filter((c) => !c.parentId))).catch(() => {});
   }, [user, toast]);
 
   // The app colour applies the moment it's tapped and is saved in the
@@ -219,7 +219,7 @@ export default function EditProfileScreen() {
     <View style={styles.container}>
       {header}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+        <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
           <Section title="App colour">
             <View style={{ padding: spacing.md }}>
               <AccentPicker />

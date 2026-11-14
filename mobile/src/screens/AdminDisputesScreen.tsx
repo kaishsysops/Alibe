@@ -48,7 +48,7 @@ export default function AdminDisputesScreen() {
           <RowSkeleton count={4} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={[styles.list, { paddingHorizontal: gutter }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => (setRefreshing(true), load())} tintColor={colors.primary} />}>
+        <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.list, { paddingHorizontal: gutter }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => (setRefreshing(true), load())} tintColor={colors.primary} />}>
           {disputes.length === 0 && <EmptyState icon={Scale} title="No open disputes" message="When a buyer reports a problem with an order, it shows up here." />}
           {disputes.map((d) => {
             const open = openId === d.id;
