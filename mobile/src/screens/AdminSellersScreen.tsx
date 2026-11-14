@@ -15,12 +15,13 @@ import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, contentWidth } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
 import AvatarPhoto from "../components/AvatarPhoto";
+import StaffOnly from "../components/StaffOnly";
 
 const joined = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
 // Staff only: everyone who has listed something, with contact details, counts,
 // rating and open reports, and a ban/unban switch.
-export default function AdminSellersScreen() {
+function AdminSellersScreenInner() {
   const styles = useStyles();
   const { colors } = useTheme();
   const toast = useToast();
@@ -266,3 +267,11 @@ const useStyles = makeStyles((colors) => ({
   actionText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold },
   actionSpinner: { width: 56 },
 }));
+
+export default function AdminSellersScreen() {
+  return (
+    <StaffOnly title="Sellers">
+      <AdminSellersScreenInner />
+    </StaffOnly>
+  );
+}

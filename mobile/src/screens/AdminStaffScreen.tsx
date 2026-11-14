@@ -15,12 +15,13 @@ import Tap from "../components/Tap";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow, contentWidth, controlHeight } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
+import StaffOnly from "../components/StaffOnly";
 
 const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
 
 // Staff only: who has staff access, and adding someone by email. Staff sign in
 // with their normal email code; there's no separate staff password to share.
-export default function AdminStaffScreen() {
+function AdminStaffScreenInner() {
   const styles = useStyles();
   const { colors } = useTheme();
   const toast = useToast();
@@ -224,3 +225,11 @@ const useStyles = makeStyles((colors) => ({
   iconButton: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: colors.background },
   empty: { alignItems: "center", gap: spacing.sm, padding: spacing.lg },
 }));
+
+export default function AdminStaffScreen() {
+  return (
+    <StaffOnly title="Staff">
+      <AdminStaffScreenInner />
+    </StaffOnly>
+  );
+}

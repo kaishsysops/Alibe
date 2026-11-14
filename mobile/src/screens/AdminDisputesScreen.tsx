@@ -14,10 +14,11 @@ import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow, contentWidth } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
 import { timeAgo } from "../utils/time";
+import StaffOnly from "../components/StaffOnly";
 
 // Staff only: open disputes, oldest first. Open one to read both sides'
 // evidence and settle it.
-export default function AdminDisputesScreen() {
+function AdminDisputesScreenInner() {
   const styles = useStyles();
   const { colors } = useTheme();
   const toast = useToast();
@@ -100,3 +101,11 @@ const useStyles = makeStyles((colors) => ({
   receipt: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: spacing.md, height: 36, borderRadius: radius.pill, backgroundColor: colors.primaryTint },
   receiptText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.primary },
 }));
+
+export default function AdminDisputesScreen() {
+  return (
+    <StaffOnly title="Disputes">
+      <AdminDisputesScreenInner />
+    </StaffOnly>
+  );
+}

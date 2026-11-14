@@ -16,6 +16,7 @@ import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, contentWidth } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
 import { timeAgo } from "../utils/time";
+import StaffOnly from "../components/StaffOnly";
 
 const REASONS: Record<ReportReason, string> = {
   SCAM: "Scam",
@@ -25,7 +26,7 @@ const REASONS: Record<ReportReason, string> = {
   OTHER: "Other",
 };
 
-export default function AdminReportsScreen() {
+function AdminReportsScreenInner() {
   const styles = useStyles();
   const { colors } = useTheme();
   const toast = useToast();
@@ -161,3 +162,11 @@ const useStyles = makeStyles((colors) => ({
   action: { flex: 1, height: controlHeight.secondary, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   actionText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.text },
 }));
+
+export default function AdminReportsScreen() {
+  return (
+    <StaffOnly title="Reports">
+      <AdminReportsScreenInner />
+    </StaffOnly>
+  );
+}

@@ -12,10 +12,11 @@ import Tap from "../components/Tap";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, contentWidth } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
+import StaffOnly from "../components/StaffOnly";
 
 // Staff only: every item copied from iBay, including ones the public showcase
 // leaves out, plus the switch for the showcase itself.
-export default function AdminIbayScreen() {
+function AdminIbayScreenInner() {
   const styles = useStyles();
   const { colors } = useTheme();
   const toast = useToast();
@@ -167,3 +168,11 @@ const useStyles = makeStyles((colors) => ({
   price: { fontSize: fontSize.md, fontWeight: fontWeight.extrabold, color: colors.text, marginTop: 2 },
   meta: { fontSize: fontSize.caption, color: colors.textMuted, marginTop: 2 },
 }));
+
+export default function AdminIbayScreen() {
+  return (
+    <StaffOnly title="iBay items">
+      <AdminIbayScreenInner />
+    </StaffOnly>
+  );
+}

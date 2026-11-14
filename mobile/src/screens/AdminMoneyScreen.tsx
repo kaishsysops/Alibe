@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, ScrollView, Text, TextInput, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
-import { CheckCircle2 } from "lucide-react-native";
+import { CheckCircle2, AlertTriangle } from "lucide-react-native";
 import { api, errorMessage, mediaUrl, MoneySettings, PlanPrices, Purchase } from "../api/client";
 import { useToast } from "../components/Toast";
 import { useAppAlert } from "../components/AppAlertProvider";
@@ -16,13 +16,14 @@ import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, conte
 import { useResponsive } from "../hooks/useResponsive";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import { formatPhone } from "../utils/phone";
+import StaffOnly from "../components/StaffOnly";
 
 const KIND_LABEL = { BOOST: "Boost", AD: "Ad", BUY_FOR_YOU: "Buy for you" } as const;
 const PLANS: Array<keyof PlanPrices> = ["3", "7", "30"];
 
 // Staff only: the bank details and prices customers see, and the queue of
 // purchases to check. Nothing goes live until it's approved here.
-export default function AdminMoneyScreen() {
+function AdminMoneyScreenInner() {
   const styles = useStyles();
   const { colors } = useTheme();
   const toast = useToast();
@@ -32,6 +33,9 @@ export default function AdminMoneyScreen() {
   const [purchases, setPurchases] = useState<Purchase[] | null>(null);
   const [totals, setTotals] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
+  // Why it couldn't load (offline, server error): shown instead of a
+  // placeholder that never goes away.
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(
     () =>
@@ -40,8 +44,9 @@ export default function AdminMoneyScreen() {
         .then((res) => {
           setSettings(res.settings);
           setPurchases(res.purchases);
+          setLoadError(null);
         })
-        .catch((e) => toast.error(errorMessage(e))),
+        .catch((e) => setLoadError(errorMessage(e, "Couldn't load payments. Please try again."))),
     [toast]
   );
   useFocusEffect(
@@ -147,7 +152,9 @@ export default function AdminMoneyScreen() {
   return (
     <View style={styles.container}>
       {isDesktopWeb ? <WebNavBar active="profile" /> : <ScreenHeader title="Payments and prices" />}
-      {!settings || !purchases ? (
+      {loadError && (!settings || !purchases) ? (
+        <EmptyState icon={AlertTriangle} tone="error" title="Payments didn't load" message={loadError} actionLabel="Try again" onAction={() => (setLoadError(null), load())} />
+      ) : !settings || !purchases ? (
         <View style={{ paddingHorizontal: gutter }}>
           <RowSkeleton count={5} />
         </View>
@@ -222,3 +229,11 @@ const useStyles = makeStyles((colors) => ({
   reject: { alignItems: "center", paddingTop: spacing.sm + 2 },
   rejectText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold },
 }));
+
+export default function AdminMoneyScreen() {
+  return (
+    <StaffOnly title="Payments and prices">
+      <AdminMoneyScreenInner />
+    </StaffOnly>
+  );
+}

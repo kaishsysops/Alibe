@@ -16,13 +16,14 @@ import Tap from "../components/Tap";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow, contentWidth, controlHeight } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
+import StaffOnly from "../components/StaffOnly";
 
 type Editing = { mode: "add"; parentId: string | null } | { mode: "edit"; category: AdminCategory };
 
 // Staff only: the category tree, one level at a time. Add subcategories at any
 // depth, rename, set search words, hide, reorder, delete. Changes show in the
 // app within a minute.
-export default function AdminCategoriesScreen() {
+function AdminCategoriesScreenInner() {
   const styles = useStyles();
   const { colors } = useTheme();
   const toast = useToast();
@@ -251,3 +252,11 @@ const useStyles = makeStyles((colors) => ({
   save: { height: controlHeight.primary, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", marginTop: spacing.md },
   saveText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.md },
 }));
+
+export default function AdminCategoriesScreen() {
+  return (
+    <StaffOnly title="Categories">
+      <AdminCategoriesScreenInner />
+    </StaffOnly>
+  );
+}
