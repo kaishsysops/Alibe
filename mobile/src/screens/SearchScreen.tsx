@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { View, Text, TextInput, ScrollView, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { Search as SearchIcon, X, SlidersHorizontal, SearchX, BellPlus, BellRing, Clock, TrendingUp, ArrowUpDown, Star, ChevronRight, Sparkles, LayoutGrid } from "lucide-react-native";
+import { Search as SearchIcon, X, ChevronLeft, SlidersHorizontal, SearchX, BellPlus, BellRing, Clock, TrendingUp, ArrowUpDown, Star, ChevronRight, Sparkles, LayoutGrid } from "lucide-react-native";
 import { api, Atoll, AttrFilters, AttributeDef, Category, DeliveryOption, errorMessage, Listing, ListingSort, SearchUnderstanding, SellerSearchResult } from "../api/client";
 import { buildCategoryTree, matchCategories } from "../utils/categoryTree";
 import { VerifiedBadge } from "../components/Badges";
@@ -379,29 +379,22 @@ export default function SearchScreen() {
     </ScrollView>
   ) : (
     <View>
-      <ScrollView showsVerticalScrollIndicator={false} horizontal showsHorizontalScrollIndicator={false} style={styles.hRow} contentContainerStyle={[styles.crumbs, { paddingHorizontal: isDesktopWeb ? 0 : gutter }]} keyboardShouldPersistTaps="handled">
-        <Tap onPress={() => setCategorySlug(undefined)} hitSlop={6} scaleTo={0.92} accessibilityLabel="All categories">
-          <Text style={styles.crumb}>All</Text>
+      {/* Where you are, in one line that always fits: a step back up, and the
+          current category (its X clears the category altogether). */}
+      <View style={[styles.crumbs, { paddingHorizontal: isDesktopWeb ? 0 : gutter }]}>
+        <Tap style={styles.crumbBack} onPress={() => setCategorySlug(crumbs[crumbs.length - 2]?.slug)} scaleTo={0.94} accessibilityLabel={`Back to ${crumbs[crumbs.length - 2]?.name ?? "all categories"}`}>
+          <ChevronLeft size={16} color={colors.text} strokeWidth={2.4} />
+          <Text style={styles.crumbBackText} numberOfLines={1}>
+            {crumbs[crumbs.length - 2]?.name ?? "All"}
+          </Text>
         </Tap>
-        {crumbs.map((c, i) => {
-          const last = i === crumbs.length - 1;
-          return (
-            <React.Fragment key={c.id}>
-              <ChevronRight size={14} color={colors.textMuted} />
-              {last ? (
-                <Tap style={styles.crumbCurrent} onPress={() => setCategorySlug(crumbs[i - 1]?.slug)} scaleTo={0.94} accessibilityLabel={`Remove ${c.name}`}>
-                  <Text style={styles.crumbCurrentText}>{c.name}</Text>
-                  <X size={13} color={colors.inverseText} strokeWidth={2.8} />
-                </Tap>
-              ) : (
-                <Tap onPress={() => setCategorySlug(c.slug)} hitSlop={6} scaleTo={0.92}>
-                  <Text style={styles.crumb}>{c.name}</Text>
-                </Tap>
-              )}
-            </React.Fragment>
-          );
-        })}
-      </ScrollView>
+        <Tap style={styles.crumbCurrent} onPress={() => setCategorySlug(undefined)} scaleTo={0.94} accessibilityLabel={`Clear ${activeCategory?.name ?? "category"}`}>
+          <Text style={styles.crumbCurrentText} numberOfLines={1}>
+            {activeCategory?.name}
+          </Text>
+          <X size={14} color={colors.inverseText} strokeWidth={2.8} />
+        </Tap>
+      </View>
       <View style={{ paddingTop: spacing.sm }}>
         <SubcategoryCards tree={tree} slug={categorySlug} onPress={(c) => setCategorySlug(c.slug)} horizontalPadding={isDesktopWeb ? 0 : gutter} />
       </View>
@@ -861,8 +854,11 @@ export default function SearchScreen() {
         <View style={[styles.desktopColumn, { paddingHorizontal: gutter }]}>
           <View style={styles.desktopTop}>
             <View style={{ width: FILTER_PANEL_WIDTH }}>{searchBar}</View>
-            <View style={{ flex: 1, minWidth: 0 }}>{!isBrowsing && categoryChips}</View>
+            {/* Top categories fit beside the search bar; a chosen category's path and
+                subcategories get their own row below, so this row never changes height. */}
+            <View style={{ flex: 1, minWidth: 0 }}>{!isBrowsing && !categorySlug && categoryChips}</View>
           </View>
+          {!!categorySlug && <View style={{ marginLeft: FILTER_PANEL_WIDTH + spacing.lg, marginBottom: spacing.md }}>{categoryChips}</View>}
           <View style={{ flexDirection: "row", flex: 1, gap: spacing.lg }}>
             <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} style={{ width: FILTER_PANEL_WIDTH, flexGrow: 0 }} contentContainerStyle={styles.filterCard}>
               {filterControls}
@@ -936,10 +932,11 @@ const useStyles = makeStyles((colors) => ({
   desktopColumn: { maxWidth: MAX_CONTENT_WIDTH, width: "100%", alignSelf: "center", flex: 1, paddingTop: spacing.lg },
   desktopTop: { flexDirection: "row", alignItems: "center", gap: spacing.lg, marginBottom: spacing.lg },
   hRow: { flexGrow: 0, flexShrink: 0 },
-  crumbs: { flexDirection: "row", alignItems: "center", gap: 6 },
-  crumb: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.textMuted, paddingVertical: 12, paddingHorizontal: 2 },
-  crumbCurrent: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: spacing.md, height: 44 },
-  crumbCurrentText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.inverseText },
+  crumbs: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  crumbBack: { flexDirection: "row", alignItems: "center", gap: 2, flexShrink: 1, height: 44, paddingLeft: spacing.sm, paddingRight: spacing.md, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  crumbBackText: { flexShrink: 1, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text },
+  crumbCurrent: { flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1, backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: spacing.md, height: 44 },
+  crumbCurrentText: { flexShrink: 1, fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.inverseText },
   subCard: { flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: colors.card, borderRadius: radius.md, paddingVertical: spacing.sm, paddingLeft: spacing.sm, paddingRight: spacing.md, ...cardShadow },
   subIcon: { width: 36, height: 36, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   subName: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.text },
