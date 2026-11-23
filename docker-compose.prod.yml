@@ -17,7 +17,7 @@ x-backend-env: &backend-env
   RESEND_API_KEY: ${RESEND_API_KEY:-}
   # "Sign in with Google" (Google Cloud OAuth client id; empty = no button).
   GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
-  MAIL_FROM: "${MAIL_FROM:-Alibe <no-reply@alibe.mv>}"
+  MAIL_FROM: "${MAIL_FROM:-Alibe <no-reply@alibe.online>}"
   # Shared by all replicas so a slip link made by one opens on another.
   SLIP_LINK_SECRET: "${SLIP_LINK_SECRET:?missing - run ./deploy.sh to create it}"
   # Emails that are staff as soon as they sign in (comma-separated).

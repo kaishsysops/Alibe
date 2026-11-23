@@ -81,7 +81,7 @@ export default function HelpScreen() {
                 {qa(r, `s-${r.q}`, i)}
               </View>
             ))}
-            {!results.length && <Text style={styles.muted}>Try other words, or email help@alibe.mv.</Text>}
+            {!results.length && <Text style={styles.muted}>Try other words, or email help@alibe.online.</Text>}
           </View>
         ) : topic ? (
           <View style={{ gap: spacing.sm }}>
@@ -117,7 +117,7 @@ export default function HelpScreen() {
         )}
 
         <View style={styles.footer}>
-          <Text style={styles.muted}>Still stuck? Email help@alibe.mv</Text>
+          <Text style={styles.muted}>Still stuck? Email help@alibe.online</Text>
           <Tap onPress={() => navigation.navigate("Safety")} scaleTo={0.97}>
             <Text style={styles.link}>How Alibe keeps you safe</Text>
           </Tap>

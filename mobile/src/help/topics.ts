@@ -119,6 +119,6 @@ export const HELP_TOPICS: HelpTopic[] = [
     title: "Contact us",
     blurb: "Still stuck?",
     Icon: LifeBuoy,
-    items: [{ q: "How do I reach Alibe?", a: "Email help@alibe.mv with your question and, if it's about a listing or order, a link to it. We reply as soon as we can." }],
+    items: [{ q: "How do I reach Alibe?", a: "Email help@alibe.online with your question and, if it's about a listing or order, a link to it. We reply as soon as we can." }],
   },
 ];
