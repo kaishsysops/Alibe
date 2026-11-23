@@ -18,6 +18,7 @@ const LINKS = [
   { key: "search", label: "Browse", route: "SearchTab" },
   { key: "mylistings", label: "My listings", route: "MyListings" },
   { key: "chats", label: "Chats", route: "ChatsTab" },
+  { key: "help", label: "Help", route: "Help" },
 ];
 
 // Desktop-web top bar: one 64px row with logo, primary links, search and

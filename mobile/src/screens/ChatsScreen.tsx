@@ -19,6 +19,7 @@ import { spacing, radius, tabBarClearance, cardShadow, fontSize, fontWeight } fr
 import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
 import { timeAgo } from "../utils/time";
 import AvatarPhoto from "../components/AvatarPhoto";
+import FirstTimeTip from "../components/FirstTimeTip";
 
 const LIST_PANE_WIDTH = 360;
 type Filter = "ALL" | "UNREAD" | "BUYING" | "SELLING";
@@ -172,6 +173,7 @@ export default function ChatsScreen() {
           <View style={styles.split}>
             <View style={styles.listPane}>
               <Text style={styles.paneTitle}>Chats</Text>
+              <FirstTimeTip id="chats" title="Chat safely" text="Agree the price here and keep the conversation in Alibe. Never pay in full before you have the item, and give your handover code only once it's in your hands." topic="safety" style={{ marginHorizontal: spacing.sm, marginBottom: spacing.sm }} />
               {filterRow}
               {loading ? (
                 <RowSkeleton count={6} />
@@ -201,6 +203,7 @@ export default function ChatsScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
       <Text style={[styles.header, { paddingHorizontal: gutter }]}>Chats</Text>
+      <FirstTimeTip id="chats" title="Chat safely" text="Agree the price here and keep the conversation in Alibe. Never pay in full before you have the item, and give your handover code only once it's in your hands." topic="safety" style={{ marginHorizontal: gutter, marginBottom: spacing.sm }} />
       {filterRow}
       {loading ? (
         <View style={{ paddingHorizontal: gutter - spacing.sm }}>

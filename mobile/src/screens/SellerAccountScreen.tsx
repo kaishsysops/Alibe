@@ -14,6 +14,7 @@ import Tap from "../components/Tap";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, contentWidth } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
+import FirstTimeTip from "../components/FirstTimeTip";
 
 type Period = "MONTHLY" | "YEARLY";
 const date = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "");
@@ -121,6 +122,8 @@ export default function SellerAccountScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => (setRefreshing(true), load())} tintColor={colors.primary} />}
       >
+        <FirstTimeTip id="seller-account" title="Your seller account" text="Choose whether you sell as an individual or a store, get verified (free, optional) and see the plans. The posting rules are at the bottom." topic="selling" />
+
         {/* Standing */}
         <View style={styles.hero}>
           <View style={styles.heroTop}>
@@ -265,7 +268,12 @@ export default function SellerAccountScreen() {
         />
 
         <View style={styles.rules}>
-          <Text style={styles.rulesTitle}>How selling on Alibe works</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm }}>
+            <Text style={styles.rulesTitle}>How selling on Alibe works</Text>
+            <Tap onPress={() => navigation.navigate("Help", { topic: "selling" })} scaleTo={0.96}>
+              <Text style={{ fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.primary }}>More help</Text>
+            </Tap>
+          </View>
           {[
             ["1", "Your posts go live straight away."],
             ["2", "Now and then our team checks a post first (for example a link, a bank number or a very new account selling phones). It's usually done within a few hours, and you'll be told either way. Verified sellers and stores never wait."],

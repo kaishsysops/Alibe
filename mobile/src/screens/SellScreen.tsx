@@ -22,6 +22,7 @@ import { useKeyboardVisible } from "../hooks/useKeyboardVisible";
 import IslandPicker, { defaultIslandId, findIsland } from "../components/IslandPicker";
 import { useAuthMethods } from "../hooks/useAuthMethods";
 import PremiumPromo from "../components/PremiumPromo";
+import FirstTimeTip from "../components/FirstTimeTip";
 
 const CONDITIONS: Array<{ value: Listing["condition"]; label: string; hint: string }> = [
   { value: "NEW", label: "New", hint: "Unused, in original packaging" },
@@ -447,6 +448,22 @@ function SellForm() {
           ))}
         </View>
       </View>
+    );
+  }
+
+  // First visit: how selling works.
+  if (step === 0) {
+    stepContent = (
+      <>
+        <FirstTimeTip
+          id="sell"
+          title="How selling works"
+          text="Your post goes live straight away. Now and then we check one first (a link, a bank number, or a very new account selling phones). Up to 30 posts a month; Premium has no limit."
+          topic="selling"
+          style={{ marginBottom: spacing.md }}
+        />
+        {stepContent}
+      </>
     );
   }
 

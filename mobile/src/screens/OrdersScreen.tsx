@@ -16,6 +16,7 @@ import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { Colors, spacing, radius, fontSize, fontWeight, cardShadow, contentWidth } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
 import { timeAgo } from "../utils/time";
+import FirstTimeTip from "../components/FirstTimeTip";
 
 export function orderStatusMeta(status: OrderStatus, role: "BUYER" | "SELLER", colors: Colors) {
   switch (status) {
@@ -186,6 +187,7 @@ export default function OrdersScreen() {
         <WebNavBar />
         <View style={styles.desktopColumn}>
           <Text style={styles.header}>Orders</Text>
+          <FirstTimeTip id="orders" title="How orders work" text="When an offer is accepted, an order is made. The seller delivers it; the buyer gives their private handover code only once the item is in their hands. Problems? Open the order and report it." topic="orders" style={{ marginBottom: spacing.sm }} />
           {tabs}
           {list}
         </View>
@@ -195,6 +197,7 @@ export default function OrdersScreen() {
   return (
     <View style={styles.container}>
       <ScreenHeader title="Orders" />
+      <FirstTimeTip id="orders" title="How orders work" text="When an offer is accepted, an order is made. The seller delivers it; the buyer gives their private handover code only once the item is in their hands. Problems? Open the order and report it." topic="orders" style={{ marginHorizontal: gutter, marginBottom: spacing.sm }} />
       {tabs}
       {list}
     </View>

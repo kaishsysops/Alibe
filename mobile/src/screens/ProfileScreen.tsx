@@ -79,38 +79,53 @@ export default function ProfileScreen() {
     </View>
   );
 
-  const groups: Array<Array<{ icon: any; label: string; value?: React.ReactNode; onPress: () => void }>> = [
-    [
-      {
-        icon: Store,
-        label: "Seller account",
-        value: user?.sellerKind === "STORE" ? "Store" : user?.verificationStatus === "VERIFIED" ? "Verified" : "Get verified",
-        onPress: () => navigation.navigate("SellerAccount"),
-      },
-      { icon: Package, label: "My orders", onPress: () => navigation.navigate("Orders") },
-      { icon: Archive, label: "My listings", value: counts ? String(counts.active) : undefined, onPress: () => navigation.navigate("MyListings") },
-      { icon: Heart, label: "Saved items", value: String(favoriteIds.size), onPress: () => navigation.navigate("Favorites") },
-      { icon: BellRing, label: "Search alerts", onPress: () => navigation.navigate("SavedSearches") },
-      { icon: Bell, label: "Notifications", onPress: () => navigation.navigate("Notifications") },
-      { icon: Wallet, label: "My purchases", onPress: () => navigation.navigate("Purchases") },
-      { icon: Megaphone, label: "Advertise on Alibe", onPress: () => navigation.navigate("BuyAd") },
-    ],
-    [
-      ...(phoneSignIn ? [{ icon: Phone, label: "Phone number", value: formatPhone(user?.phone) || "Add", onPress: () => navigation.navigate("ChangePhone") }] : []),
-      { icon: Mail, label: "Email", value: user?.email || "Add", onPress: () => navigation.navigate("ChangeEmail") },
-      { icon: MessageSquareText, label: "WhatsApp and Viber", value: contactSummary, onPress: () => navigation.navigate("EditProfile", { section: "contact" }) },
-      { icon: Palette, label: "App colour", value: <View style={[styles.colorDot, { backgroundColor: colors.primary }]} />, onPress: () => navigation.navigate("EditProfile", { section: "appearance" }) },
-      { icon: SunMoon, label: "Light or dark", value: mode === "system" ? "Automatic" : mode === "dark" ? "Dark" : "Light", onPress: () => navigation.navigate("EditProfile", { section: "appearance" }) },
-      { icon: Ban, label: "Blocked people", onPress: () => navigation.navigate("BlockedUsers") },
-    ],
-    [
-      { icon: ShieldCheck, label: "How Alibe keeps you safe", onPress: () => navigation.navigate("Safety") },
-      { icon: Activity, label: "System status", onPress: () => navigation.navigate("Status") },
-      { icon: HelpCircle, label: "Help and support", onPress: () => toast.info("Support chat is coming soon. For now, email help@alibe.mv.") },
-      { icon: FileText, label: "Privacy policy", onPress: () => navigation.navigate("Privacy") },
-      { icon: FileText, label: "Terms of use", onPress: () => navigation.navigate("Terms") },
-      { icon: Info, label: "About Alibe", onPress: () => toast.info("Alibe v0.2. A marketplace for every island in the Maldives.") },
-    ],
+  // Grouped by what people come here to do, each with a heading.
+  const groups: Array<{ title: string; items: Array<{ icon: any; label: string; value?: React.ReactNode; onPress: () => void }> }> = [
+    {
+      title: "Buying",
+      items: [
+        { icon: Package, label: "My orders", onPress: () => navigation.navigate("Orders") },
+        { icon: Heart, label: "Saved items", value: String(favoriteIds.size), onPress: () => navigation.navigate("Favorites") },
+        { icon: BellRing, label: "Search alerts", onPress: () => navigation.navigate("SavedSearches") },
+        { icon: Bell, label: "Notifications", onPress: () => navigation.navigate("Notifications") },
+      ],
+    },
+    {
+      title: "Selling",
+      items: [
+        { icon: Archive, label: "My listings", value: counts ? String(counts.active) : undefined, onPress: () => navigation.navigate("MyListings") },
+        {
+          icon: Store,
+          label: "Seller account",
+          value: user?.sellerKind === "STORE" ? "Store" : user?.verificationStatus === "VERIFIED" ? "Verified" : "Get verified",
+          onPress: () => navigation.navigate("SellerAccount"),
+        },
+        { icon: Megaphone, label: "Advertise on Alibe", onPress: () => navigation.navigate("BuyAd") },
+        { icon: Wallet, label: "Payments (boosts, ads, plans)", onPress: () => navigation.navigate("Purchases") },
+      ],
+    },
+    {
+      title: "Account",
+      items: [
+        ...(phoneSignIn ? [{ icon: Phone, label: "Phone number", value: formatPhone(user?.phone) || "Add", onPress: () => navigation.navigate("ChangePhone") }] : []),
+        { icon: Mail, label: "Email", value: user?.email || "Add", onPress: () => navigation.navigate("ChangeEmail") },
+        { icon: MessageSquareText, label: "WhatsApp and Viber", value: contactSummary, onPress: () => navigation.navigate("EditProfile", { section: "contact" }) },
+        { icon: Palette, label: "App colour", value: <View style={[styles.colorDot, { backgroundColor: colors.primary }]} />, onPress: () => navigation.navigate("EditProfile", { section: "appearance" }) },
+        { icon: SunMoon, label: "Light or dark", value: mode === "system" ? "Automatic" : mode === "dark" ? "Dark" : "Light", onPress: () => navigation.navigate("EditProfile", { section: "appearance" }) },
+        { icon: Ban, label: "Blocked people", onPress: () => navigation.navigate("BlockedUsers") },
+      ],
+    },
+    {
+      title: "Help",
+      items: [
+        { icon: HelpCircle, label: "Help centre", onPress: () => navigation.navigate("Help") },
+        { icon: ShieldCheck, label: "How Alibe keeps you safe", onPress: () => navigation.navigate("Safety") },
+        { icon: Activity, label: "System status", onPress: () => navigation.navigate("Status") },
+        { icon: FileText, label: "Privacy policy", onPress: () => navigation.navigate("Privacy") },
+        { icon: FileText, label: "Terms of use", onPress: () => navigation.navigate("Terms") },
+        { icon: Info, label: "About Alibe", onPress: () => toast.info("Alibe v0.2. A marketplace for every island in the Maldives.") },
+      ],
+    },
   ];
 
   const content = (
@@ -150,8 +165,10 @@ export default function ProfileScreen() {
 
       <PremiumPromo style={{ marginTop: spacing.md }} />
 
-      {groups.map((items, gi) => (
-        <View key={gi} style={styles.menuCard}>
+      {groups.map(({ title, items }) => (
+        <View key={title}>
+        <Text style={styles.groupTitle}>{title}</Text>
+        <View style={styles.menuCard}>
           {items.map((item, i) => (
             <React.Fragment key={item.label}>
             {/* Inset divider that starts at the label, iOS-settings style. */}
@@ -166,6 +183,7 @@ export default function ProfileScreen() {
             </Tap>
             </React.Fragment>
           ))}
+        </View>
         </View>
       ))}
 
@@ -210,7 +228,8 @@ const useStyles = makeStyles((colors) => ({
   statTileBorder: { borderLeftWidth: 1, borderLeftColor: colors.border },
   statValue: { fontSize: fontSize.xl, fontWeight: fontWeight.extrabold, color: colors.text },
   statLabel: { fontSize: fontSize.caption, color: colors.textMuted },
-  menuCard: { backgroundColor: colors.card, borderRadius: radius.lg, ...cardShadow, marginTop: spacing.md, overflow: "hidden" },
+  menuCard: { backgroundColor: colors.card, borderRadius: radius.lg, ...cardShadow, overflow: "hidden" },
+  groupTitle: { fontSize: fontSize.caption, fontWeight: fontWeight.extrabold, color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.7, marginTop: spacing.lg, marginBottom: spacing.sm, marginLeft: spacing.xs },
   menuRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 4, paddingHorizontal: spacing.md, minHeight: 56 },
   menuDivider: { height: 1, backgroundColor: colors.border, marginLeft: spacing.md + 34 + spacing.sm + 4 },
   menuIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" },

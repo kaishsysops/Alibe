@@ -30,6 +30,7 @@ import { categoryIcons, AllCategoriesIcon } from "../theme/categoryIcons";
 import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
 import AvatarPhoto from "../components/AvatarPhoto";
 import PremiumPromo from "../components/PremiumPromo";
+import FirstTimeTip from "../components/FirstTimeTip";
 
 const HERO_IMAGE = "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=1200&h=800&fit=crop&auto=format&q=75";
 const SELL_IMAGE = "https://images.unsplash.com/photo-1556745757-8d76bdb6984b?w=1000&h=600&fit=crop&auto=format&q=75";
@@ -245,6 +246,7 @@ export default function HomeScreen() {
                 ) : (
                   <>
                     <AdBanner />
+                    <FirstTimeTip id="home" title="New to Alibe?" text="Browse what's for sale near you, message sellers to ask or make an offer, and sell your own things with the Sell button." topic="start" style={{ marginTop: spacing.md }} />
                     <PremiumPromo variant="banner" style={{ marginVertical: spacing.md }} />
                     {railsByCategory.slice(0, 3).map(({ category, items }) => (
                       <HomeRail
@@ -350,6 +352,7 @@ export default function HomeScreen() {
               <HomeRail title="Recently viewed" data={recentlyViewed.slice(0, 12)} onPressItem={goToProduct} horizontalPadding={gutter} />
             )}
             <AdBanner horizontalPadding={gutter} />
+            <FirstTimeTip id="home" title="New to Alibe?" text="Browse what's for sale near you, message sellers to ask or make an offer, and sell your own things with the Sell button." topic="start" style={{ marginHorizontal: gutter, marginTop: spacing.md }} />
             <PremiumPromo variant="banner" style={{ marginHorizontal: gutter, marginVertical: spacing.md }} />
             {railsByCategory.map(({ category, items }, i) => (
               <React.Fragment key={category.id}>

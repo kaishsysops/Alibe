@@ -27,6 +27,7 @@ import EditProfileScreen from "../screens/EditProfileScreen";
 import { ChangeEmailScreen, ChangePhoneScreen } from "../screens/ChangeContactScreen";
 import CategoriesScreen from "../screens/CategoriesScreen";
 import LegalScreen from "../screens/LegalScreen";
+import HelpScreen from "../screens/HelpScreen";
 import StatusScreen from "../screens/StatusScreen";
 import IbayBrowseScreen from "../screens/IbayBrowseScreen";
 import IbayItemScreen from "../screens/IbayItemScreen";
@@ -75,6 +76,7 @@ const linking = {
       IbayItem: "ibay/:id",
       Categories: "categories/:slug?",
       Status: "status",
+      Help: "help/:topic?",
       Purchases: "purchases",
       BuyAd: "advertise",
       Boost: "boost/:id",
@@ -181,6 +183,7 @@ export default function RootNavigator() {
         )}
         {/* alibe.online/status, /privacy and /terms work signed in or out (the app stores link to them). */}
         <Stack.Screen name="Status" component={StatusScreen} />
+        <Stack.Screen name="Help" component={HelpScreen} />
         <Stack.Screen name="Privacy" component={LegalScreen} />
         <Stack.Screen name="Terms" component={LegalScreen} />
       </Stack.Navigator>
