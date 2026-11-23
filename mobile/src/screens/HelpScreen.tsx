@@ -9,7 +9,7 @@ import { FadeIn } from "../components/Motion";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, contentWidth } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
-import { HELP_TOPICS, HelpTopicKey } from "../help/topics";
+import { FAQ, HELP_TOPICS, HelpTopicKey } from "../help/topics";
 
 // alibe.online/help: how Alibe works, by topic, with search. Other screens
 // link straight to a topic: navigation.navigate("Help", { topic: "selling" }).
@@ -29,7 +29,7 @@ export default function HelpScreen() {
     () =>
       q.length < 2
         ? []
-        : HELP_TOPICS.flatMap((t) => t.items.filter((i) => `${i.q} ${i.a}`.toLowerCase().includes(q)).map((i) => ({ ...i, topic: t }))),
+        : HELP_TOPICS.filter((t) => t.key !== "faq").flatMap((t) => t.items.filter((i) => `${i.q} ${i.a}`.toLowerCase().includes(q)).map((i) => ({ ...i, topic: t }))),
     [q]
   );
 
@@ -101,8 +101,19 @@ export default function HelpScreen() {
             {topic.items.map((item, i) => qa(item, `${topic.key}-${i}`, i))}
           </View>
         ) : (
+          <>
+          <View style={{ gap: spacing.sm }}>
+            <View style={styles.faqHead}>
+              <Text style={styles.sectionTitle}>Frequently asked</Text>
+              <Tap onPress={() => (setTopicKey("faq"), setOpen(null))} scaleTo={0.96}>
+                <Text style={styles.link}>See all {FAQ.length}</Text>
+              </Tap>
+            </View>
+            {FAQ.slice(0, 6).map((item, i) => qa(item, `faq-${i}`, i))}
+          </View>
+          <Text style={[styles.sectionTitle, { marginTop: spacing.sm }]}>Browse by topic</Text>
           <View style={styles.grid}>
-            {HELP_TOPICS.map((t, i) => (
+            {HELP_TOPICS.filter((t) => t.key !== "faq").map((t, i) => (
               <FadeIn key={t.key} delay={Math.min(i, 10) * 30} style={styles.cell}>
                 <Tap style={styles.tile} onPress={() => (setTopicKey(t.key), setOpen(null))} scaleTo={0.97} accessibilityLabel={`${t.title}: ${t.blurb}`}>
                   <View style={styles.tileIcon}>
@@ -114,6 +125,7 @@ export default function HelpScreen() {
               </FadeIn>
             ))}
           </View>
+          </>
         )}
 
         <View style={styles.footer}>
@@ -138,6 +150,8 @@ const useStyles = makeStyles((colors) => ({
   searchInput: { flex: 1, height: "100%", fontSize: fontSize.md, color: colors.text, outlineStyle: "none" as any },
   section: { fontSize: fontSize.caption, fontWeight: fontWeight.extrabold, color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.6 },
   resultTopic: { fontSize: fontSize.caption, fontWeight: fontWeight.bold, color: colors.primary, marginTop: spacing.xs },
+  faqHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  sectionTitle: { fontSize: fontSize.lg, fontWeight: fontWeight.extrabold, color: colors.text },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm + 4 },
   cell: { flexGrow: 1, flexBasis: 150, alignSelf: "stretch" },
   tile: { flexGrow: 1, backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.md, gap: 4, minHeight: 116, ...cardShadow },

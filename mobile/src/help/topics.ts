@@ -1,9 +1,9 @@
-import { Compass, ShoppingBag, Tag, ShieldCheck, Package, Rocket, Crown, BadgeCheck, UserCog, LifeBuoy, LucideIcon } from "lucide-react-native";
+import { MessagesSquare, Compass, ShoppingBag, Tag, ShieldCheck, Package, Rocket, Crown, BadgeCheck, UserCog, LifeBuoy, LucideIcon } from "lucide-react-native";
 
 // Everything in the help centre (Profile > Help, /help). Plain words, short
 // answers. Keep the selling rules in step with backend/src/sellers.ts and
 // backend/src/postRisk.ts, and prices with Admin > Payments.
-export type HelpTopicKey = "start" | "buying" | "selling" | "safety" | "orders" | "boosts" | "premium" | "verify" | "account" | "contact";
+export type HelpTopicKey = "faq" | "start" | "buying" | "selling" | "safety" | "orders" | "boosts" | "premium" | "verify" | "account" | "contact";
 export type HelpTopic = { key: HelpTopicKey; title: string; blurb: string; Icon: LucideIcon; items: Array<{ q: string; a: string }> };
 
 export const HELP_TOPICS: HelpTopic[] = [
@@ -122,3 +122,28 @@ export const HELP_TOPICS: HelpTopic[] = [
     items: [{ q: "How do I reach Alibe?", a: "Email help@alibe.online with your question and, if it's about a listing or order, a link to it. We reply as soon as we can." }],
   },
 ];
+
+// The questions people ask most, shown first in the help centre and at
+// /help/faq. They point at answers in the topics above, so each answer is
+// written once.
+const FAQ_PICKS: Array<[HelpTopicKey, string]> = [
+  ["buying", "How do I buy something?"],
+  ["buying", "How do I pay?"],
+  ["buying", "What's the handover code?"],
+  ["selling", "How do I list an item?"],
+  ["selling", "Does my post go live straight away?"],
+  ["selling", "Is there a limit?"],
+  ["safety", "The golden rules"],
+  ["verify", "Do I have to verify?"],
+  ["boosts", "What's a boost?"],
+  ["premium", "What does Premium include?"],
+  ["selling", "I sell for a business. What should I do?"],
+  ["orders", "Something went wrong"],
+];
+
+export const FAQ: Array<{ q: string; a: string; topic: HelpTopicKey }> = FAQ_PICKS.flatMap(([key, q]) => {
+  const item = HELP_TOPICS.find((t) => t.key === key)?.items.find((i) => i.q === q);
+  return item ? [{ ...item, topic: key }] : [];
+});
+
+HELP_TOPICS.unshift({ key: "faq", title: "Frequently asked", blurb: "The quick answers", Icon: MessagesSquare, items: FAQ });
