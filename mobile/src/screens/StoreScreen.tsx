@@ -58,7 +58,7 @@ export default function StoreScreen() {
         </View>
         <View style={styles.nameRow}>
           <Text style={styles.name}>{page.store.name}</Text>
-          <SellerBadgePill badge={page.owner.badge ?? "STORE"} />
+          <SellerBadgePill badge={page.owner.badge ?? "STORE"} verified={page.owner.verified} />
         </View>
         <View style={styles.metaRow}>
           <RatingSummary rating={page.owner.rating} />

@@ -95,7 +95,7 @@ export default function SellerProfileScreen() {
         <View style={{ flex: 1, minWidth: 0 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <Text style={styles.name}>{seller.name}</Text>
-            <SellerBadgePill badge={seller.badge} />
+            <SellerBadgePill badge={seller.badge} verified={seller.verified} />
           </View>
           <Text style={styles.meta}>
             {seller.username ? `@${seller.username}  ·  ` : ""}Since {memberSince}

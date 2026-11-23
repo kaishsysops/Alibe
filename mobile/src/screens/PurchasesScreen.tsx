@@ -1,8 +1,9 @@
-import React, { useCallback, useState } from "react";
-import { ActivityIndicator, FlatList, RefreshControl, Text, View } from "react-native";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import React, { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, FlatList, Linking, Platform, RefreshControl, Text, View } from "react-native";
+import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import { Megaphone, Wallet } from "lucide-react-native";
+import { Megaphone, Wallet, Copy, Check, ImageUp, CreditCard } from "lucide-react-native";
+import * as Clipboard from "expo-clipboard";
 import { api, BankDetails, errorMessage, Purchase, PurchaseStatus, uploadMedia } from "../api/client";
 import { useToast } from "../components/Toast";
 import { useAppAlert } from "../components/AppAlertProvider";
@@ -37,6 +38,30 @@ function statusText(p: Purchase): string {
   return texts[p.status];
 }
 
+// A "Copy" button: puts the value on the clipboard and says so.
+function CopyButton({ value, label, big }: { value: string; label: string; big?: boolean }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
+  const toast = useToast();
+  const [done, setDone] = useState(false);
+  const copy = async () => {
+    try {
+      await Clipboard.setStringAsync(value);
+      setDone(true);
+      toast.success(`Copied the ${label}.`);
+      setTimeout(() => setDone(false), 2000);
+    } catch {
+      toast.error("Couldn't copy. Please copy it by hand.");
+    }
+  };
+  return (
+    <Tap style={[styles.copy, big && styles.copyBig]} onPress={copy} scaleTo={0.94} accessibilityLabel={`Copy the ${label}`}>
+      {done ? <Check size={16} color={colors.success} strokeWidth={3} /> : <Copy size={16} color={colors.primary} />}
+      <Text style={[styles.copyText, done && { color: colors.success }]}>{done ? "Copied" : "Copy"}</Text>
+    </Tap>
+  );
+}
+
 export default function PurchasesScreen() {
   const styles = useStyles();
   const { colors } = useTheme();
@@ -46,6 +71,38 @@ export default function PurchasesScreen() {
   const { isDesktopWeb, gutter } = useResponsive();
   const [purchases, setPurchases] = useState<Purchase[] | null>(null);
   const [bank, setBank] = useState<BankDetails | null>(null);
+  const [cardPayments, setCardPayments] = useState(false);
+  const [paying, setPaying] = useState<string | null>(null);
+  const route = useRoute<any>();
+
+  // Back from BML's card page (?paid=<id>): ask the server to check it.
+  const paidId: string | undefined = route.params?.paid;
+  useEffect(() => {
+    if (!paidId) return;
+    api
+      .checkCardPayment(paidId)
+      .then((r) => {
+        if (r.status === "ACTIVE") toast.success("Payment received. It's live now.");
+        else toast.info("We haven't had the card payment confirmed yet. If you paid, it'll show here shortly.");
+        load();
+      })
+      .catch((e) => toast.error(errorMessage(e)));
+    navigation.setParams({ paid: undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paidId]);
+
+  const payByCard = async (p: Purchase) => {
+    setPaying(p.id);
+    try {
+      const { url } = await api.payByCard(p.id);
+      if (Platform.OS === "web" && typeof window !== "undefined") window.location.href = url;
+      else await Linking.openURL(url);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setPaying(null);
+    }
+  };
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(
@@ -55,6 +112,7 @@ export default function PurchasesScreen() {
         .then((res) => {
           setPurchases(res.purchases);
           setBank(res.bank);
+          setCardPayments(!!res.cardPayments);
         })
         .catch((e) => {
           setPurchases((p) => p ?? []);
@@ -124,17 +182,85 @@ export default function PurchasesScreen() {
 
         {p.status === "AWAITING_PAYMENT" && (
           <View style={styles.payBox}>
-            <Text style={styles.payAmount}>Pay MVR {p.amount.toLocaleString()}</Text>
-            <Text style={styles.payLine}>Bank: {bank?.bankName}</Text>
-            <Text style={styles.payLine}>Account name: {bank?.accountName}</Text>
-            <Text style={styles.payLine} selectable>
-              Account number: {bank?.accountNumber}
-            </Text>
-            <Text style={styles.payRef} selectable>
-              Put this in the transfer note: {p.reference}
-            </Text>
+            {cardPayments && (
+              <>
+                <Tap style={styles.cardButton} onPress={() => payByCard(p)} disabled={paying === p.id} scaleTo={0.97} accessibilityLabel={`Pay MVR ${p.amount} by card`}>
+                  {paying === p.id ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <CreditCard size={20} color="#fff" />
+                      <Text style={styles.buttonText}>Pay MVR {p.amount.toLocaleString()} by card</Text>
+                    </>
+                  )}
+                </Tap>
+                <Text style={styles.cardNote}>On Bank of Maldives' secure page. It starts as soon as you've paid.</Text>
+                <View style={styles.orRow}>
+                  <View style={styles.orLine} />
+                  <Text style={styles.orText}>or pay by bank transfer</Text>
+                  <View style={styles.orLine} />
+                </View>
+              </>
+            )}
+            {/* 1. Send the money */}
+            <View style={styles.step}>
+              <View style={styles.stepNum}>
+                <Text style={styles.stepNumText}>1</Text>
+              </View>
+              <View style={{ flex: 1, gap: spacing.sm }}>
+                <Text style={styles.stepTitle}>Send MVR {p.amount.toLocaleString()} to Alibe</Text>
+                <View style={styles.bankCard}>
+                  <Text style={styles.bankLabel}>Bank</Text>
+                  <Text style={styles.bankValue}>{bank?.bankName}</Text>
+                  <Text style={[styles.bankLabel, { marginTop: spacing.sm }]}>Account name</Text>
+                  <Text style={styles.bankValue}>{bank?.accountName}</Text>
+                  <Text style={[styles.bankLabel, { marginTop: spacing.sm }]}>Account number</Text>
+                  <View style={styles.copyRow}>
+                    <Text style={[styles.bankValue, styles.mono, { flex: 1 }]} selectable>
+                      {bank?.accountNumber}
+                    </Text>
+                    <CopyButton value={bank?.accountNumber ?? ""} label="account number" />
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            {/* 2. The code that ties the payment to this order */}
+            <View style={styles.step}>
+              <View style={styles.stepNum}>
+                <Text style={styles.stepNumText}>2</Text>
+              </View>
+              <View style={{ flex: 1, gap: spacing.sm }}>
+                <Text style={styles.stepTitle}>Type this code in the transfer's "remarks" or "note"</Text>
+                <View style={styles.codeBox}>
+                  <Text style={[styles.code, styles.mono]} selectable numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                    {p.reference}
+                  </Text>
+                  <CopyButton value={p.reference} label="code" big />
+                </View>
+                <Text style={styles.hint}>It tells us the money is from you.</Text>
+              </View>
+            </View>
+
+            {/* 3. Show us the receipt */}
+            <View style={styles.step}>
+              <View style={styles.stepNum}>
+                <Text style={styles.stepNumText}>3</Text>
+              </View>
+              <View style={{ flex: 1, gap: spacing.sm }}>
+                <Text style={styles.stepTitle}>Send us a photo of the receipt</Text>
+                <Text style={styles.hint}>A screenshot from your bank app is fine.</Text>
+              </View>
+            </View>
             <Tap style={styles.button} onPress={() => sendSlip(p)} disabled={sending} scaleTo={0.97}>
-              {sending ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>I've paid. Upload my slip</Text>}
+              {sending ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <ImageUp size={20} color="#fff" />
+                  <Text style={styles.buttonText}>I've paid: add the receipt</Text>
+                </>
+              )}
             </Tap>
           </View>
         )}
@@ -150,7 +276,7 @@ export default function PurchasesScreen() {
 
   return (
     <View style={styles.container}>
-      {isDesktopWeb ? <WebNavBar active="profile" /> : <ScreenHeader title="My purchases" />}
+      {isDesktopWeb ? <WebNavBar active="profile" /> : <ScreenHeader title="Payments" />}
       {!purchases ? (
         <View style={{ paddingHorizontal: gutter }}>
           <RowSkeleton count={4} />
@@ -181,17 +307,34 @@ export default function PurchasesScreen() {
 
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
-  list: { paddingVertical: spacing.md, gap: spacing.md, width: "100%", maxWidth: contentWidth.list, alignSelf: "center", flexGrow: 1 },
+  list: { paddingVertical: spacing.md, gap: spacing.md, width: "100%", maxWidth: contentWidth.list, alignSelf: "center", flexGrow: 1, justifyContent: "center" },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.md, ...cardShadow },
   kind: { fontSize: fontSize.caption, fontWeight: fontWeight.bold, color: colors.primary },
   title: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.text, marginTop: 2 },
   status: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: spacing.xs, lineHeight: fontSize.sm * 1.4 },
   stats: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text, marginTop: spacing.xs },
+  cardButton: { flexDirection: "row", gap: spacing.sm, height: controlHeight.primary, borderRadius: radius.pill, backgroundColor: colors.text, alignItems: "center", justifyContent: "center" },
+  cardNote: { fontSize: fontSize.caption, color: colors.textMuted, textAlign: "center", marginTop: 6 },
+  orRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginVertical: spacing.md },
+  orLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  orText: { fontSize: fontSize.caption, fontWeight: fontWeight.bold, color: colors.textMuted },
   payBox: { marginTop: spacing.md, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.primaryTint },
-  payAmount: { fontSize: fontSize.xl, fontWeight: fontWeight.extrabold, color: colors.text, marginBottom: spacing.xs },
-  payLine: { fontSize: fontSize.sm, color: colors.text, marginTop: 3 },
-  payRef: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.text, marginTop: spacing.sm },
-  button: { height: controlHeight.primary, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", marginTop: spacing.md },
+  step: { flexDirection: "row", gap: spacing.sm + 4, marginBottom: spacing.md },
+  stepNum: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  stepNumText: { color: "#fff", fontWeight: fontWeight.extrabold, fontSize: fontSize.base },
+  stepTitle: { fontSize: fontSize.md, fontWeight: fontWeight.extrabold, color: colors.text, lineHeight: 22, marginTop: 2 },
+  bankCard: { backgroundColor: colors.card, borderRadius: radius.md, padding: spacing.md },
+  bankLabel: { fontSize: fontSize.caption, fontWeight: fontWeight.bold, color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.5 },
+  bankValue: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.text, marginTop: 2 },
+  copyRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  mono: { letterSpacing: 1 },
+  codeBox: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: spacing.sm, padding: spacing.md, borderRadius: radius.md, backgroundColor: colors.card, borderWidth: 2, borderStyle: "dashed", borderColor: colors.primary },
+  code: { flexShrink: 1, fontSize: 22, whiteSpace: "nowrap" as any, fontWeight: fontWeight.extrabold, color: colors.text },
+  hint: { fontSize: fontSize.sm, color: colors.textMuted },
+  copy: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, height: 36, borderRadius: 18, backgroundColor: colors.primaryTint },
+  copyBig: { height: 44, paddingHorizontal: 16, borderRadius: 22 },
+  copyText: { fontSize: fontSize.sm, fontWeight: fontWeight.extrabold, color: colors.primary },
+  button: { flexDirection: "row", gap: spacing.sm, height: controlHeight.primary, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", marginTop: spacing.xs },
   buttonText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.lg },
   link: { alignItems: "center", paddingTop: spacing.md },
   linkText: { color: colors.textMuted, fontWeight: fontWeight.semibold, fontSize: fontSize.sm },

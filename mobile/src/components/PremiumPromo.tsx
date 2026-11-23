@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { View, Text } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { Crown, Rocket, Sparkles, ChevronRight, Check, Infinity as InfinityIcon } from "lucide-react-native";
+import { Crown, Rocket, Sparkles, ChevronRight, Check, Infinity as InfinityIcon, ArrowUpCircle, BarChart3, Images } from "lucide-react-native";
 import { api, SellerMe } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import Tap from "./Tap";
@@ -73,6 +73,9 @@ export default function PremiumPromo({ variant = "card", style }: { variant?: "c
           { Icon: Rocket, text: `${me.premiumFreeBoosts} free 7-day boosts every month` },
           { Icon: Sparkles, text: "New items featured at the top for a week" },
           { Icon: InfinityIcon, text: "No monthly post limit (others: 30 a month)" },
+          { Icon: ArrowUpCircle, text: "Bump any item to the top, once a day" },
+          { Icon: BarChart3, text: "See how many people viewed and saved each item" },
+          { Icon: Images, text: "12 photos per item instead of 6" },
           { Icon: Crown, text: "Gold Premium badge on everything you sell" },
         ].map(({ Icon, text }) => (
           <View key={text} style={styles.perk}>

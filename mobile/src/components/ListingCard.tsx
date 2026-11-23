@@ -118,7 +118,7 @@ export default function ListingCard({
           {!!listing.previousPrice && <Text style={styles.wasPrice}>{listing.previousPrice.toLocaleString()}</Text>}
           {!sellerView && !!listing.seller.badge && (
             <View style={{ marginLeft: "auto" }}>
-              <SellerBadgeIcon badge={listing.seller.badge} size={15} />
+              <SellerBadgeIcon badge={listing.seller.badge} verified={listing.seller.verified} size={15} />
             </View>
           )}
         </View>

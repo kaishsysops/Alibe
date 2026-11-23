@@ -12,6 +12,8 @@ import { invalidate } from "../cache.js";
 import { Prisma } from "@prisma/client";
 import { categoryIndex, clearCategoryCaches, descendants } from "../categories.js";
 import { adminGate, Access } from "../roles.js";
+import { activatePurchase } from "../purchaseActivation.js";
+import { bmlStatus } from "../bml.js";
 
 // Feeds are cached for up to a minute; staff changes show at once on the
 // server that handled them (other replicas catch up within the minute).
@@ -103,7 +105,7 @@ adminRouter.get("/money", async (_req, res) => {
     orderBy: { updatedAt: "desc" },
   });
   // Slips are private: staff get links that work for an hour.
-  res.json({ settings: await moneySettings(), purchases: purchases.map((p) => ({ ...p, slipUrl: signedSlipUrl(p.slipUrl) })) });
+  res.json({ settings: await moneySettings(), purchases: purchases.map((p) => ({ ...p, slipUrl: signedSlipUrl(p.slipUrl) })), cardPayments: bmlStatus() });
 });
 
 adminRouter.put("/money/settings", async (req, res) => {
@@ -142,17 +144,9 @@ adminRouter.post("/purchases/:id", async (req, res) => {
     changed = (await move(["REQUESTED"], { status: "AWAITING_PAYMENT", amount: body.amount })).count;
     message = ["It's available", `${label}: pay MVR ${body.amount.toLocaleString()} and we'll get it for you.`];
   } else if (body.action === "APPROVE") {
-    const timed = purchase.kind !== "BUY_FOR_YOU";
-    // A plan renewed early starts where the current one ends, so no days are lost.
-    let start = now;
-    if (purchase.kind === "STORE_PLAN" || purchase.kind === "PREMIUM_PLAN") {
-      const current = await prisma.purchase.findFirst({ where: { userId: purchase.userId, kind: purchase.kind, status: "ACTIVE", endsAt: { gt: now } }, orderBy: { endsAt: "desc" } });
-      if (current?.endsAt) start = current.endsAt;
-    }
-    changed = (await move(["SUBMITTED"], { status: "ACTIVE", ...(timed ? { startsAt: start, endsAt: new Date(start.getTime() + (purchase.days ?? 0) * DAY_MS) } : {}) })).count;
-    message = ["Payment confirmed", timed ? `${label} is live now.` : `We're getting ${label} for you.`];
-    clearFeedCaches();
-    invalidate("premium-sellers");
+    // Same as a confirmed card payment (src/purchaseActivation.ts), which
+    // also tells the customer.
+    changed = (await activatePurchase(purchase.id, ["SUBMITTED"])) ? 1 : 0;
   } else if (body.action === "COMPLETE") {
     changed = (await move(["ACTIVE"], { status: "COMPLETED" })).count;
     message = ["All done", `${label} is complete. Thanks for using Alibe.`];

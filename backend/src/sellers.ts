@@ -33,13 +33,20 @@ export type StoreSummary = { name: string; slug: string; logoUrl: string | null 
 
 type Plans = { store: Date | null; premium: Date | null };
 
-// Paid plans running now, with when each ends.
+// After a Store or Premium plan's end date it keeps working for this long, so
+// a late renewal doesn't cut anyone off (reminders: src/reminders.ts).
+export const PLAN_GRACE_DAYS = 5;
+export const PLAN_GRACE_MS = PLAN_GRACE_DAYS * 86_400_000;
+export const graceCutoff = () => new Date(Date.now() - PLAN_GRACE_MS);
+
+// Paid plans running now (including their grace period), with when each
+// ends. An end date in the past means it's in its grace period.
 export async function plansFor(userIds: string[]): Promise<Map<string, Plans>> {
   const ids = [...new Set(userIds)];
   const map = new Map<string, Plans>(ids.map((id) => [id, { store: null, premium: null }]));
   if (!ids.length) return map;
   const rows = await prisma.purchase.findMany({
-    where: { userId: { in: ids }, kind: { in: ["STORE_PLAN", "PREMIUM_PLAN"] }, status: "ACTIVE", endsAt: { gt: new Date() } },
+    where: { userId: { in: ids }, kind: { in: ["STORE_PLAN", "PREMIUM_PLAN"] }, status: "ACTIVE", endsAt: { gt: graceCutoff() } },
     select: { userId: true, kind: true, endsAt: true },
   });
   for (const r of rows) {
@@ -50,21 +57,26 @@ export async function plansFor(userIds: string[]): Promise<Map<string, Plans>> {
   return map;
 }
 
-// The badge and store each seller shows buyers (one batch for a whole feed).
-export async function sellerBadges(userIds: string[]): Promise<Map<string, { badge: Badge; store: StoreSummary | null }>> {
+// What each seller shows buyers (one batch for a whole feed): the main badge
+// (Premium > Store > Verified), whether their ID is checked (the blue tick,
+// shown next to the other badges), Premium, and their store if its page is open.
+export type SellerBadges = { badge: Badge; verified: boolean; premium: boolean; store: (StoreSummary & { id: string }) | null };
+export async function sellerBadges(userIds: string[]): Promise<Map<string, SellerBadges>> {
   const ids = [...new Set(userIds)];
-  const out = new Map<string, { badge: Badge; store: StoreSummary | null }>();
+  const out = new Map<string, SellerBadges>();
   if (!ids.length) return out;
   const [users, plans] = await Promise.all([
-    prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, verificationStatus: true, store: { select: { name: true, slug: true, logoUrl: true, status: true } } } }),
+    prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, verificationStatus: true, store: { select: { id: true, name: true, slug: true, logoUrl: true, status: true } } } }),
     plansFor(ids),
   ]);
   for (const u of users) {
     const p = plans.get(u.id)!;
     const storeLive = u.store?.status === "APPROVED" && !!p.store;
     const approved = u.verificationStatus === "VERIFIED" || u.store?.status === "APPROVED";
-    const badge: Badge = approved && p.premium ? "PREMIUM" : storeLive ? "STORE" : u.verificationStatus === "VERIFIED" ? "VERIFIED" : null;
-    out.set(u.id, { badge, store: storeLive && u.store ? { name: u.store.name, slug: u.store.slug, logoUrl: u.store.logoUrl } : null });
+    const premium = approved && !!p.premium;
+    const verified = u.verificationStatus === "VERIFIED";
+    const badge: Badge = premium ? "PREMIUM" : storeLive ? "STORE" : verified ? "VERIFIED" : null;
+    out.set(u.id, { badge, verified, premium, store: storeLive && u.store ? { id: u.store.id, name: u.store.name, slug: u.store.slug, logoUrl: u.store.logoUrl } : null });
   }
   return out;
 }
@@ -73,7 +85,7 @@ export async function sellerBadges(userIds: string[]): Promise<Map<string, { bad
 export const premiumSellerIds = () =>
   cached("premium-sellers", 60_000, async () => {
     const rows = await prisma.purchase.findMany({
-      where: { kind: "PREMIUM_PLAN", status: "ACTIVE", endsAt: { gt: new Date() } },
+      where: { kind: "PREMIUM_PLAN", status: "ACTIVE", endsAt: { gt: graceCutoff() } },
       select: { userId: true },
       distinct: ["userId"],
     });
@@ -112,6 +124,10 @@ export async function standing(userId: string) {
     storeEndsAt: p.store,
     premium,
     premiumEndsAt: p.premium,
+    // In the grace period: past the end date but still working until graceUntil.
+    graceDays: PLAN_GRACE_DAYS,
+    storeGraceUntil: p.store && p.store < new Date() ? new Date(p.store.getTime() + PLAN_GRACE_MS) : null,
+    premiumGraceUntil: p.premium && p.premium < new Date() ? new Date(p.premium.getTime() + PLAN_GRACE_MS) : null,
     liveCount,
     // New posts this month, against the cap (null = no cap).
     postedThisMonth,

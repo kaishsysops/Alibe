@@ -23,6 +23,7 @@ import { startReminders } from "./reminders.js";
 import { authenticate } from "./auth.js";
 import { shareRouter } from "./routes/share.js";
 import { sellersRouter, storesRouter } from "./routes/sellers.js";
+import { bmlWebhook } from "./routes/purchases.js";
 import { staffRouter } from "./routes/staff.js";
 import { ipCeiling, accountLimits } from "./rateLimit.js";
 import { slipsRouter, idsRouter, moveSlipsOutOfPublicUploads } from "./routes/slips.js";
@@ -91,6 +92,12 @@ app.use("/ids", idsRouter);
 app.use("/sellers", sellersRouter);
 app.use("/stores", storesRouter);
 app.use("/staff", staffRouter);
+// BML Connect calls this when a card payment changes (src/bml.ts). Public:
+// the transaction is looked up with BML before anything happens.
+app.post("/payments/bml/webhook", (req, res) => {
+  void bmlWebhook(req.body);
+  res.status(200).json({ ok: true });
+});
 app.use("/share", shareRouter);
 // The logo in emails (email apps need a plain PNG at a public address).
 app.use("/brand", express.static(path.resolve("assets"), { maxAge: "30d" }));

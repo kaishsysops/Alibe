@@ -27,11 +27,17 @@ staffRouter.get("/me", async (req, res) => {
   res.json({ admin: a.admin, roles: a.roles, counts: { applications, posts, reports, disputes } });
 });
 
-// Tells the seller the outcome: in the app, and by email.
+// Tells the seller the outcome: in the app, and by email with a link to the
+// page where they act on it.
 async function tell(userId: string, title: string, body: string, data: Record<string, string>) {
   notifyUser(userId, title, body, data);
   const u = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
-  void sendNoticeEmail(u?.email, title, body);
+  const site = process.env.PUBLIC_URL ?? "https://alibe.online";
+  const path = data.listingId
+    ? data.type === "listing" && /wasn't/.test(title) ? "/my-listings" : `/listing/${data.listingId}`
+    : `/seller-account${data.focus ? `?focus=${data.focus}` : ""}`;
+  const emailBody = `${body.replace(/^(.*?)Tap here to /, "$1Open the link below to ")}\n\n${site}${path}`;
+  void sendNoticeEmail(u?.email, title, emailBody);
 }
 
 // ---- seller applications (Seller approver) -----------------------------------
@@ -107,11 +113,11 @@ staffRouter.post("/applications/:id/decide", requireRole("SELLER_APPROVER"), asy
     await tell(
       app.userId,
       app.kind === "STORE" ? "Your store is approved" : "You're verified",
-      app.kind === "STORE" ? "Your store is approved. Choose a Store plan in Profile > Seller account to open your store page." : "Your posts now go live straight away, with the Verified badge.",
-      { type: "seller" }
+      app.kind === "STORE" ? "Your store is approved. Tap here to choose your Store plan and open your store page." : "Your posts now go live straight away, with the Verified badge.",
+      app.kind === "STORE" ? { type: "seller", focus: "store-plan" } : { type: "seller" }
     );
   } else {
-    await tell(app.userId, `Your ${what} wasn't approved`, `${reason} You can apply again from Profile > Seller account.`, { type: "seller" });
+    await tell(app.userId, `Your ${what} wasn't approved`, `${reason} Tap here to fix it and apply again.`, { type: "seller" });
   }
   res.status(204).send();
 });

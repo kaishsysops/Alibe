@@ -129,11 +129,14 @@ async function requestPage<T>(path: string): Promise<Page<T>> {
 const query = (params: Record<string, string | number | undefined>) =>
   new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== "").map(([k, v]) => [k, String(v)])).toString();
 
-// Uploaded files come back as server-relative paths (/uploads/…); resolve
-// them against whichever API host this device talks to.
+// Files the API serves come back as server-relative paths: photos
+// (/uploads/…), payment slips (/slips/…) and ID card photos (/ids/…, signed
+// links for approvers). Resolve them against the API, which on the web is
+// /api on the same site.
+const API_FILE_PATHS = ["/uploads/", "/slips/", "/ids/"];
 export function mediaUrl(uri: string | null | undefined) {
   if (!uri) return undefined;
-  return uri.startsWith("/uploads/") || uri.startsWith("/slips/") ? `${BASE_URL}${uri}` : uri;
+  return API_FILE_PATHS.some((p) => uri.startsWith(p)) ? `${BASE_URL}${uri}` : uri;
 }
 
 export type UploadedMedia = { url: string; type: "IMAGE" | "VIDEO"; size: number };
@@ -237,6 +240,11 @@ export type Listing = {
   rejectReason?: string | null;
   // Why a risk check held it for review (shown to Post approvers).
   holdReason?: string | null;
+  // Posted under the seller's store (null: as themselves).
+  storeId?: string | null;
+  // My listings only: views and saves (Premium; null otherwise).
+  stats?: { views: number; saves: number } | null;
+  bumpedAt?: string | null;
   images: string[];
   deliveryOptions: DeliveryOption[];
   deliveryNote: string | null;
@@ -402,6 +410,10 @@ export type SellerMe = {
   storeEndsAt: string | null;
   premium: boolean;
   premiumEndsAt: string | null;
+  // Past its end date but still working for a few days (renew before then).
+  graceDays: number;
+  storeGraceUntil: string | null;
+  premiumGraceUntil: string | null;
   liveCount: number;
   // Posting rules: posts go live at once (a risk check may hold one for
   // review); 30 new posts a month without Premium / Store.
@@ -568,6 +580,8 @@ export type ListingInput = {
   deliveryOptions: DeliveryOption[];
   deliveryNote: string | null;
   attributes?: ListingAttributes;
+  // Store owners: under the store (true) or as themselves (false).
+  asStore?: boolean;
 };
 
 export const api = {
@@ -602,6 +616,8 @@ export const api = {
     request<Listing[]>(`/listings/mine/${sellerId}${status ? `?status=${status}` : ""}`),
   createListing: (data: ListingInput & { sellerId: string; clientRequestId: string }) =>
     request<Listing>("/listings", { method: "POST", body: JSON.stringify(data) }),
+  // Premium: back to the top of "newest", once a day per item.
+  bumpListing: (id: string) => request<{ bumpedAt: string }>(`/listings/${id}/bump`, { method: "POST" }),
   updateListing: (id: string, sellerId: string, data: Partial<ListingInput>) =>
     request<Listing>(`/listings/${id}`, { method: "PATCH", body: JSON.stringify({ ...data, sellerId }) }),
   updateListingStatus: (id: string, sellerId: string, status: Listing["status"]) =>
@@ -648,13 +664,16 @@ export const api = {
   verifyEmailChange: (id: string, email: string, code: string) =>
     request<FullUser>(`/users/${id}/email/verify`, { method: "POST", body: JSON.stringify({ email, code }) }),
   moneyConfig: () => request<MoneyConfig>("/purchases/config"),
-  myPurchases: () => request<{ purchases: Purchase[]; bank: BankDetails }>("/purchases/mine"),
+  myPurchases: () => request<{ purchases: Purchase[]; bank: BankDetails; cardPayments?: boolean }>("/purchases/mine"),
+  // Card payments (BML Connect): only when the server has it switched on.
+  payByCard: (id: string) => request<{ url: string }>(`/purchases/${id}/pay-card`, { method: "POST" }),
+  checkCardPayment: (id: string) => request<{ status: PurchaseStatus | null }>(`/purchases/${id}/check-card`, { method: "POST" }),
   createPurchase: (data: NewPurchase, clientRequestId: string) => request<Purchase>("/purchases", { method: "POST", body: JSON.stringify({ ...data, clientRequestId }) }),
   submitSlip: (id: string, slipUrl: string) => request<void>(`/purchases/${id}/slip`, { method: "POST", body: JSON.stringify({ slipUrl }) }),
   cancelPurchase: (id: string) => request<void>(`/purchases/${id}/cancel`, { method: "POST", body: "{}" }),
   ads: () => request<RunningAd[]>("/ads"),
   adClicked: (id: string) => request<void>(`/ads/${id}/click`, { method: "POST", body: "{}" }),
-  adminMoney: () => request<{ settings: MoneySettings; purchases: Purchase[] }>("/admin/money"),
+  adminMoney: () => request<{ settings: MoneySettings; purchases: Purchase[]; cardPayments?: { enabled: boolean; mode: "sandbox" | "production"; tested: boolean } }>("/admin/money"),
   saveMoneySettings: (settings: MoneySettings) => request<MoneySettings>("/admin/money/settings", { method: "PUT", body: JSON.stringify(settings) }),
   purchaseAction: (id: string, body: { action: "QUOTE"; amount: number } | { action: "APPROVE" } | { action: "COMPLETE" } | { action: "REJECT"; note: string }) =>
     request<void>(`/admin/purchases/${id}`, { method: "POST", body: JSON.stringify(body) }),

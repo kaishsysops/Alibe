@@ -23,6 +23,7 @@ import IslandPicker, { defaultIslandId, findIsland } from "../components/IslandP
 import { useAuthMethods } from "../hooks/useAuthMethods";
 import PremiumPromo from "../components/PremiumPromo";
 import FirstTimeTip from "../components/FirstTimeTip";
+import PostAsPicker from "../components/PostAsPicker";
 
 const CONDITIONS: Array<{ value: Listing["condition"]; label: string; hint: string }> = [
   { value: "NEW", label: "New", hint: "Unused, in original packaging" },
@@ -30,7 +31,8 @@ const CONDITIONS: Array<{ value: Listing["condition"]; label: string; hint: stri
   { value: "GOOD", label: "Good", hint: "Normal wear, works perfectly" },
   { value: "FAIR", label: "Fair", hint: "Visible wear or minor faults" },
 ];
-const MAX_IMAGES = 6;
+// Photos per item: 12 with Premium (backend/src/routes/listings.ts).
+const photoLimit = (premium?: boolean) => (premium ? 12 : 6);
 const DELIVERY: Array<{ value: DeliveryOption; label: string; hint: string }> = [
   { value: "PICKUP", label: "Pickup", hint: "Buyer collects from you" },
   { value: "FERRY", label: "Ferry cargo", hint: "Send to another island" },
@@ -184,6 +186,10 @@ function SellForm() {
 
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [standing, setStanding] = useState<SellerMe | null>(null);
+  // Store owners choose: under the store (default) or as themselves.
+  const [asStore, setAsStore] = useState(true);
+  const hasStore = standing?.store?.status === "APPROVED";
+  const MAX_IMAGES = photoLimit(standing?.premium);
   useFocusEffect(
     useCallback(() => {
       if (user) api.sellerMe().then(setStanding).catch(() => {});
@@ -222,6 +228,7 @@ function SellForm() {
         deliveryOptions: draft.deliveryOptions?.length ? draft.deliveryOptions : ["PICKUP"],
         deliveryNote: draft.deliveryNote?.trim() || null,
         clientRequestId: draft.requestId,
+        ...(hasStore ? { asStore } : {}),
       });
       clear();
       if (listing.status === "PENDING") {
@@ -278,7 +285,7 @@ function SellForm() {
       <View>
         <Text style={styles.header}>Add photos</Text>
         <Text style={styles.subheader}>
-          {images.length > 0 ? "Tap a photo to make it the cover. Buyers see the cover first." : "Up to 6 photos. Bright, clear shots sell faster."}
+          {images.length > 0 ? "Tap a photo to make it the cover. Buyers see the cover first." : `Up to ${MAX_IMAGES} photos${standing?.premium ? "" : " (12 with Premium)"}. Bright, clear shots sell faster.`}
         </Text>
         <View style={styles.photoGrid}>
           {images.map((uri, i) => (
@@ -494,6 +501,16 @@ function SellForm() {
         </>
       );
     }
+  }
+
+  // The last step: store owners pick who it's posted as.
+  if (step === STEPS.length - 1 && hasStore) {
+    stepContent = (
+      <>
+        {stepContent}
+        <PostAsPicker asStore={asStore} onChange={setAsStore} style={{ marginTop: spacing.lg }} />
+      </>
+    );
   }
 
   // The last step: a word about Premium before they publish.

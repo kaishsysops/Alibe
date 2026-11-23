@@ -39,6 +39,7 @@ import { useResponsive } from "../hooks/useResponsive";
 import { animateLayout, FadeIn, FillLine, Pop, SuccessBurst, useShake } from "../components/Motion";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, contentWidth } from "../theme/theme";
+import MediaViewer from "../components/MediaViewer";
 
 const CODE_LENGTH = 4;
 const MAX_CODE_ATTEMPTS = 5;
@@ -600,6 +601,7 @@ function SendItemCard({ order, onChange }: { order: Order; onChange: (o: Order) 
 }
 
 function DeliveryDetails({ order }: { order: Order }) {
+  const [viewing, setViewing] = useState<string | null>(null);
   const styles = useStyles();
   const rows: Array<[string, string]> = [];
   if (order.deliveryMethod === "FERRY") {
@@ -621,11 +623,12 @@ function DeliveryDetails({ order }: { order: Order }) {
         </View>
       ))}
       {!!order.cargoReceiptUrl && (
-        <Tap onPress={() => Linking.openURL(mediaUrl(order.cargoReceiptUrl) ?? "").catch(() => {})} scaleTo={0.98} accessibilityLabel="Open the cargo receipt">
+        <Tap onPress={() => setViewing(mediaUrl(order.cargoReceiptUrl) ?? null)} scaleTo={0.98} accessibilityLabel="Open the cargo receipt">
           <Text style={styles.detailKey}>Cargo receipt</Text>
           <Image source={{ uri: mediaUrl(order.cargoReceiptUrl) }} style={styles.receiptPhoto} contentFit="cover" />
         </Tap>
       )}
+      <MediaViewer uri={viewing} type="IMAGE" onClose={() => setViewing(null)} />
     </View>
   );
 }

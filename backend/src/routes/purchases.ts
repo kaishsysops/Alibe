@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import { z } from "zod";
 import { prisma } from "../db.js";
+import { bmlEnabled, bmlPaid, createBmlTransaction, getBmlTransaction } from "../bml.js";
+import { activatePurchase } from "../purchaseActivation.js";
 import { safeRouter } from "../http.js";
 import { prohibitedReason } from "../moderation.js";
 import { notifyUser } from "../push.js";
@@ -25,7 +27,7 @@ const newReference = () => `AL-${crypto.randomBytes(4).toString("hex").toUpperCa
 // and the buy-for-you margin isn't theirs to see.
 purchasesRouter.get("/config", async (_req, res) => {
   const m = await moneySettings();
-  res.json({ boostPrices: m.boostPrices, adPrices: m.adPrices, sellerPlans: m.sellerPlans, premiumFreeBoosts: m.premiumFreeBoosts, ready: isReady(m) });
+  res.json({ boostPrices: m.boostPrices, adPrices: m.adPrices, sellerPlans: m.sellerPlans, premiumFreeBoosts: m.premiumFreeBoosts, ready: isReady(m), cardPayments: bmlEnabled() });
 });
 
 // The seller's price stays on staff screens.
@@ -34,7 +36,7 @@ const forBuyer = <T extends { itemPrice: number | null }>({ itemPrice: _hidden, 
 purchasesRouter.get("/mine", async (req, res) => {
   const m = await moneySettings();
   const purchases = await prisma.purchase.findMany({ where: { userId: req.userId }, orderBy: { createdAt: "desc" }, take: 100 });
-  res.json({ purchases: purchases.map(forBuyer), bank: { bankName: m.bankName, accountName: m.accountName, accountNumber: m.accountNumber } });
+  res.json({ purchases: purchases.map(forBuyer), bank: { bankName: m.bankName, accountName: m.accountName, accountNumber: m.accountNumber }, cardPayments: bmlEnabled() });
 });
 
 const planField = z.union([z.literal(3), z.literal(7), z.literal(30)]);
@@ -178,6 +180,62 @@ purchasesRouter.post("/:id/slip", async (req, res) => {
   if (!count) return res.status(409).json({ error: "This purchase can't take a slip right now." });
   res.status(204).send();
 });
+
+// ---- card payments (BML Connect, src/bml.ts; untested until a key is set) ----
+
+const publicUrl = () => process.env.PUBLIC_URL ?? "https://alibe.online";
+
+// Starts paying a purchase by card: returns BML's payment page to open.
+purchasesRouter.post("/:id/pay-card", async (req, res) => {
+  if (!bmlEnabled()) return res.status(503).json({ error: "Card payments aren't set up yet. Please pay by bank transfer.", code: "CARD_NOT_SET_UP" });
+  const purchase = await prisma.purchase.findUnique({ where: { id: req.params.id } });
+  if (!purchase || purchase.userId !== req.userId) return res.status(404).json({ error: "We couldn't find that purchase." });
+  if (purchase.status !== "AWAITING_PAYMENT") return res.status(409).json({ error: "This purchase isn't waiting for payment." });
+  try {
+    const tx = await createBmlTransaction({ amountMvr: purchase.amount, reference: purchase.reference, redirectUrl: `${publicUrl()}/purchases?paid=${purchase.id}` });
+    if (!tx.id || !tx.url) throw new Error(`BML returned no transaction: ${JSON.stringify(tx).slice(0, 200)}`);
+    await prisma.purchase.update({ where: { id: purchase.id }, data: { gatewayRef: tx.id } });
+    res.json({ url: tx.url });
+  } catch (e) {
+    console.error("[bml] create", e);
+    res.status(502).json({ error: "Card payment isn't working right now. Please pay by bank transfer." });
+  }
+});
+
+// Back from BML's page: ask BML whether it was paid, and start it if so.
+async function settleCardPayment(purchaseId: string) {
+  const purchase = await prisma.purchase.findUnique({ where: { id: purchaseId } });
+  if (!purchase?.gatewayRef || !bmlEnabled()) return purchase?.status ?? null;
+  if (purchase.status !== "AWAITING_PAYMENT" && purchase.status !== "SUBMITTED") return purchase.status;
+  const tx = await getBmlTransaction(purchase.gatewayRef);
+  if (bmlPaid(tx, { amountMvr: purchase.amount, reference: purchase.reference })) {
+    await activatePurchase(purchase.id, ["AWAITING_PAYMENT", "SUBMITTED"]);
+    return "ACTIVE";
+  }
+  return purchase.status;
+}
+
+purchasesRouter.post("/:id/check-card", async (req, res) => {
+  const purchase = await prisma.purchase.findUnique({ where: { id: req.params.id }, select: { userId: true } });
+  if (!purchase || purchase.userId !== req.userId) return res.status(404).json({ error: "We couldn't find that purchase." });
+  try {
+    res.json({ status: await settleCardPayment(req.params.id) });
+  } catch (e) {
+    console.error("[bml] check", e);
+    res.status(502).json({ error: "We couldn't check the card payment yet. Pull down to refresh in a minute." });
+  }
+});
+
+// BML's notification that a transaction changed. Its body isn't trusted: we
+// look the transaction up ourselves. Always answers 200 so BML doesn't retry
+// forever on a purchase we don't know.
+export async function bmlWebhook(body: unknown) {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const id = String(b.transactionId ?? b.id ?? (b.transaction as Record<string, unknown> | undefined)?.id ?? "");
+  if (!id || !bmlEnabled()) return;
+  const purchase = await prisma.purchase.findUnique({ where: { gatewayRef: id }, select: { id: true } });
+  if (purchase) await settleCardPayment(purchase.id).catch((e) => console.error("[bml] webhook", e));
+}
 
 purchasesRouter.post("/:id/cancel", async (req, res) => {
   const { count } = await prisma.purchase.updateMany({

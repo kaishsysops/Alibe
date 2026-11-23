@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { View, Text, RefreshControl, ScrollView } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { PackagePlus, BadgeCheck, Clock, AlertCircle } from "lucide-react-native";
+import { PackagePlus, BadgeCheck, Clock, AlertCircle, Eye, Heart, ArrowUpCircle } from "lucide-react-native";
 import { api, errorMessage, Listing } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import ProductGrid from "../components/ProductGrid";
@@ -75,6 +75,16 @@ export default function MyListingsScreen() {
   const restore = async (listing: Listing) => {
     setAllListings((prev) => prev.map((l) => (l.id === listing.id ? { ...l, status: listing.status } : l)));
     await api.updateListingStatus(listing.id, user!.id, listing.status).catch(() => toast.error("Couldn't undo. Try again from the listing."));
+  };
+
+  // Premium: back to the top of "newest" (once a day per item).
+  const bump = async (l: Listing) => {
+    try {
+      await api.bumpListing(l.id);
+      toast.success(`"${l.title}" is back at the top.`);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
   };
 
   const goToProduct = (l: Listing) => navigation.navigate("ProductDetail", { id: l.id });
@@ -165,6 +175,20 @@ export default function MyListingsScreen() {
             </Tap>
           )}
           {l.status === "PENDING" && <Text style={styles.pendingText}>Our team is checking it</Text>}
+          {l.stats && (
+            <View style={styles.statsRow}>
+              <Eye size={13} color={colors.textMuted} />
+              <Text style={styles.statsText}>{l.stats.views}</Text>
+              <Heart size={13} color={colors.textMuted} />
+              <Text style={styles.statsText}>{l.stats.saves}</Text>
+              {l.status === "ACTIVE" && (
+                <Tap style={styles.bump} onPress={() => bump(l)} scaleTo={0.94} accessibilityLabel="Bump to the top">
+                  <ArrowUpCircle size={13} color={colors.gold} />
+                  <Text style={styles.bumpText}>Bump</Text>
+                </Tap>
+              )}
+            </View>
+          )}
         </View>
       )}
       refreshControl={
@@ -218,6 +242,10 @@ const useStyles = makeStyles((colors) => ({
   reason: { marginTop: -spacing.sm, marginBottom: spacing.md, padding: spacing.sm + 2, borderRadius: radius.md, backgroundColor: `${colors.danger}10`, gap: 4 },
   reasonText: { fontSize: fontSize.caption, color: colors.text, lineHeight: 16 },
   reasonAction: { fontSize: fontSize.caption, fontWeight: fontWeight.extrabold, color: colors.danger },
+  statsRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: -spacing.sm, marginBottom: spacing.md },
+  statsText: { fontSize: fontSize.caption, fontWeight: fontWeight.bold, color: colors.textMuted, marginRight: 6 },
+  bump: { flexDirection: "row", alignItems: "center", gap: 3, marginLeft: "auto", paddingHorizontal: 8, height: 24, borderRadius: 12, backgroundColor: `${colors.gold}1F` },
+  bumpText: { fontSize: fontSize.caption, fontWeight: fontWeight.extrabold, color: colors.gold },
   pendingText: { marginTop: -spacing.sm, marginBottom: spacing.md, fontSize: fontSize.caption, color: colors.textMuted, fontWeight: fontWeight.semibold },
   tab: { paddingHorizontal: spacing.md, height: 38, justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   tabActive: { backgroundColor: colors.text, borderColor: colors.text },

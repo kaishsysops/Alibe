@@ -51,10 +51,23 @@ export function CountBadge({ count, style }: { count: number; style?: object }) 
   );
 }
 
-// Premium (gold crown), Store (shop) or Verified (blue tick) next to a name.
+// Premium (gold crown) or Store (shop) next to a name, with the blue tick
+// beside it whenever the seller's ID is verified.
 export function SellerBadgeIcon({ badge, verified, size = 16 }: { badge?: SellerBadge; verified?: boolean; size?: number }) {
-  const { colors } = useTheme();
   const b = badge ?? (verified ? "VERIFIED" : null);
+  if (verified && (b === "PREMIUM" || b === "STORE")) {
+    return (
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+        <SingleBadge badge={b} size={size} />
+        <VerifiedBadge size={size} />
+      </View>
+    );
+  }
+  return <SingleBadge badge={b} size={size} />;
+}
+
+function SingleBadge({ badge: b, size }: { badge: SellerBadge; size: number }) {
+  const { colors } = useTheme();
   if (b === "PREMIUM") return <Crown size={size} color="#fff" fill={colors.gold} strokeWidth={1.6} accessibilityLabel="Premium seller" />;
   if (b === "STORE")
     return (
@@ -68,14 +81,27 @@ export function SellerBadgeIcon({ badge, verified, size = 16 }: { badge?: Seller
 
 const PILL = { PREMIUM: "Premium", STORE: "Store", VERIFIED: "Verified" } as const;
 
-// The same, with a word: for profiles and store pages.
-export function SellerBadgePill({ badge }: { badge?: SellerBadge }) {
+// The same, with a word: for profiles and store pages. A verified Premium or
+// Store seller gets the "Verified" pill too.
+export function SellerBadgePill({ badge, verified }: { badge?: SellerBadge; verified?: boolean }) {
+  if (verified && (badge === "PREMIUM" || badge === "STORE")) {
+    return (
+      <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+        <OnePill badge={badge} />
+        <OnePill badge="VERIFIED" />
+      </View>
+    );
+  }
+  return <OnePill badge={badge ?? (verified ? "VERIFIED" : null)} />;
+}
+
+function OnePill({ badge }: { badge?: SellerBadge }) {
   const { colors } = useTheme();
   if (!badge) return null;
   const tint = badge === "PREMIUM" ? colors.gold : badge === "STORE" ? colors.primary : colors.verified;
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingLeft: 4, paddingRight: 9, height: 24, borderRadius: radius.pill, backgroundColor: `${tint}1F` }}>
-      <SellerBadgeIcon badge={badge} size={16} />
+      <SingleBadge badge={badge} size={16} />
       <Text style={{ fontSize: fontSize.caption, fontWeight: fontWeight.extrabold, color: tint }}>{PILL[badge]}</Text>
     </View>
   );

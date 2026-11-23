@@ -181,6 +181,12 @@ model Listing {
   reviewedAt    DateTime?
   // Why the risk checks held it for review (src/postRisk.ts).
   holdReason    String?
+  // Premium: how many times others opened it, and the last "bump to top".
+  views         Int            @default(0)
+  bumpedAt      DateTime?
+  // Posted under the seller's store (null: posted as themselves).
+  storeId       String?
+  store         Store?         @relation(fields: [storeId], references: [id], onDelete: SetNull)
   favoritedBy   Favorite[]
   conversations Conversation[]
   reviews       Review[]
@@ -192,6 +198,7 @@ model Listing {
   @@index([status, hiddenAt, createdAt])
   @@index([categoryId, status, createdAt])
   @@index([sellerId, status])
+  @@index([storeId])
   @@index([attributes], type: Gin)
   // Typo-tolerant title search (pg_trgm).
   @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "Listing_title_trgm_idx")
@@ -480,6 +487,10 @@ model Purchase {
   amount          Int
   // Typed into the transfer so staff can match it to this purchase.
   reference       String         @unique
+  // Card payments: BML Connect's transaction id (src/bml.ts).
+  gatewayRef      String?        @unique
+  // Reminders sent so far (src/reminders.ts), so each goes out once.
+  reminderStage   Int            @default(0)
   slipUrl         String?
   note            String?
   // Stops a double tap from creating two.
@@ -677,6 +688,7 @@ model Store {
   approvedAt         DateTime?
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
+  listings           Listing[]
 }
 
 // An ID check (and, for stores, the business details) waiting for a Seller

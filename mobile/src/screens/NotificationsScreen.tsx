@@ -63,7 +63,8 @@ export default function NotificationsScreen() {
         refresh();
         return navigation.navigate("Tabs", { screen: "SearchTab", params: { ...item.params, fromSaved: Date.now() } });
       case "seller":
-        return navigation.navigate("SellerAccount");
+        // A newly approved store goes straight to choosing its plan.
+        return navigation.navigate("SellerAccount", item.approved && item.kind === "STORE" ? { focus: "store-plan" } : undefined);
       case "post_review":
         return item.approved ? navigation.navigate("ProductDetail", { id: item.listingId }) : navigation.navigate("MyListings");
       default:
@@ -87,7 +88,7 @@ export default function NotificationsScreen() {
           : { Icon: Package, tint: colors.primary, title: `${item.listingTitle} is on its way`, body: "Confirm once you have it.", sub: item.fromName };
       case "seller":
         return item.approved
-          ? { Icon: item.kind === "STORE" ? Store : BadgeCheck, tint: colors.success, title: item.kind === "STORE" ? "Your store is approved" : "You're verified", body: item.kind === "STORE" ? "Choose a Store plan to open your store page." : "Your posts now go live straight away.", sub: null }
+          ? { Icon: item.kind === "STORE" ? Store : BadgeCheck, tint: colors.success, title: item.kind === "STORE" ? "Your store is approved" : "You're verified", body: item.kind === "STORE" ? "Tap to choose your Store plan and open your store page." : "Your posts now go live straight away.", sub: null, action: item.kind === "STORE" ? "Choose plan" : undefined }
           : { Icon: XCircle, tint: colors.danger, title: item.kind === "STORE" ? "Your store wasn't approved" : "Your ID check wasn't approved", body: item.note ?? "Open your seller account to try again.", sub: null };
       case "post_review":
         return item.approved
@@ -165,7 +166,7 @@ export default function NotificationsScreen() {
       renderItem={renderItem}
       stickySectionHeadersEnabled={false}
       renderSectionHeader={({ section }: any) => <Text style={styles.section}>{section.title}</Text>}
-      contentContainerStyle={{ paddingHorizontal: isDesktopWeb ? 0 : gutter, paddingBottom: spacing.xl, flexGrow: 1 }}
+      contentContainerStyle={{ paddingHorizontal: isDesktopWeb ? 0 : gutter, paddingBottom: spacing.xl, flexGrow: 1, justifyContent: "center" }}
       ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
       ListHeaderComponent={
         data.items.length ? (

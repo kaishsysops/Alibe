@@ -12,11 +12,14 @@ import { useSingleFlight } from "../hooks/useSingleFlight";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight } from "../theme/theme";
 import { timeAgo } from "../utils/time";
+import MediaViewer from "./MediaViewer";
 
 // A disputed order: what the buyer reported, then each side's evidence, then
 // staff's decision. Buyer and seller can add evidence (text and a photo) while
 // it's open; staff see two buttons to settle it.
 export default function DisputePanel({ orderId, staff, viewOnly, onSettled }: { orderId: string; staff?: boolean; viewOnly?: boolean; onSettled?: () => void }) {
+  // A photo (slip, receipt) opened here, not in a new tab.
+  const [viewing, setViewing] = useState<string | null>(null);
   const styles = useStyles();
   const { colors } = useTheme();
   const { user } = useAuth();
@@ -102,7 +105,7 @@ export default function DisputePanel({ orderId, staff, viewOnly, onSettled }: { 
           </Text>
           <Text style={styles.entryText}>{e.text}</Text>
           {!!e.photoUrl && (
-            <Tap onPress={() => Linking.openURL(mediaUrl(e.photoUrl) ?? "").catch(() => {})} scaleTo={0.97} accessibilityLabel="Open photo">
+            <Tap onPress={() => setViewing(mediaUrl(e.photoUrl) ?? null)} scaleTo={0.97} accessibilityLabel="Open photo">
               <Image source={{ uri: mediaUrl(e.photoUrl) }} style={styles.photo} contentFit="cover" />
             </Tap>
           )}
@@ -154,6 +157,7 @@ export default function DisputePanel({ orderId, staff, viewOnly, onSettled }: { 
           </View>
         </View>
       )}
+      <MediaViewer uri={viewing} type="IMAGE" onClose={() => setViewing(null)} />
     </View>
   );
 }

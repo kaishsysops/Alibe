@@ -131,9 +131,10 @@ storesRouter.get("/:slug", async (req, res) => {
   const live = !!store && store.status === "APPROVED" && !!badges?.get(store.userId)?.store && !store.user.bannedAt;
   if (!store || !live) return res.status(404).json({ error: "We couldn't find that store." });
   const [listings, ratings, count] = await Promise.all([
-    prisma.listing.findMany({ where: { sellerId: store.userId, status: "ACTIVE", hiddenAt: null }, include: listingInclude, orderBy: { createdAt: "desc" }, take: 60 }),
+    // Only what's posted under the store (the owner's personal items aren't).
+    prisma.listing.findMany({ where: { storeId: store.id, status: "ACTIVE", hiddenAt: null }, include: listingInclude, orderBy: { createdAt: "desc" }, take: 60 }),
     ratingsFor([store.userId]),
-    prisma.listing.count({ where: { sellerId: store.userId, status: "ACTIVE", hiddenAt: null } }),
+    prisma.listing.count({ where: { storeId: store.id, status: "ACTIVE", hiddenAt: null } }),
   ]);
   res.json({
     store: { name: store.name, slug: store.slug, logoUrl: store.logoUrl, since: store.approvedAt ?? store.createdAt },

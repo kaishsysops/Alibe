@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator, RefreshControl } from "react-native";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { User, Store, Crown, Check, ChevronRight, Clock, Rocket, LayoutGrid, Sparkles, AlertTriangle, ExternalLink } from "lucide-react-native";
 import { api, errorMessage, newClientId, SellerMe } from "../api/client";
 import { useAuth } from "../api/AuthContext";
@@ -25,6 +25,10 @@ export default function SellerAccountScreen() {
   const styles = useStyles();
   const { colors } = useTheme();
   const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const focusPlans = route.params?.focus === "store-plan" || route.params?.focus === "plans";
+  const scrollRef = useRef<any>(null);
+  const scrolled = useRef(false);
   const toast = useToast();
   const showAlert = useAppAlert();
   const { updateUser } = useAuth();
@@ -118,11 +122,25 @@ export default function SellerAccountScreen() {
     <View style={styles.container}>
       {isDesktopWeb ? <WebNavBar active="profile" /> : <ScreenHeader title="Seller account" />}
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[styles.scroll, { paddingHorizontal: gutter }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => (setRefreshing(true), load())} tintColor={colors.primary} />}
       >
         <FirstTimeTip id="seller-account" title="Your seller account" text="Choose whether you sell as an individual or a store, get verified (free, optional) and see the plans. The posting rules are at the bottom." topic="selling" />
+
+        {/* A plan past its end date: still working, but not for long. */}
+        {(me.storeGraceUntil || me.premiumGraceUntil) && (
+          <Tap style={styles.grace} onPress={() => scrollRef.current?.scrollToEnd?.({ animated: true })} scaleTo={0.99}>
+            <AlertTriangle size={20} color={colors.danger} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.graceTitle}>
+                Your {me.storeGraceUntil && me.premiumGraceUntil ? "Store and Premium plans have" : me.storeGraceUntil ? "Store plan has" : "Premium plan has"} ended
+              </Text>
+              <Text style={styles.graceText}>Everything keeps working until {date(me.storeGraceUntil ?? me.premiumGraceUntil)}. Renew below before then so nothing switches off.</Text>
+            </View>
+          </Tap>
+        )}
 
         {/* Standing */}
         <View style={styles.hero}>
@@ -226,7 +244,17 @@ export default function SellerAccountScreen() {
         )}
 
         {/* Plans */}
-        <View style={styles.plansHead}>
+        <View
+          style={styles.plansHead}
+          onLayout={(e) => {
+            // Opened from "Choose your Store plan": jump straight here.
+            if (focusPlans && !scrolled.current) {
+              scrolled.current = true;
+              const y = e.nativeEvent.layout.y;
+              setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true }), 150);
+            }
+          }}
+        >
           <Text style={styles.section}>Plans</Text>
           <View style={styles.toggle}>
             {(["MONTHLY", "YEARLY"] as const).map((p) => (
@@ -239,6 +267,7 @@ export default function SellerAccountScreen() {
 
         {isStore && (
           <PlanCard
+            highlight={route.params?.focus === "store-plan" && !me.storeLive}
             Icon={Store}
             tint={colors.primary}
             name="Store"
@@ -247,6 +276,7 @@ export default function SellerAccountScreen() {
             save={yearly ? saving(me.prices.storeMonthly, me.prices.storeYearly) : 0}
             perks={["Your own store page with your logo", "Store badge on every item", "Shown above individual sellers"]}
             activeUntil={me.storeLive ? date(me.storeEndsAt) : null}
+            graceUntil={me.storeGraceUntil ? date(me.storeGraceUntil) : null}
             locked={!storeApproved ? "Needs an approved store" : null}
             busy={buying === "STORE_PLAN"}
             onBuy={() => buy("STORE_PLAN")}
@@ -259,8 +289,9 @@ export default function SellerAccountScreen() {
           price={premiumPrice}
           per={per}
           save={yearly ? saving(me.prices.premiumMonthly, me.prices.premiumYearly) : 0}
-          perks={[`${me.premiumFreeBoosts} free 7-day boosts every month`, "Your new items featured at the top for a week", "Gold Premium badge"]}
+          perks={[`${me.premiumFreeBoosts} free 7-day boosts every month`, "New items featured at the top for a week", "Bump any item to the top, once a day", "Views and saves for every item", "12 photos per item, no monthly post limit", "Gold Premium badge"]}
           activeUntil={me.premium ? date(me.premiumEndsAt) : null}
+          graceUntil={me.premiumGraceUntil ? date(me.premiumGraceUntil) : null}
           locked={!me.approved ? (isStore ? "Needs an approved store" : "Get verified first") : null}
           busy={buying === "PREMIUM_PLAN"}
           onBuy={() => buy("PREMIUM_PLAN")}
@@ -312,7 +343,11 @@ function PlanCard({
   busy,
   onBuy,
   extra,
+  highlight,
+  graceUntil,
 }: {
+  highlight?: boolean;
+  graceUntil?: string | null;
   Icon: typeof Crown;
   tint: string;
   name: string;
@@ -329,14 +364,19 @@ function PlanCard({
   const styles = useStyles();
   const { colors } = useTheme();
   return (
-    <View style={[styles.plan, activeUntil && { borderColor: tint }]}>
+    <View style={[styles.plan, activeUntil && { borderColor: tint }, highlight && { borderColor: tint, borderWidth: 2.5 }]}>
+      {highlight && (
+        <View style={[styles.startHere, { backgroundColor: tint }]}>
+          <Text style={styles.startHereText}>Start here</Text>
+        </View>
+      )}
       <View style={styles.planHead}>
         <View style={[styles.planIcon, { backgroundColor: `${tint}1F` }]}>
           <Icon size={20} color={tint} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.planName}>{name}</Text>
-          {activeUntil ? <Text style={[styles.planActive, { color: colors.success }]}>Active until {activeUntil}</Text> : save > 0 ? <Text style={[styles.planActive, { color: tint }]}>Save {save}% yearly</Text> : null}
+          {graceUntil ? <Text style={[styles.planActive, { color: colors.danger }]}>Ended · renew by {graceUntil}</Text> : activeUntil ? <Text style={[styles.planActive, { color: colors.success }]}>Active until {activeUntil}</Text> : save > 0 ? <Text style={[styles.planActive, { color: tint }]}>Save {save}% yearly</Text> : null}
         </View>
         <View style={{ alignItems: "flex-end" }}>
           <Text style={styles.planPrice}>MVR {price.toLocaleString()}</Text>
@@ -391,6 +431,8 @@ const useStyles = makeStyles((colors) => ({
   rowIcon: { width: 42, height: 42, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   rowTitle: { fontSize: fontSize.base, fontWeight: fontWeight.bold, color: colors.text },
   rowText: { fontSize: fontSize.caption, color: colors.textMuted, marginTop: 2, lineHeight: 17 },
+  startHere: { position: "absolute", top: -12, right: spacing.md, paddingHorizontal: 10, height: 24, borderRadius: 12, justifyContent: "center" },
+  startHereText: { color: "#fff", fontSize: fontSize.caption, fontWeight: fontWeight.extrabold },
   plansHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.sm },
   section: { fontSize: fontSize.xl, fontWeight: fontWeight.extrabold, color: colors.text },
   toggle: { flexDirection: "row", padding: 3, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
@@ -402,6 +444,9 @@ const useStyles = makeStyles((colors) => ({
   planHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 4 },
   planIcon: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   planName: { fontSize: fontSize.lg, fontWeight: fontWeight.extrabold, color: colors.text },
+  grace: { flexDirection: "row", gap: spacing.sm + 4, alignItems: "flex-start", padding: spacing.md, borderRadius: radius.lg, backgroundColor: `${colors.danger}12`, borderWidth: 1.5, borderColor: `${colors.danger}44` },
+  graceTitle: { fontSize: fontSize.base, fontWeight: fontWeight.extrabold, color: colors.text },
+  graceText: { fontSize: fontSize.sm, color: colors.text, marginTop: 2, lineHeight: 19 },
   planActive: { fontSize: fontSize.caption, fontWeight: fontWeight.bold, marginTop: 2 },
   planPrice: { fontSize: fontSize.lg, fontWeight: fontWeight.extrabold, color: colors.text },
   planPer: { fontSize: fontSize.caption, color: colors.textMuted },

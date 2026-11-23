@@ -129,8 +129,14 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     const tapSub =
       Platform.OS !== "web"
         ? Notifications.addNotificationResponseReceivedListener((r) => {
-            const { orderId, conversationId, listingId } = r.notification.request.content.data ?? {};
-            if (typeof listingId === "string") openListing(listingId);
+            const { orderId, conversationId, listingId, type, focus } = r.notification.request.content.data ?? {};
+            // Seller decisions and plan reminders open the seller account,
+            // scrolled to the plan when there's one to choose.
+            if (type === "purchase") {
+              if (navigationRef.isReady()) (navigationRef as any).navigate("Purchases");
+            } else if (type === "seller") {
+              if (navigationRef.isReady()) (navigationRef as any).navigate("SellerAccount", typeof focus === "string" ? { focus } : undefined);
+            } else if (typeof listingId === "string") openListing(listingId);
             else if (typeof orderId === "string") openOrder(orderId);
             else if (typeof conversationId === "string") openChat(conversationId);
           })

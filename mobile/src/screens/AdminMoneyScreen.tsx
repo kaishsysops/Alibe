@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
-import { CheckCircle2, AlertTriangle, Landmark, Tag, Inbox, Clock, Play, ExternalLink, Receipt, Save } from "lucide-react-native";
+import { CheckCircle2, AlertTriangle, Landmark, Tag, Inbox, Clock, Play, ExternalLink, Receipt, Save, CreditCard } from "lucide-react-native";
 import { api, errorMessage, mediaUrl, MoneySettings, PlanPrices, Purchase, SellerPlanPrices } from "../api/client";
 import { useToast } from "../components/Toast";
 import { useAppAlert } from "../components/AppAlertProvider";
@@ -18,6 +18,7 @@ import { useSingleFlight } from "../hooks/useSingleFlight";
 import { formatPhone } from "../utils/phone";
 import StaffOnly from "../components/StaffOnly";
 import { useConsoleColumn, useConsolePage } from "../console/layout";
+import MediaViewer from "../components/MediaViewer";
 
 const KIND_LABEL = { BOOST: "Boost", AD: "Ad", BUY_FOR_YOU: "Buy for you", STORE_PLAN: "Store plan", PREMIUM_PLAN: "Premium plan" } as const;
 const PLANS: Array<keyof PlanPrices> = ["3", "7", "30"];
@@ -29,6 +30,8 @@ const num = (v: string) => Number(v.replace(/\D/g, "")) || 0;
 // Admins: purchases to check, the bank details customers pay into, and every
 // price. Nothing goes live until a payment is approved here.
 function AdminMoneyScreenInner() {
+  // A photo (slip, receipt) opened here, not in a new tab.
+  const [viewing, setViewing] = useState<string | null>(null);
   const styles = useStyles();
   const { colors } = useTheme();
   const toast = useToast();
@@ -45,6 +48,7 @@ function AdminMoneyScreenInner() {
   const [tab, setTab] = useState<Tab>("QUEUE");
   const [filter, setFilter] = useState<Filter>("NEEDS");
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [card, setCard] = useState<{ enabled: boolean; mode: "sandbox" | "production"; tested: boolean } | null>(null);
   // Two queue cards side by side once there's room (sidebar included).
   const twoColumns = width >= 1180;
 
@@ -54,6 +58,7 @@ function AdminMoneyScreenInner() {
         .adminMoney()
         .then((res) => {
           setSettings(res.settings);
+          setCard(res.cardPayments ?? null);
           setPurchases(res.purchases);
           setLoadError(null);
         })
@@ -201,7 +206,7 @@ function AdminMoneyScreenInner() {
         {(!!p.slipUrl || !!p.itemUrl) && (
           <View style={styles.links}>
             {!!p.slipUrl && (
-              <Tap style={styles.link} onPress={() => Linking.openURL(mediaUrl(p.slipUrl) ?? "").catch(() => {})} scaleTo={0.96}>
+              <Tap style={styles.link} onPress={() => setViewing(mediaUrl(p.slipUrl) ?? null)} scaleTo={0.96}>
                 <Receipt size={14} color={colors.primary} />
                 <Text style={styles.linkText}>Payment slip</Text>
               </Tap>
@@ -366,6 +371,26 @@ function AdminMoneyScreenInner() {
           )}
 
           {tab === "BANK" && (
+            <View style={{ gap: spacing.md }}>
+            {/* Card payments (BML Connect): honest about whether it works. */}
+            <View style={[styles.card, styles.formCard, { borderWidth: 1.5, borderColor: card?.enabled ? `${colors.success}55` : colors.border }]}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                <CreditCard size={20} color={card?.enabled ? colors.success : colors.textMuted} />
+                <Text style={[styles.cardTitle, { flex: 1 }]}>Card payments (BML)</Text>
+                <View style={[styles.statusPill, { backgroundColor: card?.enabled ? `${colors.success}18` : `${colors.textMuted}18` }]}>
+                  <Text style={[styles.statusText, { color: card?.enabled ? colors.success : colors.textMuted }]}>{card?.enabled ? (card.mode === "sandbox" ? "On (test mode)" : "On") : "Not set up"}</Text>
+                </View>
+              </View>
+              {card?.enabled ? (
+                <Text style={styles.cardHelp}>
+                  Buyers see "Pay by card" and payments start as soon as BML confirms them. This hasn't been tested against BML yet: try a small payment{card.mode === "sandbox" ? " in test mode" : ""} and check it here before relying on it.
+                </Text>
+              ) : (
+                <Text style={styles.cardHelp}>
+                  Off: it doesn't work until it's set up, so buyers only see bank transfer. To switch it on, get an API key from BML's merchant portal and add BML_API_KEY (and BML_MODE=sandbox to test first) to the server's .env, then deploy. It hasn't been tested against BML yet.
+                </Text>
+              )}
+            </View>
             <View style={[styles.card, styles.formCard]}>
               <Text style={styles.cardTitle}>Where customers pay</Text>
               <Text style={styles.cardHelp}>Shown on every payment screen. Check it carefully: money sent to a wrong account is hard to get back.</Text>
@@ -384,6 +409,7 @@ function AdminMoneyScreenInner() {
                 <TextInput style={[styles.input, styles.mono]} value={settings.accountNumber} onChangeText={(accountNumber) => setSettings({ ...settings, accountNumber })} keyboardType="number-pad" placeholder="7730000000000" placeholderTextColor={colors.textMuted} accessibilityLabel="Account number" />
               </View>
               {saveBar}
+            </View>
             </View>
           )}
 
@@ -408,6 +434,7 @@ function AdminMoneyScreenInner() {
             </View>
           )}
         </ScrollView>
+      <MediaViewer uri={viewing} type="IMAGE" onClose={() => setViewing(null)} />
       </KeyboardAvoidingView>
     </View>
   );

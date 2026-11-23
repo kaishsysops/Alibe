@@ -86,7 +86,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     blurb: "Plans for regular sellers",
     Icon: Crown,
     items: [
-      { q: "What does Premium include?", a: "Free 7-day boosts every month, your new items featured at the top for a week, no monthly post limit, and a gold badge. Monthly or yearly, in Profile > Seller account." },
+      { q: "What does Premium include?", a: "Free 7-day boosts every month, your new items featured at the top for a week, a daily 'bump to top' for any item, views and saves for every listing, 12 photos per item, no monthly post limit, and a gold badge. Monthly or yearly, in Profile > Seller account. If a plan runs out you keep everything for 5 more days, so there's time to renew." },
       { q: "What does a Store plan include?", a: "A store page with your logo at alibe.online/store/your-name, the Store badge, a place above individual sellers and no post limit. Register your store first (business name, logo, registration number and the owner's ID); once it's approved, choose a plan." },
       { q: "Can a store have Premium?", a: "Yes: a store pays for the Store plan and Premium on top." },
     ],

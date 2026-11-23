@@ -17,10 +17,13 @@ import { timeAgo } from "../utils/time";
 import StaffOnly from "../components/StaffOnly";
 import { useConsole } from "../components/ConsoleContext";
 import { useConsolePage } from "../console/layout";
+import MediaViewer from "../components/MediaViewer";
 
 // Staff only: open disputes, oldest first. Open one to read both sides'
 // evidence and settle it.
 function AdminDisputesScreenInner() {
+  // A photo (slip, receipt) opened here, not in a new tab.
+  const [viewing, setViewing] = useState<string | null>(null);
   const consolePage = useConsolePage();
   // Support reads disputes; admins settle them.
   const { me } = useConsole();
@@ -79,7 +82,7 @@ function AdminDisputesScreenInner() {
                 {open && (
                   <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
                     {!!d.cargoReceiptUrl && (
-                      <Tap style={styles.receipt} onPress={() => Linking.openURL(mediaUrl(d.cargoReceiptUrl) ?? "").catch(() => {})} scaleTo={0.98}>
+                      <Tap style={styles.receipt} onPress={() => setViewing(mediaUrl(d.cargoReceiptUrl) ?? null)} scaleTo={0.98}>
                         <Ship size={16} color={colors.primary} />
                         <Text style={styles.receiptText}>Open the seller's cargo receipt</Text>
                       </Tap>
@@ -92,6 +95,7 @@ function AdminDisputesScreenInner() {
           })}
         </ScrollView>
       )}
+      <MediaViewer uri={viewing} type="IMAGE" onClose={() => setViewing(null)} />
     </View>
   );
 }

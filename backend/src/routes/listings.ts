@@ -8,7 +8,7 @@ import { listingBlock, prohibitedReason } from "../moderation.js";
 import { notifyUser } from "../push.js";
 import { mixedIbayListings } from "./ibay.js";
 import { boostedListingIds } from "./purchases.js";
-import { cached } from "../cache.js";
+import { cached, invalidate } from "../cache.js";
 import { categoryIndex, cleanAttributes, descendants, effectiveAttributes } from "../categories.js";
 import { checkListingPhotosLater } from "../photoHash.js";
 import { postHoldReason } from "../postRisk.js";
@@ -188,7 +188,27 @@ listingsRouter.get("/:id", async (req, res) => {
   // Pending and rejected posts are only visible to their seller.
   if ((listing.status === "PENDING" || listing.status === "REJECTED") && listing.sellerId !== req.userId) return res.status(404).json({ error: "This listing is no longer available." });
   const [ratings, badges] = await Promise.all([ratingsFor([listing.sellerId]), sellerBadges([listing.sellerId])]);
+  // Count views by other people (shown to Premium sellers).
+  if (req.userId !== listing.sellerId) prisma.listing.updateMany({ where: { id: listing.id }, data: { views: { increment: 1 } } }).catch(() => {});
   res.json(serializeListing(listing, ratings, badges));
+});
+
+// Premium: move a live listing back to the top of "newest", once a day per item.
+const BUMP_EVERY_MS = 24 * 3600_000;
+listingsRouter.post("/:id/bump", async (req, res) => {
+  const listing = await prisma.listing.findUnique({ where: { id: req.params.id }, select: { id: true, sellerId: true, status: true, hiddenAt: true, bumpedAt: true } });
+  if (!listing || listing.sellerId !== req.userId) return res.status(404).json({ error: "We couldn't find that listing." });
+  const st = await standing(listing.sellerId);
+  if (!st?.premium) return res.status(403).json({ error: "Bumping to the top is a Premium feature.", code: "PREMIUM_ONLY" });
+  if (listing.status !== "ACTIVE" || listing.hiddenAt) return res.status(400).json({ error: "Only items that are for sale can be bumped." });
+  if (listing.bumpedAt && Date.now() - listing.bumpedAt.getTime() < BUMP_EVERY_MS) {
+    const hours = Math.ceil((BUMP_EVERY_MS - (Date.now() - listing.bumpedAt.getTime())) / 3600_000);
+    return res.status(429).json({ error: `You can bump this again in ${hours} ${hours === 1 ? "hour" : "hours"}.` });
+  }
+  const now = new Date();
+  await prisma.listing.update({ where: { id: listing.id }, data: { createdAt: now, bumpedAt: now } });
+  ["home:", "categories"].forEach(invalidate);
+  res.json({ bumpedAt: now });
 });
 
 const prohibitedMessage = (what: string) => `Alibe can't list ${what}. Please remove it to continue.`;
@@ -221,9 +241,17 @@ const createListingSchema = z.object({
   deliveryOptions: deliveryField.default(["PICKUP"]),
   deliveryNote: z.string().trim().max(200).nullable().optional(),
   clientRequestId: z.string().max(64).optional(),
+  // Store owners: post under the store (true) or as themselves (false).
+  asStore: z.boolean().optional(),
   // Answers to the category's questions; anything it doesn't ask is dropped.
   attributes: z.record(z.string().max(40), z.union([z.string().max(60), z.number()])).optional(),
 });
+
+// Photos per listing: 12 with Premium, 6 otherwise.
+export const photoLimit = (premium: boolean) => (premium ? 12 : 6);
+
+// The seller's store, if it's approved (listings can be posted under it).
+const approvedStoreId = async (sellerId: string) => (await prisma.store.findFirst({ where: { userId: sellerId, status: "APPROVED" }, select: { id: true } }))?.id ?? null;
 
 // Only answers the listing's category asks for, cleaned up.
 async function listingAttributes(categoryId: string, raw: unknown) {
@@ -252,6 +280,7 @@ listingsRouter.post("/", async (req, res) => {
   // approved stores); 30 new posts a month without Premium or a Store plan.
   const st = await standing(parsed.data.sellerId);
   if (!st) return res.status(404).json({ error: "Your account couldn't be found. Please sign in again." });
+  if (parsed.data.images.length > photoLimit(st.premium)) return res.status(400).json({ error: `Up to ${photoLimit(st.premium)} photos per item${st.premium ? "" : " (12 with Premium)"}.` });
   if (st.monthlyLimit !== null && st.postedThisMonth >= st.monthlyLimit) {
     return res.status(429).json({
       error: `You've posted ${st.monthlyLimit} items this month, the most without Premium. Premium (or a Store plan) has no limit, or post again on the 1st.`,
@@ -262,9 +291,12 @@ listingsRouter.post("/", async (req, res) => {
     const attributes = await listingAttributes(parsed.data.categoryId, parsed.data.attributes);
     if (!attributes) return res.status(400).json({ error: "Please pick a category." });
     const holdReason = st.approved ? null : await postHoldReason(parsed.data.sellerId, parsed.data);
-    const listing = await prisma.listing.create({ data: { ...parsed.data, attributes, status: holdReason ? "PENDING" : "ACTIVE", holdReason }, include: listingInclude });
+    const { asStore, ...fields } = parsed.data;
+    const storeId = asStore ? await approvedStoreId(fields.sellerId) : null;
+    if (asStore && !storeId) return res.status(400).json({ error: "Your store isn't approved yet, so post this as yourself for now." });
+    const listing = await prisma.listing.create({ data: { ...fields, attributes, storeId, status: holdReason ? "PENDING" : "ACTIVE", holdReason }, include: listingInclude });
     checkListingPhotosLater(listing.id);
-    res.status(201).json(serializeListing(listing));
+    res.status(201).json((await serializeListings([listing]))[0]);
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002" && clientRequestId) {
       const existing = await prisma.listing.findUniqueOrThrow({ where: { clientRequestId }, include: listingInclude });
@@ -281,12 +313,17 @@ listingsRouter.get("/mine/:sellerId", async (req, res) => {
   if (!parsed.success) return sendValidationError(res, parsed.error);
   // Includes drafts and posts under review, so it's the owner's alone.
   if (req.params.sellerId !== req.userId) return res.status(403).json({ error: "You can only see your own listings here." });
-  const listings = await prisma.listing.findMany({
-    where: { sellerId: req.params.sellerId, status: parsed.data.status ?? undefined },
-    include: listingInclude,
-    orderBy: { createdAt: "desc" },
-  });
-  res.json(await serializeListings(listings));
+  const [listings, st] = await Promise.all([
+    prisma.listing.findMany({ where: { sellerId: req.params.sellerId, status: parsed.data.status ?? undefined }, include: listingInclude, orderBy: { createdAt: "desc" } }),
+    standing(req.params.sellerId),
+  ]);
+  const items = await serializeListings(listings);
+  // Premium: views and saves on each item (others see them locked).
+  if (!st?.premium) return res.json(items.map((l) => ({ ...l, stats: null })));
+  const saves = await prisma.favorite.groupBy({ by: ["listingId"], where: { listingId: { in: listings.map((l) => l.id) } }, _count: { _all: true } });
+  const savesBy = new Map(saves.map((s) => [s.listingId, s._count._all]));
+  const viewsBy = new Map(listings.map((l) => [l.id, l.views]));
+  res.json(items.map((l) => ({ ...l, stats: { views: viewsBy.get(l.id) ?? 0, saves: savesBy.get(l.id) ?? 0 } })));
 });
 
 // Edits require the caller to name the seller; without real auth this is
@@ -305,7 +342,7 @@ listingsRouter.patch("/:id", async (req, res) => {
     if (parsed.error.issues[0]?.message === "delivery") return res.status(400).json({ error: "Pick at least one way buyers can get the item." });
     return sendValidationError(res, parsed.error);
   }
-  const { sellerId, ...data } = parsed.data;
+  const { sellerId, asStore, ...data } = parsed.data;
   const existing = await prisma.listing.findUnique({ where: { id: req.params.id } });
   if (!existing) return res.status(404).json({ error: "This listing is no longer available." });
   if (existing.sellerId !== sellerId) return res.status(403).json({ error: "You can only edit your own listings." });
@@ -338,7 +375,15 @@ listingsRouter.patch("/:id", async (req, res) => {
     }
   } else if (st?.approved && reviewable && contentChanged) review = { status: "ACTIVE", rejectReason: null, holdReason: null };
   if (reviewable && data.status === "ACTIVE" && review.status !== "ACTIVE") delete data.status;
-  const listing = await prisma.listing.update({ where: { id: req.params.id }, data: { ...data, ...fields, attributes, ...review }, include: listingInclude });
+  if (data.images && data.images.length > photoLimit(!!st?.premium)) return res.status(400).json({ error: `Up to ${photoLimit(!!st?.premium)} photos per item${st?.premium ? "" : " (12 with Premium)"}.` });
+  // Moving it between the store and the person.
+  let storeMove: { storeId?: string | null } = {};
+  if (asStore !== undefined) {
+    const storeId = asStore ? await approvedStoreId(existing.sellerId) : null;
+    if (asStore && !storeId) return res.status(400).json({ error: "Your store isn't approved yet, so this stays under your name." });
+    storeMove = { storeId };
+  }
+  const listing = await prisma.listing.update({ where: { id: req.params.id }, data: { ...data, ...fields, attributes, ...review, ...storeMove }, include: listingInclude });
   if (alert && listing.status === "ACTIVE" && !listing.hiddenAt) {
     const savers = await prisma.favorite.findMany({ where: { listingId: listing.id }, select: { userId: true } });
     for (const { userId } of savers) {
@@ -346,7 +391,7 @@ listingsRouter.patch("/:id", async (req, res) => {
     }
   }
   if (data.images) checkListingPhotosLater(listing.id);
-  res.json(serializeListing(listing));
+  res.json((await serializeListings([listing]))[0]);
 });
 
 listingsRouter.delete("/:id", async (req, res) => {

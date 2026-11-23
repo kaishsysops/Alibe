@@ -35,11 +35,18 @@ export async function ratingsFor(sellerIds: string[]): Promise<Map<string, Selle
 
 type Badges = Awaited<ReturnType<typeof sellerBadges>>;
 
-export function serializeListing<T extends { seller: User }>(listing: T, ratings?: Map<string, SellerRating>, badges?: Badges) {
+// A listing posted under a store shows the store and its badge; one posted as
+// the person shows them (blue tick if verified, crown if Premium).
+export function serializeListing<T extends { seller: User; storeId?: string | null }>(listing: T, ratings?: Map<string, SellerRating>, badges?: Badges) {
   const b = badges?.get(listing.seller.id);
+  const asStore = !!b?.store && !!listing.storeId && listing.storeId === b.store.id;
+  const badge = b?.premium ? "PREMIUM" : asStore ? "STORE" : b?.verified ? "VERIFIED" : null;
+  const store = asStore && b?.store ? { name: b.store.name, slug: b.store.slug, logoUrl: b.store.logoUrl } : null;
+  // View counts are the seller's own (Premium stats), never shown to others.
+  const { views: _views, ...rest } = listing as T & { views?: number };
   return {
-    ...listing,
-    seller: { ...publicUser(listing.seller), rating: ratings?.get(listing.seller.id) ?? { average: 0, count: 0 }, badge: b?.badge ?? null, store: b?.store ?? null },
+    ...rest,
+    seller: { ...publicUser(listing.seller), rating: ratings?.get(listing.seller.id) ?? { average: 0, count: 0 }, badge, store },
   };
 }
 

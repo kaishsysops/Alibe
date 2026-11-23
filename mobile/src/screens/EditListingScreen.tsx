@@ -21,6 +21,8 @@ import { useResponsive } from "../hooks/useResponsive";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import { usePersistentState } from "../hooks/usePersistentState";
 import { IslandField } from "../components/IslandPicker";
+import PostAsPicker from "../components/PostAsPicker";
+import { useSellerStanding } from "../components/PremiumPromo";
 
 const CONDITIONS: Array<{ value: Listing["condition"]; label: string }> = [
   { value: "NEW", label: "New" },
@@ -33,7 +35,6 @@ const DELIVERY: Array<{ value: DeliveryOption; label: string }> = [
   { value: "FERRY", label: "Ferry cargo" },
   { value: "COURIER", label: "Courier" },
 ];
-const MAX_IMAGES = 6;
 
 type Form = {
   loaded: boolean;
@@ -47,6 +48,7 @@ type Form = {
   islandId: string;
   deliveryOptions: DeliveryOption[];
   deliveryNote: string;
+  asStore?: boolean;
 };
 
 const EMPTY: Form = { loaded: false, images: [], title: "", price: "", description: "", condition: "GOOD", categoryId: "", islandId: "", deliveryOptions: ["PICKUP"], deliveryNote: "" };
@@ -69,6 +71,8 @@ export default function EditListingScreen() {
   const [form, setForm, { hydrated, clear }] = usePersistentState<Form>(`${DRAFT_PREFIX}edit.${id}`, EMPTY);
   const tree = useMemo(() => buildCategoryTree(categories), [categories]);
   const set = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
+  // Photos per item: 12 with Premium.
+  const MAX_IMAGES = useSellerStanding()?.premium ? 12 : 6;
 
   useEffect(() => {
     api.categories().then(setCategories).catch(() => {});
@@ -92,6 +96,7 @@ export default function EditListingScreen() {
           islandId: l.island.id,
           deliveryOptions: l.deliveryOptions?.length ? l.deliveryOptions : ["PICKUP"],
           deliveryNote: l.deliveryNote ?? "",
+          asStore: !!l.storeId,
         })
       )
       .catch(() => setMissing(true));
@@ -132,6 +137,7 @@ export default function EditListingScreen() {
         images,
         deliveryOptions: form.deliveryOptions,
         deliveryNote: form.deliveryNote.trim() || null,
+        ...(form.asStore !== undefined ? { asStore: form.asStore } : {}),
       });
       clear();
       toast.success("Listing updated.");
@@ -245,6 +251,7 @@ export default function EditListingScreen() {
               }}
             />
             <AttributeFields defs={tree.attributesOf(tree.byId.get(form.categoryId)?.slug)} value={form.attributes ?? {}} onChange={(attributes) => set({ attributes })} />
+            <PostAsPicker asStore={!!form.asStore} onChange={(asStore) => set({ asStore })} style={{ marginTop: spacing.md }} />
             <Text style={styles.label}>Condition</Text>
             <View style={styles.chipGrid}>{CONDITIONS.map((c) => chip(c.label, form.condition === c.value, () => set({ condition: c.value })))}</View>
             <Text style={styles.label}>Island</Text>

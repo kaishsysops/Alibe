@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { Store, Building2, CheckCircle2, AlertTriangle, Receipt } from "lucide-react-native";
+import { Store, Building2, CheckCircle2, AlertTriangle, Receipt, ArrowRight, Clock } from "lucide-react-native";
 import { api, errorMessage, SellerMe } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import { useToast } from "../components/Toast";
@@ -104,12 +104,24 @@ export default function StoreApplyScreen() {
           <SkeletonGroup>
             <Skeleton width="100%" height={320} rounded={radius.lg} />
           </SkeletonGroup>
-        ) : approved || pending ? (
-          <View style={[styles.status, { backgroundColor: approved ? `${colors.success}14` : colors.primaryTint }]}>
-            <CheckCircle2 size={20} color={approved ? colors.success : colors.primary} />
+        ) : approved ? (
+          <View style={styles.doneCard}>
+            <View style={styles.doneIcon}>
+              <CheckCircle2 size={30} color={colors.success} />
+            </View>
+            <Text style={styles.doneTitle}>{me.store!.name} is approved</Text>
+            <Text style={styles.doneText}>One last step: choose a Store plan. Your store page opens as soon as we've confirmed the payment.</Text>
+            <Tap style={styles.bigButton} onPress={() => navigation.navigate("SellerAccount", { focus: "store-plan" })} scaleTo={0.97} accessibilityLabel="Choose your Store plan">
+              <Text style={styles.bigButtonText}>Choose your Store plan</Text>
+              <ArrowRight size={20} color="#fff" />
+            </Tap>
+          </View>
+        ) : pending ? (
+          <View style={[styles.status, { backgroundColor: colors.primaryTint }]}>
+            <Clock size={20} color={colors.primary} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.statusTitle}>{approved ? `${me.store!.name} is approved` : "Your store is being checked"}</Text>
-              <Text style={styles.statusText}>{approved ? "Choose a Store plan in your seller account to open your store page." : "You'll get a notification and an email with the result."}</Text>
+              <Text style={styles.statusTitle}>Your store is being checked</Text>
+              <Text style={styles.statusText}>You'll get a notification and an email with the result. Nothing else to do for now.</Text>
             </View>
           </View>
         ) : (
@@ -189,6 +201,12 @@ const useStyles = makeStyles((colors) => ({
   input: { height: controlHeight.input, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border, paddingHorizontal: spacing.md, fontSize: fontSize.md, color: colors.text, backgroundColor: colors.background, outlineStyle: "none" as any },
   inputRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, height: controlHeight.input, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border, paddingHorizontal: spacing.md, backgroundColor: colors.background },
   inputBare: { flex: 1, height: "100%", fontSize: fontSize.md, color: colors.text, outlineStyle: "none" as any },
+  doneCard: { alignItems: "center", gap: spacing.sm, padding: spacing.lg, borderRadius: radius.lg, backgroundColor: colors.card, borderWidth: 1.5, borderColor: `${colors.success}55`, ...cardShadow },
+  doneIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: `${colors.success}1A`, alignItems: "center", justifyContent: "center" },
+  doneTitle: { fontSize: fontSize.xl, fontWeight: fontWeight.extrabold, color: colors.text, textAlign: "center" },
+  doneText: { fontSize: fontSize.base, color: colors.textMuted, textAlign: "center", lineHeight: 21, maxWidth: 400 },
+  bigButton: { flexDirection: "row", gap: spacing.sm, alignSelf: "stretch", height: controlHeight.primary, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", marginTop: spacing.sm },
+  bigButtonText: { color: "#fff", fontWeight: fontWeight.extrabold, fontSize: fontSize.md },
   status: { flexDirection: "row", gap: spacing.sm + 4, padding: spacing.md, borderRadius: radius.lg, alignItems: "flex-start" },
   statusTitle: { fontSize: fontSize.base, fontWeight: fontWeight.bold, color: colors.text },
   statusText: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2, lineHeight: 19 },

@@ -183,6 +183,33 @@ The first deploy asks for the first admin's username and password. Later, or
 if every admin is locked out: `ADMIN_PASSWORD='...' ./scripts/admin.sh set-admin <username>`.
 On a dev machine, open the app with `?site=admin` or `?site=portal`.
 
+### Card payments (BML Connect): not tested yet
+
+`backend/src/bml.ts` takes card payments through Bank of Maldives' merchant
+API. It was written from BML's public docs without an API key, so it has
+never actually talked to BML. While it's off (no key), buyers only see bank
+transfer and Admin > Payments says "Not set up". To try it:
+
+1. Get an API key (and app id, if shown) from BML's merchant portal.
+2. In the server's `.env`: `BML_API_KEY=...`, `BML_APP_ID=...`,
+   `BML_MODE=sandbox` (test mode first), then `./deploy.sh`.
+3. In BML's portal, set the webhook to `https://alibe.online/api/payments/bml/webhook`.
+4. Pay a small test boost by card and check it starts. Lines marked
+   `CHECK` in `bml.ts` are the ones most likely to need adjusting.
+5. When it works, set `BML_MODE=production` and deploy again.
+
+A purchase only starts once the server has asked BML itself and the
+transaction is CONFIRMED for the right amount; redirects and webhooks alone
+are never trusted.
+
+### Plans, grace period and reminders
+
+Store and Premium plans keep working for 5 days after their end date. Sellers
+get a push and an email 3 days before the end, on the day it ends, the day
+before the grace period runs out, and when it switches off. Renewing early or
+during grace carries on from the old end date. Unpaid purchases get a
+reminder after 1 day and after 3 days.
+
 ### Sellers
 
 - **Individual** (default) or **Store**, chosen at sign-up or in Profile >
@@ -209,6 +236,13 @@ On a dev machine, open the app with `?site=admin` or `?site=portal`.
   sides, no selfie). ID photos are private (signed 10-minute links for approvers) and are
   deleted as soon as a decision is made; only the last 4 characters of the ID
   number are kept.
+- **Store or personal:** a seller with an approved store chooses for each
+  listing whether it goes under the store (store name, logo, Store badge,
+  on the store page) or as themselves (a personal item).
+- **Badges:** the blue tick shows whenever the seller's ID is verified, next
+  to the Store or Premium badge.
+- **Premium** also includes a daily "bump to top" per item, views and saves
+  for every listing, and 12 photos per item.
 - **Plans** (prices in Admin > Payments): *Store* (store page, Store badge,
   placed above individuals) and *Premium* (free 7-day boosts each month, new
   items featured for a week, gold badge). Monthly or yearly; a store with

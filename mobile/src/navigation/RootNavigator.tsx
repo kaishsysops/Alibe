@@ -78,6 +78,7 @@ const linking = {
       Status: "status",
       Help: "help/:topic?",
       Purchases: "purchases",
+      Orders: "orders",
       BuyAd: "advertise",
       Boost: "boost/:id",
       BuyForYou: "buy-for-you/:id",
