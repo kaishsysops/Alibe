@@ -49,7 +49,7 @@ export default function PremiumPromo({ variant = "card", style }: { variant?: "c
           <Crown size={16} color="#fff" fill="#fff" />
         </View>
         <Text style={styles.bannerText} numberOfLines={2}>
-          <Text style={styles.bannerStrong}>Go Premium</Text> · {me.premiumFreeBoosts} free boosts a month and your new items featured
+          <Text style={styles.bannerStrong}>Go Premium</Text> · {me.premiumFreeBoosts} free boosts a month and your newest items shown near the top
         </Text>
         <ChevronRight size={16} color={colors.gold} />
       </Tap>
@@ -71,7 +71,7 @@ export default function PremiumPromo({ variant = "card", style }: { variant?: "c
       <View style={styles.perks}>
         {[
           { Icon: Rocket, text: `${me.premiumFreeBoosts} free 7-day boosts every month` },
-          { Icon: Sparkles, text: "New items featured at the top for a week" },
+          { Icon: Sparkles, text: "Your 3 newest items shown near the top for a week" },
           { Icon: InfinityIcon, text: "No monthly post limit (others: 30 a month)" },
           { Icon: ArrowUpCircle, text: "Bump any item to the top, once a day" },
           { Icon: BarChart3, text: "See how many people viewed and saved each item" },

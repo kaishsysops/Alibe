@@ -116,7 +116,7 @@ const SLIDES: Slide[] = [
   { Icon: ShieldCheck, left: KeyRound, right: PackageCheck, tag: "Safety", title: "Stay safe when you buy", text: "A private code confirms your item reached you." },
   { Icon: BadgeCheck, left: Store, right: Star, tag: "Trust", title: "Verified sellers and stores", text: "Look for the badges: ID-checked sellers, real stores and honest reviews." },
   { Icon: Rocket, left: Sparkles, right: TrendingUp, tag: "Boost", title: "Get seen with a boost", text: "Put your item at the top of search and the home page." },
-  { Icon: Crown, left: Rocket, right: Sparkles, tag: "Premium", title: "Grow with Premium", text: "Free boosts every month, your new items featured and a gold badge." },
+  { Icon: Crown, left: Rocket, right: Sparkles, tag: "Premium", title: "Grow with Premium", text: "Free boosts every month, your newest items shown near the top and a gold badge." },
 ];
 const SLIDE_MS = 4200;
 

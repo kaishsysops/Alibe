@@ -300,7 +300,7 @@ export default function SellerAccountScreen() {
           offer={premiumDiscount?.label}
           per={per}
           save={yearly ? saving(me.prices.premiumMonthly, me.prices.premiumYearly) : 0}
-          perks={[`${me.premiumFreeBoosts} free 7-day boosts every month`, "New items featured at the top for a week", "Bump any item to the top, once a day", "Views and saves for every item", "12 photos per item, no monthly post limit", "Gold Premium badge"]}
+          perks={[`${me.premiumFreeBoosts} free 7-day boosts every month`, "Your 3 newest items shown near the top for a week", "Bump any item to the top, once a day", "Views and saves for every item", "12 photos per item, no monthly post limit", "Gold Premium badge"]}
           activeUntil={me.premium ? date(me.premiumEndsAt) : null}
           graceUntil={me.premiumGraceUntil ? date(me.premiumGraceUntil) : null}
           locked={!me.approved ? (isStore ? "Needs an approved store" : "Get verified first") : null}

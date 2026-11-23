@@ -63,21 +63,32 @@ const SORTS: Record<string, Prisma.ListingOrderByWithRelationInput[]> = {
 
 // Short-lived shared copies of things every feed request needs.
 // Ids of listings with an active boost (purchases without a listing ignored).
-// Boosted listings, plus Premium sellers' items from the last 7 days: both lead
-// newest-first feeds.
+// What leads newest-first feeds:
+//   featured  items with a boost running (paid or a free Premium boost): these,
+//             and only these, carry the "Featured" label
+//   lead      featured, plus each Premium seller's 3 newest items from the
+//             last 7 days (moved up, but not labelled, so one seller's boost
+//             never makes all their items look boosted)
+const PREMIUM_LEAD_PER_SELLER = 3;
 const boostedIds = () =>
   cached("boosted", 30_000, async () => {
-    const paid = [...(await boostedListingIds())].filter((id): id is string => !!id);
+    const featured = new Set([...(await boostedListingIds())].filter((id): id is string => !!id));
     const premium = await premiumSellerIds();
     const recent = premium.length
       ? await prisma.listing.findMany({
           where: { sellerId: { in: premium }, status: "ACTIVE", hiddenAt: null, createdAt: { gte: new Date(Date.now() - 7 * 86_400_000) } },
-          select: { id: true },
+          select: { id: true, sellerId: true },
           orderBy: { createdAt: "desc" },
-          take: 120,
+          take: 300,
         })
       : [];
-    return new Set([...paid, ...recent.map((l) => l.id)]);
+    const perSeller = new Map<string, number>();
+    const premiumPicks = recent.filter((l) => {
+      const n = perSeller.get(l.sellerId) ?? 0;
+      perSeller.set(l.sellerId, n + 1);
+      return n < PREMIUM_LEAD_PER_SELLER;
+    });
+    return { featured, lead: new Set([...featured, ...premiumPicks.map((l) => l.id)]) };
   });
 const ibayFor = (filters: object, sort?: string) => cached(`ibay:${JSON.stringify(filters)}:${sort ?? ""}`, 60_000, () => mixedIbayListings(filters, sort));
 
@@ -103,13 +114,15 @@ listingsRouter.get("/", async (req, res) => {
   // A price sort mixed with iBay has to merge both lists before cutting a page,
   // so it reads every row up to the end of this page (capped by MAX_PAGE).
   const mergeByPrice = withIbay && order !== "newest";
-  const boosted = await boostedIds();
+  const { featured, lead: leading } = await boostedIds();
   // Boosted items lead page one of a newest-first feed. A price sort stays
   // strictly by price, and a seller's own page isn't a place to compete.
-  const lead = order === "newest" && !seller && boosted.size;
-  const pinned = lead && page === 0 ? await prisma.listing.findMany({ where: { AND: [scoped, { id: { in: [...boosted] } }] }, include: listingInclude, orderBy: SORTS.newest }) : [];
+  const lead = order === "newest" && !seller && leading.size;
+  const pinned = lead && page === 0 ? await prisma.listing.findMany({ where: { AND: [scoped, { id: { in: [...leading] } }] }, include: listingInclude, orderBy: SORTS.newest }) : [];
+  // Featured (boosted) first among the pinned, then Premium's new items.
+  pinned.sort((a, b) => Number(featured.has(b.id)) - Number(featured.has(a.id)));
   const rows = await prisma.listing.findMany({
-    where: lead ? { AND: [scoped, { id: { notIn: [...boosted] } }] } : scoped,
+    where: lead ? { AND: [scoped, { id: { notIn: [...leading] } }] } : scoped,
     include: listingInclude,
     orderBy: SORTS[order],
     skip: mergeByPrice ? 0 : page * limit,
@@ -117,7 +130,7 @@ listingsRouter.get("/", async (req, res) => {
   });
   let hasMore = rows.length > (mergeByPrice ? (page + 1) * limit : limit);
   const ownRows = mergeByPrice ? rows.slice(0, (page + 1) * limit) : rows.slice(0, limit);
-  const own = (await serializeListings([...pinned, ...ownRows])).map((l) => ({ ...l, description: undefined, boosted: boosted.has(l.id) }));
+  const own = (await serializeListings([...pinned, ...ownRows])).map((l) => ({ ...l, description: undefined, boosted: featured.has(l.id) }));
 
   if (!withIbay) {
     res.setHeader("X-Has-More", hasMore ? "1" : "0");
@@ -147,15 +160,15 @@ const HOME_LATEST = 24;
 
 async function buildHome(signedIn: boolean) {
   // One row per top-level category, holding everything under it.
-  const [index, boosted] = await Promise.all([categoryIndex(), boostedIds()]);
+  const [index, { featured, lead: leading }] = await Promise.all([categoryIndex(), boostedIds()]);
   const categories = (index.children.get(null) ?? []).filter((c) => !c.hidden);
   const active = { status: "ACTIVE" as const, hiddenAt: null };
-  const leadBoosted = <T extends { id: string }>(list: T[]) => [...list.filter((l) => boosted.has(l.id)), ...list.filter((l) => !boosted.has(l.id))];
+  const leadBoosted = <T extends { id: string }>(list: T[]) => [...list.filter((l) => featured.has(l.id)), ...list.filter((l) => !featured.has(l.id) && leading.has(l.id)), ...list.filter((l) => !leading.has(l.id))];
   const [latestRows, ...railRows] = await Promise.all([
     prisma.listing.findMany({ where: active, include: listingInclude, orderBy: SORTS.newest, take: HOME_LATEST }),
     ...categories.map((c) => prisma.listing.findMany({ where: { ...active, categoryId: { in: descendants(index, c.slug).map((d) => d.id) } }, include: listingInclude, orderBy: SORTS.newest, take: HOME_RAIL })),
   ]);
-  const serialize = async (rows: typeof latestRows) => leadBoosted((await serializeListings(rows)).map((l) => ({ ...l, description: undefined, boosted: boosted.has(l.id) })));
+  const serialize = async (rows: typeof latestRows) => leadBoosted((await serializeListings(rows)).map((l) => ({ ...l, description: undefined, boosted: featured.has(l.id) })));
   const ibay = signedIn ? await ibayFor({}, undefined) : [];
   const ibayBy = (slug: string) => {
     const slugs = new Set(descendants(index, slug).map((d) => d.slug));
