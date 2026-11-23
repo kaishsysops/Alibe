@@ -1,7 +1,8 @@
 import React from "react";
 import { View, Text, ScrollView } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { ArrowRight, CheckCircle2 } from "lucide-react-native";
+import { ArrowRight, CheckCircle2, Megaphone, Sparkles, BadgePercent, CalendarDays } from "lucide-react-native";
+import { SEASON_LOOK } from "../components/Seasonal";
 import { useAuth } from "../api/AuthContext";
 import { useConsole } from "../components/ConsoleContext";
 import Tap from "../components/Tap";
@@ -36,6 +37,14 @@ export default function OverviewScreen() {
         {accessLabel(me)} · {waiting ? `${waiting} ${waiting === 1 ? "thing needs" : "things need"} you` : "Nothing waiting right now"}
       </Text>
 
+      {/* Notices from admins to staff. */}
+      {(me.now?.staffNotices ?? []).map((n) => (
+        <View key={n.id} style={[styles.notice, n.tone === "WARNING" && { backgroundColor: `${colors.gold}1A`, borderColor: `${colors.gold}66` }]}>
+          <Megaphone size={18} color={n.tone === "WARNING" ? colors.gold : colors.primary} />
+          <Text style={styles.noticeText}>{n.message}</Text>
+        </View>
+      ))}
+
       {queues.length > 0 && (
         <View style={styles.grid}>
           {queues.map((s) => {
@@ -64,6 +73,47 @@ export default function OverviewScreen() {
             );
           })}
         </View>
+      )}
+
+      {/* What's running on the site, so staff know what customers see. */}
+      {me.now && (me.now.banners.length > 0 || me.now.events.length > 0 || me.now.discounts.length > 0 || !!me.now.season) && (
+        <>
+          <Text style={styles.section}>On the site now</Text>
+          <View style={styles.toolList}>
+            {me.now.season && (
+              <View style={styles.tool}>
+                <Sparkles size={18} color={colors.textMuted} />
+                <Text style={[styles.toolTitle, { flex: 1 }]}>Season: {SEASON_LOOK[me.now.season.theme].name}</Text>
+                <Text style={styles.toolBlurb}>until {me.now.season.endsOn}</Text>
+              </View>
+            )}
+            {me.now.discounts.map((d) => (
+              <View key={d.id} style={styles.tool}>
+                <BadgePercent size={18} color={colors.textMuted} />
+                <Text style={[styles.toolTitle, { flex: 1 }]}>
+                  {d.label}: {d.percent}% off
+                </Text>
+                <Text style={styles.toolBlurb}>until {d.endsOn}</Text>
+              </View>
+            ))}
+            {me.now.events.map((e) => (
+              <View key={e.id} style={styles.tool}>
+                <CalendarDays size={18} color={colors.textMuted} />
+                <Text style={[styles.toolTitle, { flex: 1 }]}>{e.title}</Text>
+                <Text style={styles.toolBlurb}>until {e.endsOn}</Text>
+              </View>
+            ))}
+            {me.now.banners.map((b) => (
+              <View key={b.id} style={styles.tool}>
+                <Megaphone size={18} color={colors.textMuted} />
+                <Text style={[styles.toolTitle, { flex: 1 }]} numberOfLines={2}>
+                  {b.message}
+                </Text>
+                <Text style={styles.toolBlurb}>until {b.endsOn}</Text>
+              </View>
+            ))}
+          </View>
+        </>
       )}
 
       {tools.length > 0 && (
@@ -98,6 +148,8 @@ const useStyles = makeStyles((colors) => ({
   cardTitle: { fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: colors.textMuted },
   cardFoot: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: spacing.sm },
   cardAction: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.primary },
+  notice: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm + 2, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.primaryTint, borderWidth: 1, borderColor: `${colors.primary}33` },
+  noticeText: { flex: 1, fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: colors.text, lineHeight: 21 },
   section: { fontSize: fontSize.lg, fontWeight: fontWeight.extrabold, color: colors.text, marginTop: spacing.md },
   toolList: { backgroundColor: colors.card, borderRadius: radius.lg, ...cardShadow, overflow: "hidden" },
   tool: { flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border },

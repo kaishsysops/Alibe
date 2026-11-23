@@ -69,6 +69,7 @@ const PUBLIC: Array<[string, RegExp]> = [
   ["GET", /^\/stores\/[^/]+$/],
   // BML Connect's payment notifications (verified by looking them up).
   ["POST", /^\/payments\/bml\/webhook$/],
+  ["GET", /^\/site\/now$/],
   ["POST", /^\/auth\/(otp|email)\/(request|verify)$/],
   ["POST", /^\/auth\/create$/],
   ["POST", /^\/auth\/google$/],

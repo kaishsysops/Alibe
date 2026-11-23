@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { bmlEnabled, bmlPaid, createBmlTransaction, getBmlTransaction } from "../bml.js";
 import { activatePurchase } from "../purchaseActivation.js";
+import { applyDiscount, discountFor } from "../promotions.js";
 import { safeRouter } from "../http.js";
 import { prohibitedReason } from "../moderation.js";
 import { notifyUser } from "../push.js";
@@ -25,6 +26,12 @@ const newReference = () => `AL-${crypto.randomBytes(4).toString("hex").toUpperCa
 
 // What customers need to buy something. Bank details come with an actual purchase,
 // and the buy-for-you margin isn't theirs to see.
+// The price after any discount an admin is running (src/promotions.ts).
+async function priced(kind: "BOOST" | "AD" | "STORE_PLAN" | "PREMIUM_PLAN", amount: number) {
+  const d = await discountFor(kind);
+  return d ? applyDiscount(amount, d.percent) : amount;
+}
+
 purchasesRouter.get("/config", async (_req, res) => {
   const m = await moneySettings();
   res.json({ boostPrices: m.boostPrices, adPrices: m.adPrices, sellerPlans: m.sellerPlans, premiumFreeBoosts: m.premiumFreeBoosts, ready: isReady(m), cardPayments: bmlEnabled() });
@@ -114,7 +121,7 @@ purchasesRouter.post("/", async (req, res) => {
     }
     const yearly = body.period === "YEARLY";
     const p = m.sellerPlans;
-    const amount = body.kind === "STORE_PLAN" ? (yearly ? p.storeYearly : p.storeMonthly) : yearly ? p.premiumYearly : p.premiumMonthly;
+    const amount = await priced(body.kind, body.kind === "STORE_PLAN" ? (yearly ? p.storeYearly : p.storeMonthly) : yearly ? p.premiumYearly : p.premiumMonthly);
     const label = `${body.kind === "STORE_PLAN" ? "Store" : "Premium"} plan, ${yearly ? "1 year" : "1 month"}`;
     const purchase = await prisma.purchase.create({ data: { ...base, kind: body.kind, status: "AWAITING_PAYMENT", days: yearly ? 365 : 30, amount, adTitle: label } });
     return res.status(201).json(forBuyer(purchase));
@@ -126,7 +133,7 @@ purchasesRouter.post("/", async (req, res) => {
     if (listing.status !== "ACTIVE" || listing.hiddenAt) return res.status(400).json({ error: "Only items on sale right now can be boosted." });
     if (!st.canBoost) return res.status(403).json({ error: "Boosts are for verified sellers and stores. Get verified (it's free) to boost.", code: "VERIFY_TO_BOOST" });
     const purchase = await prisma.purchase.create({
-      data: { ...base, kind: "BOOST", status: "AWAITING_PAYMENT", listingId: listing.id, adTitle: listing.title, days: body.days, amount: m.boostPrices[String(body.days) as Plan] },
+      data: { ...base, kind: "BOOST", status: "AWAITING_PAYMENT", listingId: listing.id, adTitle: listing.title, days: body.days, amount: await priced("BOOST", m.boostPrices[String(body.days) as Plan]) },
     });
     return res.status(201).json(forBuyer(purchase));
   }
@@ -139,7 +146,7 @@ purchasesRouter.post("/", async (req, res) => {
       if (listing?.sellerId !== userId) return res.status(403).json({ error: "Ads can only lead to your own items." });
     }
     const purchase = await prisma.purchase.create({
-      data: { ...base, kind: "AD", status: "AWAITING_PAYMENT", days: body.days, amount: m.adPrices[String(body.days) as Plan], adTitle: body.adTitle, adImage: body.adImage, listingId: body.listingId, adUrl: body.adUrl },
+      data: { ...base, kind: "AD", status: "AWAITING_PAYMENT", days: body.days, amount: await priced("AD", m.adPrices[String(body.days) as Plan]), adTitle: body.adTitle, adImage: body.adImage, listingId: body.listingId, adUrl: body.adUrl },
     });
     return res.status(201).json(forBuyer(purchase));
   }

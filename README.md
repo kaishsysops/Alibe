@@ -183,6 +183,23 @@ The first deploy asks for the first admin's username and password. Later, or
 if every admin is locked out: `ADMIN_PASSWORD='...' ./scripts/admin.sh set-admin <username>`.
 On a dev machine, open the app with `?site=admin` or `?site=portal`.
 
+### Promotions (admin site)
+
+Admin > Promotions, everything by date (inclusive, Maldives time), saved with
+one button, live within a minute:
+
+- **Banners**: a message strip for everyone, buyers (Home) or sellers (Sell,
+  My listings, Seller account), with an optional link like `/help/safety`.
+  People can close them.
+- **Events**: a campaign card on Home whose "Shop now" opens a search.
+- **Discounts**: a percentage off boosts, ads, Store or Premium. Buyers see
+  the old price crossed out and are charged the lower one; the biggest
+  running discount wins.
+- **Season**: Ramadan, Eid, Independence Day or New Year: a mark beside the
+  logo and a greeting on Home.
+- **Staff notices**: shown at the top of the portal and admin home. The
+  portal also lists what's running on the site.
+
 ### Card payments (BML Connect): not tested yet
 
 `backend/src/bml.ts` takes card payments through Bank of Maldives' merchant

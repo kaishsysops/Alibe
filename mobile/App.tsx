@@ -6,6 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { ThemeProvider, useTheme } from "./src/theme/ThemeContext";
 import { ToastProvider } from "./src/components/Toast";
 import { AuthProvider } from "./src/api/AuthContext";
+import { SiteProvider } from "./src/api/SiteContext";
 import { FavoritesProvider } from "./src/api/FavoritesContext";
 import { AppAlertProvider } from "./src/components/AppAlertProvider";
 import { NotificationsProvider } from "./src/api/NotificationsContext";
@@ -52,6 +53,7 @@ export default function App() {
       <ThemeProvider>
         <ToastProvider>
           <AuthProvider>
+            <SiteProvider>
             <NotificationsProvider>
               <FavoritesProvider>
                 <AppAlertProvider>
@@ -62,6 +64,7 @@ export default function App() {
                 </AppAlertProvider>
               </FavoritesProvider>
             </NotificationsProvider>
+            </SiteProvider>
           </AuthProvider>
         </ToastProvider>
       </ThemeProvider>

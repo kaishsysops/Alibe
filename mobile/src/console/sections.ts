@@ -1,11 +1,11 @@
-import { LayoutDashboard, BadgeCheck, ClipboardCheck, Flag, Scale, Users, Landmark, UserCog, FolderTree, Store, LucideIcon } from "lucide-react-native";
+import { Megaphone, LayoutDashboard, BadgeCheck, ClipboardCheck, Flag, Scale, Users, Landmark, UserCog, FolderTree, Store, LucideIcon } from "lucide-react-native";
 import type { StaffMe, StaffRole } from "../api/client";
 import type { Site } from "../site";
 
 // Everything the admin and portal sites can show. A section appears when the
 // person is an admin or holds one of its roles; adminOnly sections exist only
 // on admin.alibe.online. The server checks the same rules (backend/src/roles.ts).
-export type SectionKey = "Overview" | "Applications" | "Posts" | "Reports" | "Disputes" | "Sellers" | "Payments" | "Staff" | "Categories" | "Ibay";
+export type SectionKey = "Overview" | "Applications" | "Posts" | "Reports" | "Disputes" | "Sellers" | "Payments" | "Promotions" | "Staff" | "Categories" | "Ibay";
 
 export type Section = {
   key: SectionKey;
@@ -26,6 +26,7 @@ export const SECTIONS: Section[] = [
   { key: "Disputes", path: "disputes", title: "Disputes", blurb: "Orders where buyer and seller disagree.", Icon: Scale, roles: ["SUPPORT", "MODERATOR"], count: "disputes" },
   { key: "Sellers", path: "sellers", title: "Sellers", blurb: "Look up anyone who sells.", Icon: Users, roles: ["SUPPORT", "SELLER_APPROVER", "MODERATOR"] },
   { key: "Payments", path: "payments", title: "Payments and prices", blurb: "Slips to check, bank details, plan and boost prices.", Icon: Landmark, roles: [], adminOnly: true },
+  { key: "Promotions", path: "promotions", title: "Promotions", blurb: "Banners, events, discounts, seasonal looks and staff notices.", Icon: Megaphone, roles: [], adminOnly: true },
   { key: "Staff", path: "staff", title: "Staff and roles", blurb: "Add admins and approvers, change roles.", Icon: UserCog, roles: [], adminOnly: true },
   { key: "Categories", path: "categories", title: "Categories", blurb: "The category tree and its questions.", Icon: FolderTree, roles: [], adminOnly: true },
   { key: "Ibay", path: "ibay", title: "iBay items", blurb: "The iBay catalogue and showcase switch.", Icon: Store, roles: [], adminOnly: true },

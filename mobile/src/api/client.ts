@@ -381,7 +381,24 @@ export type StaffMember = { id: string; name: string; email: string | null; user
 // A one-time sign-in link's token (the link itself is built for the right site).
 export type StaffInviteLink = { token: string; expiresAt: string; site: "admin" | "portal" };
 // What the signed-in staff member can do, and what's waiting (null = not theirs).
-export type StaffMe = { admin: boolean; roles: StaffRole[]; counts: { applications: number | null; posts: number | null; reports: number | null; disputes: number | null } };
+export type StaffMe = {
+  admin: boolean;
+  roles: StaffRole[];
+  counts: { applications: number | null; posts: number | null; reports: number | null; disputes: number | null };
+  // What's running on the site, and notices from admins to staff.
+  now?: Omit<Promotions, "season"> & { season: Promotions["season"] };
+};
+// Admin > Promotions (backend/src/promotions.ts). Dates are YYYY-MM-DD, inclusive.
+export type PromoKind = "BOOST" | "AD" | "STORE_PLAN" | "PREMIUM_PLAN";
+export type SeasonTheme = "RAMADAN" | "EID" | "INDEPENDENCE" | "NEW_YEAR";
+export type Banner = { id: string; startsOn: string; endsOn: string; message: string; tone: "INFO" | "SUCCESS" | "WARNING" | "CELEBRATE"; audience: "EVERYONE" | "SELLERS" | "BUYERS"; linkLabel?: string; link?: string };
+export type SiteEvent = { id: string; startsOn: string; endsOn: string; title: string; subtitle?: string; image?: string; searchText?: string; categorySlug?: string };
+export type Discount = { id: string; startsOn: string; endsOn: string; label: string; percent: number; appliesTo: PromoKind[] };
+export type Season = { theme: SeasonTheme; greeting?: string; startsOn: string; endsOn: string };
+export type StaffNotice = { id: string; startsOn: string; endsOn: string; message: string; tone: "INFO" | "WARNING" };
+export type Promotions = { banners: Banner[]; events: SiteEvent[]; discounts: Discount[]; season: Season | null; staffNotices: StaffNotice[] };
+// What the app shows right now.
+export type SiteNow = { banners: Banner[]; events: SiteEvent[]; discounts: Array<Pick<Discount, "label" | "percent" | "appliesTo" | "endsOn">>; season: Season | null };
 export type SellerApplicationItem = {
   id: string;
   kind: "VERIFY" | "STORE";
@@ -715,6 +732,9 @@ export const api = {
   updateStaff: (id: string, admin: boolean, roles: StaffRole[]) => request<StaffMember>(`/admin/staff/${id}`, { method: "PATCH", body: JSON.stringify({ admin, roles }) }),
   // ---- portal ----
   staffMe: () => request<StaffMe>("/staff/me"),
+  siteNow: () => request<SiteNow>("/site/now"),
+  adminPromotions: () => request<{ promotions: Promotions; today: string }>("/admin/promotions"),
+  saveAdminPromotions: (p: Promotions) => request<{ promotions: Promotions }>("/admin/promotions", { method: "PUT", body: JSON.stringify(p) }),
   staffApplications: (status: "PENDING" | "APPROVED" | "REJECTED" = "PENDING") => request<SellerApplicationItem[]>(`/staff/applications?status=${status}`),
   decideApplication: (id: string, approve: boolean, reason?: string) => request<void>(`/staff/applications/${id}/decide`, { method: "POST", body: JSON.stringify({ approve, reason }) }),
   staffPosts: () => request<PendingPost[]>("/staff/posts"),

@@ -12,6 +12,7 @@ import Tap from "./Tap";
 import AvatarPhoto from "./AvatarPhoto";
 import AlibeMark from "./AlibeMark";
 import { useConsole } from "./ConsoleContext";
+import { SeasonalMark } from "./Seasonal";
 
 const LINKS = [
   { key: "home", label: "Home", route: "HomeTab" },
@@ -53,6 +54,7 @@ function WebNavBarInner({ active, onSearch }: NavProps) {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <AlibeMark size={30} color={colors.primary} />
             <Text style={styles.logo}>Alibe</Text>
+            <SeasonalMark size={14} />
           </View>
         </Tap>
 

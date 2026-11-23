@@ -16,6 +16,7 @@ import { spacing, radius, fontSize, fontWeight, cardShadow } from "../theme/them
 import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
 import PremiumPromo from "../components/PremiumPromo";
 import FirstTimeTip from "../components/FirstTimeTip";
+import { SiteBanners } from "../components/Seasonal";
 
 type TabKey = "ACTIVE" | "REVIEW" | "RESERVED" | "SOLD";
 const TABS: Array<{ key: TabKey; label: string; statuses: Listing["status"][] }> = [
@@ -116,6 +117,7 @@ export default function MyListingsScreen() {
           </View>
         </View>
       )}
+      <SiteBanners place="seller" />
       <FirstTimeTip id="mylistings" title="Managing your listings" text="Tap the tick on an item once it's sold so buyers stop asking, or the pencil to edit it. Posts our team is checking show under In review." topic="selling" />
       {!loading && allListings.length > 0 && <PremiumPromo variant="banner" />}
       {rejected.length > 0 && tab !== "REVIEW" && (

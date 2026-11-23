@@ -13,6 +13,7 @@ import { Prisma } from "@prisma/client";
 import { categoryIndex, clearCategoryCaches, descendants } from "../categories.js";
 import { adminGate, Access } from "../roles.js";
 import { activatePurchase } from "../purchaseActivation.js";
+import { loadPromotions, promotionsSchema, savePromotions, todayMv } from "../promotions.js";
 import { bmlStatus } from "../bml.js";
 
 // Feeds are cached for up to a minute; staff changes show at once on the
@@ -457,6 +458,22 @@ adminRouter.delete("/staff/:id", async (req, res) => {
     prisma.session.deleteMany({ where: { userId: user.id, staff: true } }),
   ]);
   res.json({ ok: true });
+});
+
+// ---- promotions: banners, events, discounts, season, staff notices ----------
+
+adminRouter.get("/promotions", async (_req, res) => {
+  res.json({ promotions: await loadPromotions(), today: todayMv() });
+});
+
+adminRouter.put("/promotions", async (req, res) => {
+  const parsed = promotionsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Please check the details." });
+  const bad = [...parsed.data.banners, ...parsed.data.events, ...parsed.data.discounts, ...parsed.data.staffNotices, ...(parsed.data.season ? [parsed.data.season] : [])].find((x) => x.endsOn < x.startsOn);
+  if (bad) return res.status(400).json({ error: "An end date is before its start date." });
+  await savePromotions(parsed.data);
+  ["home:", "categories"].forEach(invalidate);
+  res.json({ promotions: parsed.data });
 });
 
 // ---- categories ---------------------------------------------------------------

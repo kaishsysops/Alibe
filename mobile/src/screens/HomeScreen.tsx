@@ -31,6 +31,7 @@ import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
 import AvatarPhoto from "../components/AvatarPhoto";
 import PremiumPromo from "../components/PremiumPromo";
 import FirstTimeTip from "../components/FirstTimeTip";
+import { EventCards, SeasonalGreeting, SeasonalMark, SiteBanners } from "../components/Seasonal";
 
 const HERO_IMAGE = "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=1200&h=800&fit=crop&auto=format&q=75";
 const SELL_IMAGE = "https://images.unsplash.com/photo-1556745757-8d76bdb6984b?w=1000&h=600&fit=crop&auto=format&q=75";
@@ -194,6 +195,7 @@ export default function HomeScreen() {
           <View style={[styles.desktopColumn, { paddingHorizontal: gutter }]}>
             <View style={styles.banner}>
               <View style={styles.bannerText}>
+                <SeasonalGreeting style={{ marginBottom: spacing.sm }} />
                 <Text style={styles.bannerTitle}>{firstName ? `Welcome back, ${firstName}.` : "Buy and sell across every atoll."}</Text>
                 <Text style={styles.bannerSubtitle}>Fresh listings from Malé to Addu, with chat, WhatsApp and Viber built in.</Text>
                 <View style={styles.bannerActions}>
@@ -246,6 +248,8 @@ export default function HomeScreen() {
                 ) : (
                   <>
                     <AdBanner />
+                    <SiteBanners place="home" style={{ marginTop: spacing.md }} />
+                    <EventCards style={{ marginTop: spacing.md }} />
                     <FirstTimeTip id="home" title="New to Alibe?" text="Browse what's for sale near you, message sellers to ask or make an offer, and sell your own things with the Sell button." topic="start" style={{ marginTop: spacing.md }} />
                     <PremiumPromo variant="banner" style={{ marginVertical: spacing.md }} />
                     {railsByCategory.slice(0, 3).map(({ category, items }) => (
@@ -294,7 +298,10 @@ export default function HomeScreen() {
       >
         <View style={[styles.hero, { paddingTop: insets.top + spacing.sm, paddingHorizontal: gutter }]}>
           <View style={styles.heroTopRow}>
-            <Text style={styles.wordmark}>Alibe</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={styles.wordmark}>Alibe</Text>
+              <SeasonalMark size={14} />
+            </View>
             <View style={styles.heroActions}>
             <Tap style={styles.bell} onPress={() => navigation.navigate("Notifications")} scaleTo={0.88} accessibilityLabel={`Notifications${notifications.total ? `, ${notifications.total} new` : ""}`}>
               <Bell size={20} color={colors.text} />
@@ -352,6 +359,9 @@ export default function HomeScreen() {
               <HomeRail title="Recently viewed" data={recentlyViewed.slice(0, 12)} onPressItem={goToProduct} horizontalPadding={gutter} />
             )}
             <AdBanner horizontalPadding={gutter} />
+            <SiteBanners place="home" style={{ marginHorizontal: gutter, marginTop: spacing.md }} />
+            <SeasonalGreeting style={{ marginHorizontal: gutter, marginTop: spacing.md }} />
+            <EventCards style={{ marginHorizontal: gutter, marginTop: spacing.md }} />
             <FirstTimeTip id="home" title="New to Alibe?" text="Browse what's for sale near you, message sellers to ask or make an offer, and sell your own things with the Sell button." topic="start" style={{ marginHorizontal: gutter, marginTop: spacing.md }} />
             <PremiumPromo variant="banner" style={{ marginHorizontal: gutter, marginVertical: spacing.md }} />
             {railsByCategory.map(({ category, items }, i) => (

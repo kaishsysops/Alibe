@@ -24,6 +24,7 @@ import { useAuthMethods } from "../hooks/useAuthMethods";
 import PremiumPromo from "../components/PremiumPromo";
 import FirstTimeTip from "../components/FirstTimeTip";
 import PostAsPicker from "../components/PostAsPicker";
+import { SiteBanners } from "../components/Seasonal";
 
 const CONDITIONS: Array<{ value: Listing["condition"]; label: string; hint: string }> = [
   { value: "NEW", label: "New", hint: "Unused, in original packaging" },
@@ -462,6 +463,7 @@ function SellForm() {
   if (step === 0) {
     stepContent = (
       <>
+        <SiteBanners place="seller" style={{ marginBottom: spacing.md }} />
         <FirstTimeTip
           id="sell"
           title="How selling works"

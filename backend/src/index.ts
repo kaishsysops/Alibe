@@ -24,6 +24,7 @@ import { authenticate } from "./auth.js";
 import { shareRouter } from "./routes/share.js";
 import { sellersRouter, storesRouter } from "./routes/sellers.js";
 import { bmlWebhook } from "./routes/purchases.js";
+import { promotionsNow } from "./promotions.js";
 import { staffRouter } from "./routes/staff.js";
 import { ipCeiling, accountLimits } from "./rateLimit.js";
 import { slipsRouter, idsRouter, moveSlipsOutOfPublicUploads } from "./routes/slips.js";
@@ -94,6 +95,15 @@ app.use("/stores", storesRouter);
 app.use("/staff", staffRouter);
 // BML Connect calls this when a card payment changes (src/bml.ts). Public:
 // the transaction is looked up with BML before anything happens.
+// What's on: banners (filtered by audience in the app), events, discounts and
+// the seasonal look. Public and cached.
+app.get("/site/now", async (_req, res, next) => {
+  const now = await promotionsNow().catch(next);
+  if (!now) return;
+  res.set("Cache-Control", "public, max-age=60");
+  res.json({ banners: now.banners, events: now.events, discounts: now.discounts.map(({ label, percent, appliesTo, endsOn }) => ({ label, percent, appliesTo, endsOn })), season: now.season });
+});
+
 app.post("/payments/bml/webhook", (req, res) => {
   void bmlWebhook(req.body);
   res.status(200).json({ ok: true });

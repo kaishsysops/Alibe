@@ -17,6 +17,7 @@ import StaffSignIn from "./StaffSignIn";
 import OverviewScreen from "./OverviewScreen";
 import ApplicationsScreen from "./ApplicationsScreen";
 import PostsScreen from "./PostsScreen";
+import PromotionsScreen from "./PromotionsScreen";
 import { SECTIONS, SectionKey, visibleSections } from "./sections";
 import AdminReportsScreen from "../screens/AdminReportsScreen";
 import AdminDisputesScreen from "../screens/AdminDisputesScreen";
@@ -38,6 +39,7 @@ const SCREENS: Record<SectionKey, React.ComponentType<any>> = {
   Disputes: AdminDisputesScreen,
   Sellers: AdminSellersScreen,
   Payments: AdminMoneyScreen,
+  Promotions: PromotionsScreen,
   Staff: AdminStaffScreen,
   Categories: AdminCategoriesScreen,
   Ibay: AdminIbayScreen,

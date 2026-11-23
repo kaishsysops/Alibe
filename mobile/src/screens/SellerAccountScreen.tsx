@@ -15,6 +15,8 @@ import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, contentWidth } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
 import FirstTimeTip from "../components/FirstTimeTip";
+import { SiteBanners } from "../components/Seasonal";
+import { discounted, useDiscount } from "../api/SiteContext";
 
 type Period = "MONTHLY" | "YEARLY";
 const date = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "");
@@ -29,6 +31,8 @@ export default function SellerAccountScreen() {
   const focusPlans = route.params?.focus === "store-plan" || route.params?.focus === "plans";
   const scrollRef = useRef<any>(null);
   const scrolled = useRef(false);
+  const storeDiscount = useDiscount("STORE_PLAN");
+  const premiumDiscount = useDiscount("PREMIUM_PLAN");
   const toast = useToast();
   const showAlert = useAppAlert();
   const { updateUser } = useAuth();
@@ -111,8 +115,10 @@ export default function SellerAccountScreen() {
   const isStore = me.kind === "STORE";
   const storeApproved = me.store?.status === "APPROVED";
   const yearly = period === "YEARLY";
-  const storePrice = yearly ? me.prices.storeYearly : me.prices.storeMonthly;
-  const premiumPrice = yearly ? me.prices.premiumYearly : me.prices.premiumMonthly;
+  const storeBase = yearly ? me.prices.storeYearly : me.prices.storeMonthly;
+  const premiumBase = yearly ? me.prices.premiumYearly : me.prices.premiumMonthly;
+  const storePrice = discounted(storeBase, storeDiscount?.percent);
+  const premiumPrice = discounted(premiumBase, premiumDiscount?.percent);
   const per = yearly ? "year" : "month";
   const saving = (m: number, y: number) => Math.max(0, Math.round(100 - (y / (m * 12)) * 100));
   const badge = me.premium ? "PREMIUM" : me.storeLive ? "STORE" : me.verified ? "VERIFIED" : null;
@@ -127,6 +133,7 @@ export default function SellerAccountScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => (setRefreshing(true), load())} tintColor={colors.primary} />}
       >
+        <SiteBanners place="seller" />
         <FirstTimeTip id="seller-account" title="Your seller account" text="Choose whether you sell as an individual or a store, get verified (free, optional) and see the plans. The posting rules are at the bottom." topic="selling" />
 
         {/* A plan past its end date: still working, but not for long. */}
@@ -272,6 +279,8 @@ export default function SellerAccountScreen() {
             tint={colors.primary}
             name="Store"
             price={storePrice}
+            wasPrice={storeDiscount ? storeBase : undefined}
+            offer={storeDiscount?.label}
             per={per}
             save={yearly ? saving(me.prices.storeMonthly, me.prices.storeYearly) : 0}
             perks={["Your own store page with your logo", "Store badge on every item", "Shown above individual sellers"]}
@@ -287,6 +296,8 @@ export default function SellerAccountScreen() {
           tint={colors.gold}
           name="Premium"
           price={premiumPrice}
+          wasPrice={premiumDiscount ? premiumBase : undefined}
+          offer={premiumDiscount?.label}
           per={per}
           save={yearly ? saving(me.prices.premiumMonthly, me.prices.premiumYearly) : 0}
           perks={[`${me.premiumFreeBoosts} free 7-day boosts every month`, "New items featured at the top for a week", "Bump any item to the top, once a day", "Views and saves for every item", "12 photos per item, no monthly post limit", "Gold Premium badge"]}
@@ -345,7 +356,11 @@ function PlanCard({
   extra,
   highlight,
   graceUntil,
+  wasPrice,
+  offer,
 }: {
+  wasPrice?: number;
+  offer?: string;
   highlight?: boolean;
   graceUntil?: string | null;
   Icon: typeof Crown;
@@ -379,7 +394,9 @@ function PlanCard({
           {graceUntil ? <Text style={[styles.planActive, { color: colors.danger }]}>Ended · renew by {graceUntil}</Text> : activeUntil ? <Text style={[styles.planActive, { color: colors.success }]}>Active until {activeUntil}</Text> : save > 0 ? <Text style={[styles.planActive, { color: tint }]}>Save {save}% yearly</Text> : null}
         </View>
         <View style={{ alignItems: "flex-end" }}>
+          {wasPrice !== undefined && <Text style={styles.planWas}>MVR {wasPrice.toLocaleString()}</Text>}
           <Text style={styles.planPrice}>MVR {price.toLocaleString()}</Text>
+          {!!offer && <Text style={[styles.planOffer, { color: tint }]}>{offer}</Text>}
           <Text style={styles.planPer}>a {per}</Text>
         </View>
       </View>
@@ -447,6 +464,8 @@ const useStyles = makeStyles((colors) => ({
   grace: { flexDirection: "row", gap: spacing.sm + 4, alignItems: "flex-start", padding: spacing.md, borderRadius: radius.lg, backgroundColor: `${colors.danger}12`, borderWidth: 1.5, borderColor: `${colors.danger}44` },
   graceTitle: { fontSize: fontSize.base, fontWeight: fontWeight.extrabold, color: colors.text },
   graceText: { fontSize: fontSize.sm, color: colors.text, marginTop: 2, lineHeight: 19 },
+  planWas: { fontSize: fontSize.caption, color: colors.textMuted, textDecorationLine: "line-through" },
+  planOffer: { fontSize: fontSize.micro, fontWeight: fontWeight.extrabold, textTransform: "uppercase", letterSpacing: 0.4 },
   planActive: { fontSize: fontSize.caption, fontWeight: fontWeight.bold, marginTop: 2 },
   planPrice: { fontSize: fontSize.lg, fontWeight: fontWeight.extrabold, color: colors.text },
   planPer: { fontSize: fontSize.caption, color: colors.textMuted },

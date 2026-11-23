@@ -14,6 +14,8 @@ import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, controlHeight, contentWidth, cardShadow } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
 import { useSingleFlight } from "../hooks/useSingleFlight";
+import { discounted, useDiscount } from "../api/SiteContext";
+import DiscountRibbon from "../components/DiscountRibbon";
 
 const PLANS = [
   { days: 3, label: "Quick", note: "A weekend push" },
@@ -69,7 +71,10 @@ export default function BoostScreen() {
     }
   });
 
-  const price = (d: number) => config?.boostPrices[String(d) as keyof PlanPrices] ?? 0;
+  // An admin discount running on boosts (the server charges the same).
+  const discount = useDiscount("BOOST");
+  const basePrice = (d: number) => config?.boostPrices[String(d) as keyof PlanPrices] ?? 0;
+  const price = (d: number) => discounted(basePrice(d), discount?.percent);
   const perDay = (d: number) => Math.round(price(d) / d);
   const locked = me && !me.canBoost;
   const loading = !config || !me;
@@ -99,6 +104,7 @@ export default function BoostScreen() {
           </View>
         </View>
 
+        {!!discount && <DiscountRibbon label={discount.label} percent={discount.percent} />}
         <Text style={styles.title}>Get seen first</Text>
         <Text style={styles.text}>Boosted items get in front of more buyers, sooner.</Text>
 
@@ -168,7 +174,10 @@ export default function BoostScreen() {
                       {p.note} · MVR {perDay(p.days)} a day
                     </Text>
                   </View>
-                  <Text style={styles.optionPrice}>MVR {price(p.days).toLocaleString()}</Text>
+                  <View style={{ alignItems: "flex-end" }}>
+                    {!!discount && <Text style={styles.wasPrice}>MVR {basePrice(p.days).toLocaleString()}</Text>}
+                    <Text style={styles.optionPrice}>MVR {price(p.days).toLocaleString()}</Text>
+                  </View>
                   <Radio on={on} color={colors.primary} />
                 </Tap>
               );
@@ -222,6 +231,7 @@ const useStyles = makeStyles((colors) => ({
   optionTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   optionTitle: { fontSize: fontSize.base, fontWeight: fontWeight.extrabold, color: colors.text },
   optionNote: { fontSize: fontSize.caption, color: colors.textMuted, marginTop: 2 },
+  wasPrice: { fontSize: fontSize.caption, color: colors.textMuted, textDecorationLine: "line-through" },
   optionPrice: { fontSize: fontSize.base, fontWeight: fontWeight.extrabold, color: colors.text },
   popular: { paddingHorizontal: 7, height: 18, borderRadius: 9, backgroundColor: colors.primary, justifyContent: "center" },
   popularText: { fontSize: 10, fontWeight: fontWeight.extrabold, color: "#fff" },

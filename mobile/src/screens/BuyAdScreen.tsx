@@ -16,6 +16,8 @@ import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, conte
 import { useResponsive } from "../hooks/useResponsive";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import { usePersistentState } from "../hooks/usePersistentState";
+import { discounted, useDiscount } from "../api/SiteContext";
+import DiscountRibbon from "../components/DiscountRibbon";
 
 const WEBSITE = "website";
 
@@ -68,7 +70,11 @@ export default function BuyAdScreen() {
     }
   });
 
-  const price = config ? config.adPrices[String(draft.days) as keyof typeof config.adPrices] : null;
+  const discount = useDiscount("AD");
+  const basePrice = config ? config.adPrices[String(draft.days) as keyof typeof config.adPrices] : null;
+  const price = basePrice !== null ? discounted(basePrice, discount?.percent) : null;
+  // Plan prices shown after the discount.
+  const shownPrices = config ? (Object.fromEntries(Object.entries(config.adPrices).map(([k, v]) => [k, discounted(v, discount?.percent)])) as typeof config.adPrices) : null;
   const step = !draft.image || draft.title.trim().length < 3 ? 1 : !(isWebsite ? draft.url.trim().startsWith("https://") : !!draft.target) ? 2 : 3;
 
   return (
@@ -76,6 +82,7 @@ export default function BuyAdScreen() {
       {isDesktopWeb ? <WebNavBar /> : <ScreenHeader title="Advertise on Alibe" />}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          {!!discount && <DiscountRibbon label={discount.label} percent={discount.percent} />}
           <View style={styles.hero}>
             <View style={styles.heroIcon}>
               <Megaphone size={22} color="#fff" />
@@ -151,7 +158,7 @@ export default function BuyAdScreen() {
 
           <Section n={3} title="How long" done={false}>
             {config ? (
-              <PlanPicker prices={config.adPrices} days={draft.days} onChange={(days) => set({ days })} />
+              <PlanPicker prices={shownPrices!} days={draft.days} onChange={(days) => set({ days })} />
             ) : (
               <SkeletonGroup>
                 <Skeleton width="100%" height={76} rounded={radius.lg} />
@@ -164,7 +171,10 @@ export default function BuyAdScreen() {
               <Text style={styles.totalLabel}>Total</Text>
               <Text style={styles.totalSub}>{draft.days} days on the home page</Text>
             </View>
-            <Text style={styles.totalPrice}>{price !== null ? `MVR ${price.toLocaleString()}` : "..."}</Text>
+            <View style={{ alignItems: "flex-end" }}>
+              {!!discount && basePrice !== null && <Text style={{ fontSize: fontSize.sm, color: colors.textMuted, textDecorationLine: "line-through" }}>MVR {basePrice.toLocaleString()}</Text>}
+              <Text style={styles.totalPrice}>{price !== null ? `MVR ${price.toLocaleString()}` : "..."}</Text>
+            </View>
           </View>
           <Tap style={[styles.button, !ready && { opacity: 0.45 }]} onPress={() => buy()} disabled={buying || !config} scaleTo={0.97}>
             {buying ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Continue to payment</Text>}

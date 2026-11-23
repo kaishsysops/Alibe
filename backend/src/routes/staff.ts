@@ -7,6 +7,7 @@ import { deleteIdPhotos, signedIdUrl } from "./slips.js";
 import { notifyUser } from "../push.js";
 import { sendNoticeEmail } from "../messaging.js";
 import { invalidate } from "../cache.js";
+import { promotionsNow } from "../promotions.js";
 
 // The portal's API (portal.alibe.online; the admin site uses it too). Every
 // route checks the caller's role (src/roles.ts); admins pass everything.
@@ -24,7 +25,9 @@ staffRouter.get("/me", async (req, res) => {
     count(["MODERATOR"], () => prisma.report.groupBy({ by: ["listingId", "reportedUserId"], where: { resolvedAt: null } }).then((g) => g.length)),
     count(["SUPPORT", "MODERATOR"], () => prisma.order.count({ where: { status: "DISPUTED" } })),
   ]);
-  res.json({ admin: a.admin, roles: a.roles, counts: { applications, posts, reports, disputes } });
+  // What's running on the site, and notices from admins to staff.
+  const now = await promotionsNow();
+  res.json({ admin: a.admin, roles: a.roles, counts: { applications, posts, reports, disputes }, now });
 });
 
 // Tells the seller the outcome: in the app, and by email with a link to the
