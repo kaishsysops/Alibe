@@ -19,13 +19,6 @@ import { formatPhone } from "../utils/phone";
 import { WhatsAppIcon, ViberIcon } from "../components/BrandIcons";
 import AvatarPhoto from "../components/AvatarPhoto";
 import { useAuthMethods } from "../hooks/useAuthMethods";
-import { siteUrl, Site } from "../site";
-
-const openStaffSite = (site: Site) => {
-  const url = siteUrl(site);
-  if (url) Linking.openURL(url).catch(() => {});
-  else if (typeof window !== "undefined") window.open(`${window.location.origin}/?site=${site}`, "_blank");
-};
 
 export default function ProfileScreen() {
   const { phone: phoneSignIn } = useAuthMethods();
@@ -110,9 +103,6 @@ export default function ProfileScreen() {
       { icon: Ban, label: "Blocked people", onPress: () => navigation.navigate("BlockedUsers") },
     ],
     [
-      // Staff work on their own sites now: admin.alibe.online / portal.alibe.online.
-      ...(user?.isAdmin ? [{ icon: UserCog, label: "Open Alibe Admin", onPress: () => openStaffSite("admin") }] : []),
-      ...(user?.isAdmin || user?.staffRoles?.length ? [{ icon: Scale, label: "Open the staff portal", onPress: () => openStaffSite("portal") }] : []),
       { icon: ShieldCheck, label: "How Alibe keeps you safe", onPress: () => navigation.navigate("Safety") },
       { icon: Activity, label: "System status", onPress: () => navigation.navigate("Status") },
       { icon: HelpCircle, label: "Help and support", onPress: () => toast.info("Support chat is coming soon. For now, email help@alibe.mv.") },
