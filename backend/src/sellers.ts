@@ -4,10 +4,16 @@ import { moneySettings } from "./money.js";
 
 // Seller types and what each may do.
 //
-//   Individual, unverified   default. Every post waits for a Post approver,
-//                            at most 5 items up at once, no badge, no boosts.
-//   Individual, verified     ID + selfie approved: posts go live at once,
-//                            Verified badge.
+// Posting (everyone):
+//   - The first 5 posts go live straight away.
+//   - After that, posts from sellers who aren't approved wait for a Post
+//     approver. Approved sellers' posts always go live at once.
+//   - At most 30 new posts a month, unless the seller has Premium or a live
+//     Store plan (then no limit).
+//
+//   Individual, unverified   default. No badge, no boosts.
+//   Individual, verified     ID card (both sides) approved: posts skip review,
+//                            Verified badge, can boost.
 //   Store                    paid plan + approved store (business details +
 //                            owner's ID): posts go live at once, store page,
 //                            Store badge.
@@ -17,7 +23,10 @@ import { moneySettings } from "./money.js";
 // "Approved" (posts skip review) = ID-verified, or an approved store (whose
 // owner's ID was checked as part of the application).
 
-export const UNVERIFIED_LISTING_LIMIT = 5;
+// Posts anyone can make before review kicks in (for sellers who aren't approved).
+export const FREE_POSTS = 5;
+// New posts a month without Premium or a Store plan.
+export const MONTHLY_POST_LIMIT = 30;
 // What counts towards the limit: everything that's up or on its way up.
 export const LIVE_STATUSES = ["ACTIVE", "PENDING", "RESERVED"] as const;
 
@@ -75,10 +84,16 @@ export const premiumSellerIds = () =>
 
 // Everything about one seller's standing, for posting rules and their Profile.
 export async function standing(userId: string) {
-  const [user, plans, liveCount, m] = await Promise.all([
+  // Counted from the 1st of the month (Maldives is UTC+5; close enough to UTC here).
+  const monthStart = new Date();
+  monthStart.setUTCDate(1);
+  monthStart.setUTCHours(0, 0, 0, 0);
+  const [user, plans, liveCount, totalPosts, postedThisMonth, m] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { sellerKind: true, verificationStatus: true, store: true } }),
     plansFor([userId]),
     prisma.listing.count({ where: { sellerId: userId, status: { in: [...LIVE_STATUSES] }, hiddenAt: null } }),
+    prisma.listing.count({ where: { sellerId: userId, status: { not: "DRAFT" } } }),
+    prisma.listing.count({ where: { sellerId: userId, status: { not: "DRAFT" }, createdAt: { gte: monthStart } } }),
     moneySettings(),
   ]);
   if (!user) return null;
@@ -87,23 +102,27 @@ export async function standing(userId: string) {
   const storeApproved = user.store?.status === "APPROVED";
   const approved = verified || storeApproved;
   const premium = approved && !!p.premium;
+  const storeLive = storeApproved && !!p.store;
+  const unlimited = premium || storeLive;
   // Free boosts: Premium's monthly allowance, counted from the 1st.
-  const monthStart = new Date();
-  monthStart.setUTCDate(1);
-  monthStart.setUTCHours(0, 0, 0, 0);
   const freeUsed = premium ? await prisma.purchase.count({ where: { userId, kind: "BOOST", amount: 0, createdAt: { gte: monthStart } } }) : 0;
   return {
     kind: user.sellerKind,
     verified,
     approved,
     store: user.store,
-    storeLive: storeApproved && !!p.store,
+    storeLive,
     storeEndsAt: p.store,
     premium,
     premiumEndsAt: p.premium,
     liveCount,
-    // null = no limit
-    listingLimit: approved ? null : UNVERIFIED_LISTING_LIMIT,
+    // The first FREE_POSTS go live without review; after that only approved
+    // sellers skip it.
+    freePostsLeft: approved ? null : Math.max(0, FREE_POSTS - totalPosts),
+    nextPostReviewed: !approved && totalPosts >= FREE_POSTS,
+    // New posts this month, against the cap (null = no cap).
+    postedThisMonth,
+    monthlyLimit: unlimited ? null : MONTHLY_POST_LIMIT,
     canBoost: approved,
     freeBoosts: { allowance: premium ? m.premiumFreeBoosts : 0, used: freeUsed, left: premium ? Math.max(0, m.premiumFreeBoosts - freeUsed) : 0 },
   };

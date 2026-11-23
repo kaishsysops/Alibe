@@ -60,7 +60,7 @@ staffRouter.get("/applications", requireRole("SELLER_APPROVER"), async (req, res
       user: { ...a.user, store: undefined },
       store: a.kind === "STORE" ? a.user.store : null,
       // Links that work for 10 minutes; the photos are deleted once decided.
-      photos: { idFront: signedIdUrl(a.idFront), idBack: signedIdUrl(a.idBack), selfie: signedIdUrl(a.selfie) },
+      photos: { idFront: signedIdUrl(a.idFront), idBack: signedIdUrl(a.idBack) },
     }))
   );
 });
@@ -98,7 +98,8 @@ staffRouter.post("/applications/:id/decide", requireRole("SELLER_APPROVER"), asy
     throw e;
   });
   if (res.headersSent) return;
-  // Privacy: the ID and selfie photos are gone once it's decided.
+  // Privacy: the ID photos are gone once it's decided (and any selfie from
+  // before selfies were dropped).
   await deleteIdPhotos([app.idFront, app.idBack, app.selfie]);
   invalidate("home:");
   const what = app.kind === "STORE" ? "store" : "ID check";

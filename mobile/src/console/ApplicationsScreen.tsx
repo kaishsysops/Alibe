@@ -21,7 +21,7 @@ const TABS: Array<[Tab, string]> = [
   ["APPROVED", "Approved"],
   ["REJECTED", "Turned down"],
 ];
-const REASONS = ["The photos are unclear", "The ID doesn't match the selfie", "The ID is expired", "The business details don't check out"];
+const REASONS = ["The photos are unclear", "The ID number doesn't match the card", "The ID is expired", "The business details don't check out"];
 
 export default function ApplicationsScreen() {
   const styles = useStyles();
@@ -142,11 +142,10 @@ export default function ApplicationsScreen() {
                 </View>
 
                 {a.status === "PENDING" ? (
-                  (a.photos.idFront || a.photos.selfie) && (
+                  (a.photos.idFront || a.photos.idBack) && (
                     <View style={styles.photos}>
                       {photo("ID front", a.photos.idFront)}
-                      {a.photos.idBack ? photo("ID back", a.photos.idBack) : null}
-                      {photo("Selfie with ID", a.photos.selfie)}
+                      {photo("ID back", a.photos.idBack)}
                     </View>
                   )
                 ) : (

@@ -148,9 +148,7 @@ export default function ProfileScreen() {
         ))}
       </View>
 
-      <View style={{ marginBottom: spacing.md }}>
-        <PremiumPromo />
-      </View>
+      <PremiumPromo style={{ marginTop: spacing.md }} />
 
       {groups.map((items, gi) => (
         <View key={gi} style={styles.menuCard}>

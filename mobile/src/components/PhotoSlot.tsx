@@ -9,7 +9,7 @@ import Tap from "./Tap";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight } from "../theme/theme";
 
-// One photo to upload (ID front, selfie, store logo): a dashed box that
+// One photo to upload (ID card side, store logo): a dashed box that
 // becomes the picture once it's uploaded. Tap again to replace it.
 export default function PhotoSlot({
   label,
@@ -26,7 +26,7 @@ export default function PhotoSlot({
   value: string | null;
   onChange: (url: string) => void;
   Icon?: LucideIcon;
-  // Offer the camera first (selfies), on phones.
+  // Offer the camera first, on phones.
   camera?: boolean;
   square?: boolean;
   // The slot's outer box; by default it shares a row with other slots.

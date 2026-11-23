@@ -383,7 +383,7 @@ export type SellerApplicationItem = {
   decidedBy: string | null;
   user: { id: string; name: string; email: string | null; phone: string | null; avatarColor: string | null; avatarUrl: string | null; createdAt: string; verificationStatus: "NONE" | "VERIFIED" };
   store: StoreRecord | null;
-  photos: { idFront: string | null; idBack: string | null; selfie: string | null };
+  photos: { idFront: string | null; idBack: string | null };
 };
 export type StoreRecord = { id: string; name: string; slug: string; logoUrl: string | null; registrationNumber: string; status: "PENDING" | "APPROVED" | "REJECTED"; rejectReason: string | null; approvedAt: string | null };
 export type PendingPost = Listing & { sellerPublishedCount: number; sellerEmail: string | null };
@@ -401,7 +401,12 @@ export type SellerMe = {
   premium: boolean;
   premiumEndsAt: string | null;
   liveCount: number;
-  listingLimit: number | null;
+  // Posting rules: the first 5 posts go live; then sellers who aren't
+  // approved are reviewed; 30 new posts a month without Premium / Store.
+  freePostsLeft: number | null;
+  nextPostReviewed: boolean;
+  postedThisMonth: number;
+  monthlyLimit: number | null;
   canBoost: boolean;
   freeBoosts: { allowance: number; used: number; left: number };
   verifyApplication: ApplicationSummary;
@@ -409,7 +414,7 @@ export type SellerMe = {
   prices: SellerPlanPrices;
   premiumFreeBoosts: number;
 };
-export type IdPhotos = { idNumber: string; idFront: string; idBack?: string; selfie: string };
+export type IdPhotos = { idNumber: string; idFront: string; idBack: string };
 export type StorePage = { store: { name: string; slug: string; logoUrl: string | null; since: string }; owner: PublicSeller & { rating: SellerRating }; listingCount: number; listings: Listing[] };
 
 export type AdminDispute = {

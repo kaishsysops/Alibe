@@ -8,7 +8,7 @@ import { useToast } from "../components/Toast";
 import ScreenHeader from "../components/ScreenHeader";
 import WebNavBar from "../components/WebNavBar";
 import PhotoSlot from "../components/PhotoSlot";
-import IdForm, { emptyId, idPayload, idReady, IdDraft } from "../components/IdForm";
+import IdForm, { emptyId, idPayload, idMissing, missingMessage, IdDraft } from "../components/IdForm";
 import { Skeleton, SkeletonGroup } from "../components/Skeleton";
 import Tap from "../components/Tap";
 import { useSingleFlight } from "../hooks/useSingleFlight";
@@ -46,10 +46,16 @@ export default function StoreApplyScreen() {
   }, [toast]);
 
   const needsId = !!me && !me.verified;
-  const ready = name.trim().length >= 2 && !!logo && reg.trim().length >= 3 && (!needsId || idReady(id));
+  const missing = [
+    ...(name.trim().length < 2 ? ["the business name"] : []),
+    ...(!logo ? ["the logo"] : []),
+    ...(reg.trim().length < 3 ? ["the registration number"] : []),
+    ...(needsId ? idMissing(id) : []),
+  ];
+  const ready = missing.length === 0;
 
   const [submit, submitting] = useSingleFlight(async () => {
-    if (!ready) return toast.error(needsId ? "Fill in the store details and the owner's ID." : "Fill in the store name, logo and registration number.");
+    if (!ready) return toast.error(missingMessage(missing));
     try {
       await api.applyStore({ name: name.trim(), logoUrl: logo!, registrationNumber: reg.trim(), ...(needsId ? idPayload(id) : {}) });
       updateUser({ sellerKind: "STORE" });

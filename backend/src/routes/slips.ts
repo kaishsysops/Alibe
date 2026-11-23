@@ -69,7 +69,7 @@ slipsRouter.get("/:name", async (req, res) => {
   });
 });
 
-// ---- ID and selfie photos (seller applications) -------------------------------
+// ---- ID card photos (seller applications) -------------------------------
 // Same idea as slips, stricter: moved out of public uploads on submit, shown to
 // Seller approvers through links that expire in 10 minutes, and deleted as
 // soon as the application is decided.

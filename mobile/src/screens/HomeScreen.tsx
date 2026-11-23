@@ -29,6 +29,7 @@ import { spacing, radius, tabBarClearance, fontSize, fontWeight } from "../theme
 import { categoryIcons, AllCategoriesIcon } from "../theme/categoryIcons";
 import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
 import AvatarPhoto from "../components/AvatarPhoto";
+import PremiumPromo from "../components/PremiumPromo";
 
 const HERO_IMAGE = "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?w=1200&h=800&fit=crop&auto=format&q=75";
 const SELL_IMAGE = "https://images.unsplash.com/photo-1556745757-8d76bdb6984b?w=1000&h=600&fit=crop&auto=format&q=75";
@@ -244,6 +245,7 @@ export default function HomeScreen() {
                 ) : (
                   <>
                     <AdBanner />
+                    <PremiumPromo variant="banner" style={{ marginVertical: spacing.md }} />
                     {railsByCategory.slice(0, 3).map(({ category, items }) => (
                       <HomeRail
                         key={category.id}
@@ -348,6 +350,7 @@ export default function HomeScreen() {
               <HomeRail title="Recently viewed" data={recentlyViewed.slice(0, 12)} onPressItem={goToProduct} horizontalPadding={gutter} />
             )}
             <AdBanner horizontalPadding={gutter} />
+            <PremiumPromo variant="banner" style={{ marginHorizontal: gutter, marginVertical: spacing.md }} />
             {railsByCategory.map(({ category, items }, i) => (
               <React.Fragment key={category.id}>
                 <HomeRail title={category.name} data={items} onPressItem={goToProduct} onSeeAll={() => seeAllInCategory(category)} horizontalPadding={gutter} />

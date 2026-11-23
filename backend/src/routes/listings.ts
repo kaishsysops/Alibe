@@ -246,19 +246,20 @@ listingsRouter.post("/", async (req, res) => {
   }
   const block = await listingBlock(parsed.data.sellerId);
   if (block) return res.status(block.status).json({ error: block.error, code: block.code });
-  // Sellers who aren't approved yet: up to 5 items, and each waits for a Post approver.
+  // Posting rules (src/sellers.ts): the first 5 posts go live; after that,
+  // sellers who aren't approved wait for review; 30 a month without Premium/Store.
   const st = await standing(parsed.data.sellerId);
   if (!st) return res.status(404).json({ error: "Your account couldn't be found. Please sign in again." });
-  if (st.listingLimit !== null && st.liveCount >= st.listingLimit) {
+  if (st.monthlyLimit !== null && st.postedThisMonth >= st.monthlyLimit) {
     return res.status(429).json({
-      error: `Unverified sellers can have ${st.listingLimit} items up at a time. Get verified (it's free) to post more and skip the review.`,
-      code: "LISTING_LIMIT",
+      error: `You've posted ${st.monthlyLimit} items this month, the most without Premium. Premium (or a Store plan) has no limit, or post again on the 1st.`,
+      code: "MONTHLY_LIMIT",
     });
   }
   try {
     const attributes = await listingAttributes(parsed.data.categoryId, parsed.data.attributes);
     if (!attributes) return res.status(400).json({ error: "Please pick a category." });
-    const listing = await prisma.listing.create({ data: { ...parsed.data, attributes, status: st.approved ? "ACTIVE" : "PENDING" }, include: listingInclude });
+    const listing = await prisma.listing.create({ data: { ...parsed.data, attributes, status: st.nextPostReviewed ? "PENDING" : "ACTIVE" }, include: listingInclude });
     checkListingPhotosLater(listing.id);
     res.status(201).json(serializeListing(listing));
   } catch (e) {
@@ -319,7 +320,10 @@ listingsRouter.patch("/:id", async (req, res) => {
   const reviewable = existing.status === "PENDING" || existing.status === "REJECTED";
   const contentChanged = ["title", "description", "images", "price", "categoryId"].some((k) => (data as Record<string, unknown>)[k] !== undefined);
   let review: { status?: "PENDING" | "ACTIVE"; rejectReason?: null } = {};
-  if (st && !st.approved && (contentChanged || reviewable) && existing.status !== "SOLD") review = { status: "PENDING", rejectReason: null };
+  // (The first 5 posts never went through review, so editing them doesn't
+  // send them there; a post that was reviewed, or is waiting, does go back.)
+  const wasReviewed = !!existing.reviewedAt || reviewable;
+  if (st && !st.approved && wasReviewed && (contentChanged || reviewable) && existing.status !== "SOLD") review = { status: "PENDING", rejectReason: null };
   else if (st?.approved && reviewable && contentChanged) review = { status: "ACTIVE", rejectReason: null };
   if (reviewable && data.status === "ACTIVE" && review.status !== "ACTIVE") delete data.status;
   const listing = await prisma.listing.update({ where: { id: req.params.id }, data: { ...data, ...fields, attributes, ...review }, include: listingInclude });

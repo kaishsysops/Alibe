@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { View, Text } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { Crown, Rocket, Sparkles, ChevronRight, Check } from "lucide-react-native";
+import { Crown, Rocket, Sparkles, ChevronRight, Check, Infinity as InfinityIcon } from "lucide-react-native";
 import { api, SellerMe } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import Tap from "./Tap";
@@ -32,7 +32,8 @@ export function useSellerStanding() {
 
 // "Go Premium": shown to sellers who don't have it. `card` is the full pitch;
 // `banner` is one line for list screens.
-export default function PremiumPromo({ variant = "card" }: { variant?: "card" | "banner" }) {
+// `style` is for spacing around it; nothing is drawn (and no gap left) when hidden.
+export default function PremiumPromo({ variant = "card", style }: { variant?: "card" | "banner"; style?: object }) {
   const styles = useStyles();
   const { colors } = useTheme();
   const navigation = useNavigation<any>();
@@ -43,7 +44,7 @@ export default function PremiumPromo({ variant = "card" }: { variant?: "card" | 
 
   if (variant === "banner") {
     return (
-      <Tap style={styles.banner} onPress={open} scaleTo={0.98} accessibilityLabel="Go Premium">
+      <Tap style={[styles.banner, style]} onPress={open} scaleTo={0.98} accessibilityLabel="Go Premium">
         <View style={styles.bannerIcon}>
           <Crown size={16} color="#fff" fill="#fff" />
         </View>
@@ -56,7 +57,7 @@ export default function PremiumPromo({ variant = "card" }: { variant?: "card" | 
   }
 
   return (
-    <Tap style={styles.card} onPress={open} scaleTo={0.985} accessibilityLabel="Go Premium">
+    <Tap style={[styles.card, style]} onPress={open} scaleTo={0.985} accessibilityLabel="Go Premium">
       <View style={styles.glow} />
       <View style={styles.head}>
         <View style={styles.crown}>
@@ -71,6 +72,7 @@ export default function PremiumPromo({ variant = "card" }: { variant?: "card" | 
         {[
           { Icon: Rocket, text: `${me.premiumFreeBoosts} free 7-day boosts every month` },
           { Icon: Sparkles, text: "New items featured at the top for a week" },
+          { Icon: InfinityIcon, text: "No monthly post limit (others: 30 a month)" },
           { Icon: Crown, text: "Gold Premium badge on everything you sell" },
         ].map(({ Icon, text }) => (
           <View key={text} style={styles.perk}>

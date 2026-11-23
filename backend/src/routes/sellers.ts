@@ -47,23 +47,23 @@ sellersRouter.post("/kind", async (req, res) => {
 
 const idSchema = z.object({
   idNumber: z.string().trim().regex(/^[A-Za-z0-9-]{5,20}$/, "id"),
+  // Both sides of the ID card. No selfies: Alibe doesn't collect faces.
   idFront: uploadPath,
-  idBack: uploadPath.optional(),
-  selfie: uploadPath,
+  idBack: uploadPath,
 });
 
 // Moves the photos out of public uploads into private ID storage.
-async function storeIdPhotos(p: { idFront: string; idBack?: string; selfie: string }) {
-  const [idFront, idBack, selfie] = await Promise.all([makeIdPrivate(p.idFront), p.idBack ? makeIdPrivate(p.idBack) : null, makeIdPrivate(p.selfie)]);
-  if (!idFront || !selfie) return null;
-  return { idFront, idBack, selfie };
+async function storeIdPhotos(p: { idFront: string; idBack: string }) {
+  const [idFront, idBack] = await Promise.all([makeIdPrivate(p.idFront), makeIdPrivate(p.idBack)]);
+  if (!idFront || !idBack) return null;
+  return { idFront, idBack };
 }
 
 const pendingOf = (userId: string, kind: "VERIFY" | "STORE") => prisma.sellerApplication.findFirst({ where: { userId, kind, status: "PENDING" } });
 
 sellersRouter.post("/apply/verify", async (req, res) => {
   const parsed = idSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Add your ID card number, a photo of the card and a selfie holding it." });
+  if (!parsed.success) return res.status(400).json({ error: "Add your ID card number and photos of both sides of the card." });
   const userId = req.userId!;
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { verificationStatus: true } });
   if (user?.verificationStatus === "VERIFIED") return res.status(400).json({ error: "You're already verified." });
@@ -85,7 +85,6 @@ const storeSchema = z.object({
   idNumber: z.string().trim().regex(/^[A-Za-z0-9-]{5,20}$/).optional(),
   idFront: uploadPath.optional(),
   idBack: uploadPath.optional(),
-  selfie: uploadPath.optional(),
 });
 
 sellersRouter.post("/apply/store", async (req, res) => {
@@ -108,10 +107,10 @@ sellersRouter.post("/apply/store", async (req, res) => {
   if (existingStore?.status === "APPROVED") return res.status(400).json({ error: "Your store is already approved." });
   if (await pendingOf(userId, "STORE")) return res.status(409).json({ error: "Your store application is already waiting. We'll let you know soon." });
   const verified = user?.verificationStatus === "VERIFIED";
-  let photos: { idFront: string; idBack: string | null; selfie: string } | null = null;
+  let photos: { idFront: string; idBack: string } | null = null;
   if (!verified) {
-    if (!body.idNumber || !body.idFront || !body.selfie) return res.status(400).json({ error: "Add the owner's ID card number, a photo of the card and a selfie holding it." });
-    photos = await storeIdPhotos({ idFront: body.idFront, idBack: body.idBack, selfie: body.selfie });
+    if (!body.idNumber || !body.idFront || !body.idBack) return res.status(400).json({ error: "Add the owner's ID card number and photos of both sides of the card." });
+    photos = await storeIdPhotos({ idFront: body.idFront, idBack: body.idBack });
     if (!photos) return res.status(400).json({ error: "Please add the ID photos again." });
   }
   const slug = await uniqueStoreSlug(body.name, existingStore?.id);

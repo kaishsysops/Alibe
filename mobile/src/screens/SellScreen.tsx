@@ -450,24 +450,37 @@ function SellForm() {
     );
   }
 
-  // Sellers who aren't verified: posts are reviewed, 5 items at most.
-  if (step === 0 && standing && !standing.approved && standing.listingLimit) {
-    const full = standing.liveCount >= standing.listingLimit;
-    stepContent = (
-      <>
-        <Tap style={[styles.reviewBanner, full && styles.reviewBannerFull]} onPress={() => navigation.navigate("Verify")} scaleTo={0.98} accessibilityLabel="Get verified">
-          <View style={[styles.reviewIcon, full && { backgroundColor: `${colors.danger}22` }]}>
-            <ShieldCheck size={18} color={full ? colors.danger : colors.primary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.limitTitle}>{full ? `You have ${standing.liveCount} of ${standing.listingLimit} items up` : `Reviewed before it goes live · ${standing.liveCount} of ${standing.listingLimit} items`}</Text>
-            <Text style={styles.limitText}>{full ? "Mark something sold or remove it, or get verified to post without limits." : "Get verified to post instantly with no limit."}</Text>
-          </View>
-          <ChevronRight size={16} color={colors.textMuted} />
-        </Tap>
-        {stepContent}
-      </>
-    );
+  // Where this post stands under the posting rules (src/sellers.ts on the server).
+  if (step === 0 && standing) {
+    const full = standing.monthlyLimit !== null && standing.postedThisMonth >= standing.monthlyLimit;
+    const nearFull = standing.monthlyLimit !== null && standing.monthlyLimit - standing.postedThisMonth <= 5;
+    const note = full
+      ? { title: `You've posted ${standing.monthlyLimit} items this month`, text: "That's the most without Premium. Premium or a Store plan has no limit.", to: "SellerAccount", tone: "danger" as const }
+      : standing.nextPostReviewed
+        ? { title: "Our team checks this post before it goes live", text: "Usually within a few hours. Get verified to skip the wait.", to: "Verify", tone: "info" as const }
+        : standing.freePostsLeft
+          ? { title: `Goes live straight away (${standing.freePostsLeft} of 5 left)`, text: "After your first 5 posts, new ones are checked by our team unless you're verified.", to: "Verify", tone: "info" as const }
+          : nearFull
+            ? { title: `${standing.monthlyLimit! - standing.postedThisMonth} posts left this month`, text: "Premium or a Store plan has no monthly limit.", to: "SellerAccount", tone: "info" as const }
+            : null;
+    if (note) {
+      const danger = note.tone === "danger";
+      stepContent = (
+        <>
+          <Tap style={[styles.reviewBanner, danger && styles.reviewBannerFull]} onPress={() => navigation.navigate(note.to)} scaleTo={0.98}>
+            <View style={[styles.reviewIcon, danger && { backgroundColor: `${colors.danger}22` }]}>
+              <ShieldCheck size={18} color={danger ? colors.danger : colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.limitTitle}>{note.title}</Text>
+              <Text style={styles.limitText}>{note.text}</Text>
+            </View>
+            <ChevronRight size={16} color={colors.textMuted} />
+          </Tap>
+          {stepContent}
+        </>
+      );
+    }
   }
 
   // The last step: a word about Premium before they publish.
@@ -475,9 +488,7 @@ function SellForm() {
     stepContent = (
       <>
         {stepContent}
-        <View style={{ marginTop: spacing.lg }}>
-          <PremiumPromo variant="banner" />
-        </View>
+        <PremiumPromo variant="banner" style={{ marginTop: spacing.lg }} />
       </>
     );
   }

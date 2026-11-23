@@ -187,11 +187,17 @@ On a dev machine, open the app with `?site=admin` or `?site=portal`.
 
 - **Individual** (default) or **Store**, chosen at sign-up or in Profile >
   Seller account. Businesses must register as a store.
-- **Verification is optional.** Unverified sellers: every post waits for a Post
-  approver, at most 5 items up at once, no badge, no boosts. Verified sellers
-  and approved stores post instantly.
-- **Stores** send a name, logo, registration number and the owner's ID +
-  selfie. ID photos are private (signed 10-minute links for approvers) and are
+- **Posting rules** (`backend/src/sellers.ts`):
+  1. Everyone's first 5 posts go live straight away.
+  2. After that, posts from sellers who aren't verified wait for a Post
+     approver. Verified sellers and approved stores always post instantly.
+  3. At most 30 new posts a month, unless the seller has Premium or a live
+     Store plan (no limit).
+- **Verification is optional:** ID card number plus photos of both sides of the
+  card (no selfie: Alibe doesn't collect faces). It skips the review, adds the blue tick and
+  unlocks boosts and Premium.
+- **Stores** send a name, logo, registration number and the owner's ID (both
+  sides, no selfie). ID photos are private (signed 10-minute links for approvers) and are
   deleted as soon as a decision is made; only the last 4 characters of the ID
   number are kept.
 - **Plans** (prices in Admin > Payments): *Store* (store page, Store badge,

@@ -1,17 +1,29 @@
 import React from "react";
 import { View, Text, TextInput } from "react-native";
-import { Lock, IdCard, ScanFace } from "lucide-react-native";
+import { Lock, IdCard } from "lucide-react-native";
 import type { IdPhotos } from "../api/client";
 import PhotoSlot from "./PhotoSlot";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, controlHeight } from "../theme/theme";
 
-export type IdDraft = { idNumber: string; idFront: string | null; idBack: string | null; selfie: string | null };
-export const emptyId: IdDraft = { idNumber: "", idFront: null, idBack: null, selfie: null };
-export const idReady = (d: IdDraft) => d.idNumber.trim().length >= 5 && !!d.idFront && !!d.selfie;
-export const idPayload = (d: IdDraft): IdPhotos => ({ idNumber: d.idNumber.trim(), idFront: d.idFront!, ...(d.idBack ? { idBack: d.idBack } : {}), selfie: d.selfie! });
+export type IdDraft = { idNumber: string; idFront: string | null; idBack: string | null };
+export const emptyId: IdDraft = { idNumber: "", idFront: null, idBack: null };
+// Both sides of the card. No selfies: Alibe doesn't collect faces.
+export const idReady = (d: IdDraft) => d.idNumber.trim().length >= 5 && !!d.idFront && !!d.idBack;
+// What's still missing, in words ("the back of the ID card"), for error messages.
+export function idMissing(d: IdDraft) {
+  const out: string[] = [];
+  if (d.idNumber.trim().length < 5) out.push("the ID card number (at least 5 letters or numbers)");
+  if (!d.idFront) out.push("a photo of the front of the ID card");
+  if (!d.idBack) out.push("a photo of the back of the ID card");
+  return out;
+}
+export const missingMessage = (items: string[]) =>
+  `Still needed: ${items.length > 1 ? `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}` : items[0]}.`;
 
-// ID number, the card's photos and a selfie holding it. Shared by the
+export const idPayload = (d: IdDraft): IdPhotos => ({ idNumber: d.idNumber.trim(), idFront: d.idFront!, idBack: d.idBack! });
+
+// ID number and both sides of the card. Shared by the
 // "Verify your identity" and "Register a store" screens.
 export default function IdForm({ value, onChange }: { value: IdDraft; onChange: (d: IdDraft) => void }) {
   const styles = useStyles();
@@ -33,11 +45,7 @@ export default function IdForm({ value, onChange }: { value: IdDraft; onChange: 
       </View>
       <View style={styles.row}>
         <PhotoSlot label="Front of ID" value={value.idFront} onChange={(idFront) => onChange({ ...value, idFront })} Icon={IdCard} />
-        <PhotoSlot label="Back of ID" hint="Optional" value={value.idBack} onChange={(idBack) => onChange({ ...value, idBack })} Icon={IdCard} />
-      </View>
-      <View style={styles.row}>
-        <PhotoSlot label="Selfie holding your ID" hint="Your face and the card both clear" value={value.selfie} onChange={(selfie) => onChange({ ...value, selfie })} Icon={ScanFace} camera />
-        <View style={{ flex: 1, minWidth: 140 }} />
+        <PhotoSlot label="Back of ID" value={value.idBack} onChange={(idBack) => onChange({ ...value, idBack })} Icon={IdCard} />
       </View>
       <View style={styles.privacy}>
         <Lock size={15} color={colors.success} />
