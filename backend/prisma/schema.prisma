@@ -179,6 +179,8 @@ model Listing {
   // Post approval for sellers who aren't approved yet.
   rejectReason  String?
   reviewedAt    DateTime?
+  // Why the risk checks held it for review (src/postRisk.ts).
+  holdReason    String?
   favoritedBy   Favorite[]
   conversations Conversation[]
   reviews       Review[]

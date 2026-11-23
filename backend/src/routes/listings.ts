@@ -11,6 +11,7 @@ import { boostedListingIds } from "./purchases.js";
 import { cached } from "../cache.js";
 import { categoryIndex, cleanAttributes, descendants, effectiveAttributes } from "../categories.js";
 import { checkListingPhotosLater } from "../photoHash.js";
+import { postHoldReason } from "../postRisk.js";
 import { premiumSellerIds, sellerBadges, standing } from "../sellers.js";
 
 const DEFAULT_LIMIT = 40;
@@ -246,8 +247,9 @@ listingsRouter.post("/", async (req, res) => {
   }
   const block = await listingBlock(parsed.data.sellerId);
   if (block) return res.status(block.status).json({ error: block.error, code: block.code });
-  // Posting rules (src/sellers.ts): the first 5 posts go live; after that,
-  // sellers who aren't approved wait for review; 30 a month without Premium/Store.
+  // Posting rules (src/sellers.ts, src/postRisk.ts): posts go live at once
+  // unless a risk check holds one for review (never for verified sellers and
+  // approved stores); 30 new posts a month without Premium or a Store plan.
   const st = await standing(parsed.data.sellerId);
   if (!st) return res.status(404).json({ error: "Your account couldn't be found. Please sign in again." });
   if (st.monthlyLimit !== null && st.postedThisMonth >= st.monthlyLimit) {
@@ -259,7 +261,8 @@ listingsRouter.post("/", async (req, res) => {
   try {
     const attributes = await listingAttributes(parsed.data.categoryId, parsed.data.attributes);
     if (!attributes) return res.status(400).json({ error: "Please pick a category." });
-    const listing = await prisma.listing.create({ data: { ...parsed.data, attributes, status: st.nextPostReviewed ? "PENDING" : "ACTIVE" }, include: listingInclude });
+    const holdReason = st.approved ? null : await postHoldReason(parsed.data.sellerId, parsed.data);
+    const listing = await prisma.listing.create({ data: { ...parsed.data, attributes, status: holdReason ? "PENDING" : "ACTIVE", holdReason }, include: listingInclude });
     checkListingPhotosLater(listing.id);
     res.status(201).json(serializeListing(listing));
   } catch (e) {
@@ -313,18 +316,27 @@ listingsRouter.patch("/:id", async (req, res) => {
   const categoryId = data.categoryId ?? existing.categoryId;
   const attributes = data.attributes !== undefined || data.categoryId ? await listingAttributes(categoryId, data.attributes ?? existing.attributes) : undefined;
   if (attributes === null) return res.status(400).json({ error: "Please pick a category." });
-  // Review rules: a seller who isn't approved sends edited posts back to the
-  // queue (so an approved post can't be edited into something else), and
-  // nobody publishes their own pending or rejected post.
+  // Review rules for sellers who aren't approved: a waiting or turned-down
+  // post goes (back) to the queue when edited; a live post is checked again
+  // and held only if the edit trips a risk check. Nobody publishes their own
+  // pending or rejected post.
   const st = await standing(existing.sellerId);
   const reviewable = existing.status === "PENDING" || existing.status === "REJECTED";
   const contentChanged = ["title", "description", "images", "price", "categoryId"].some((k) => (data as Record<string, unknown>)[k] !== undefined);
-  let review: { status?: "PENDING" | "ACTIVE"; rejectReason?: null } = {};
-  // (The first 5 posts never went through review, so editing them doesn't
-  // send them there; a post that was reviewed, or is waiting, does go back.)
-  const wasReviewed = !!existing.reviewedAt || reviewable;
-  if (st && !st.approved && wasReviewed && (contentChanged || reviewable) && existing.status !== "SOLD") review = { status: "PENDING", rejectReason: null };
-  else if (st?.approved && reviewable && contentChanged) review = { status: "ACTIVE", rejectReason: null };
+  let review: { status?: "PENDING" | "ACTIVE"; rejectReason?: null; holdReason?: string | null } = {};
+  if (st && !st.approved && existing.status !== "SOLD") {
+    if (reviewable) {
+      review = { status: "PENDING", rejectReason: null, holdReason: existing.status === "REJECTED" ? "Edited after being turned down" : existing.holdReason };
+    } else if (contentChanged) {
+      const holdReason = await postHoldReason(existing.sellerId, {
+        title: data.title ?? existing.title,
+        description: data.description ?? existing.description,
+        price: data.price ?? existing.price,
+        categoryId: data.categoryId ?? existing.categoryId,
+      });
+      if (holdReason) review = { status: "PENDING", holdReason };
+    }
+  } else if (st?.approved && reviewable && contentChanged) review = { status: "ACTIVE", rejectReason: null, holdReason: null };
   if (reviewable && data.status === "ACTIVE" && review.status !== "ACTIVE") delete data.status;
   const listing = await prisma.listing.update({ where: { id: req.params.id }, data: { ...data, ...fields, attributes, ...review }, include: listingInclude });
   if (alert && listing.status === "ACTIVE" && !listing.hiddenAt) {

@@ -1,6 +1,7 @@
 import path from "node:path";
 import sharp from "sharp";
 import { prisma } from "./db.js";
+import { standing } from "./sellers.js";
 import { UPLOAD_DIR } from "./routes/uploads.js";
 
 // Duplicate and stolen photo detection. Each listing photo gets a 64-bit
@@ -69,6 +70,12 @@ export async function checkListingPhotos(listingId: string) {
       update: { details, resolvedAt: null },
       create: { reporterId, listingId, reportedUserId: null, reason: "SCAM", details },
     });
+    // A seller who isn't verified can't use someone else's photos to get a
+    // post live: it goes to the review queue.
+    const st = await standing(listing.sellerId);
+    if (st && !st.approved) {
+      await prisma.listing.updateMany({ where: { id: listingId, status: "ACTIVE" }, data: { status: "PENDING", holdReason: "Its photos match another seller's listing" } });
+    }
     return; // one report per listing is enough
   }
 }

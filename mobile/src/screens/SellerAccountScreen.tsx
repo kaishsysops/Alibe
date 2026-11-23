@@ -149,14 +149,8 @@ export default function SellerAccountScreen() {
             </View>
           )}
           <View style={styles.perkRow}>
-            {me.nextPostReviewed ? <Clock size={15} color={colors.primary} /> : <Check size={15} color={colors.success} strokeWidth={3} />}
-            <Text style={styles.perkInline}>
-              {me.approved
-                ? "Your posts go live straight away"
-                : me.freePostsLeft
-                  ? `Next ${me.freePostsLeft} ${me.freePostsLeft === 1 ? "post goes" : "posts go"} live straight away; after that they're checked first`
-                  : "New posts are checked by our team first (get verified to skip this)"}
-            </Text>
+            <Check size={15} color={colors.success} strokeWidth={3} />
+            <Text style={styles.perkInline}>{me.approved ? "Your posts always go live straight away" : "Your posts go live straight away, unless something needs a quick check"}</Text>
           </View>
         </View>
 
@@ -200,7 +194,7 @@ export default function SellerAccountScreen() {
                     ? "We'll tell you once it's done."
                     : me.verifyApplication?.status === "REJECTED"
                       ? `Not approved: ${me.verifyApplication.note ?? ""} Tap to try again.`
-                      : "Optional. Your posts skip the review after your first 5."}
+                      : "Optional. Verified sellers' posts never wait for a check."}
               </Text>
             </View>
             {me.verifyApplication?.status === "PENDING" ? <Clock size={18} color={colors.primary} /> : <ChevronRight size={18} color={colors.textMuted} />}
@@ -273,8 +267,8 @@ export default function SellerAccountScreen() {
         <View style={styles.rules}>
           <Text style={styles.rulesTitle}>How selling on Alibe works</Text>
           {[
-            ["1", "Your first 5 posts go live straight away."],
-            ["2", "After that, our team checks each new post before it goes live, usually within a few hours. Verified sellers and approved stores skip this."],
+            ["1", "Your posts go live straight away."],
+            ["2", "Now and then our team checks a post first (for example a link, a bank number or a very new account selling phones). It's usually done within a few hours, and you'll be told either way. Verified sellers and stores never wait."],
             ["3", "Getting verified is free and optional: send photos of both sides of your ID card, and it also unlocks boosts and the blue tick."],
             ["4", "Up to 30 new posts a month. Premium and Store plans have no limit."],
             ["5", "Businesses must sell as a store (a paid plan). Staff ban shops posing as individuals."],

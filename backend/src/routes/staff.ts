@@ -89,7 +89,7 @@ staffRouter.post("/applications/:id/decide", requireRole("SELLER_APPROVER"), asy
       await tx.user.update({ where: { id: app.userId }, data: { verificationStatus: "VERIFIED", verifiedAt: now } });
       if (app.kind === "STORE") await tx.store.update({ where: { userId: app.userId }, data: { status: "APPROVED", approvedAt: now, rejectReason: null } });
       // Posts waiting from this seller go live: they're approved now.
-      await tx.listing.updateMany({ where: { sellerId: app.userId, status: "PENDING" }, data: { status: "ACTIVE", reviewedAt: now } });
+      await tx.listing.updateMany({ where: { sellerId: app.userId, status: "PENDING" }, data: { status: "ACTIVE", reviewedAt: now, holdReason: null } });
     } else if (app.kind === "STORE") {
       await tx.store.update({ where: { userId: app.userId }, data: { status: "REJECTED", rejectReason: reason } });
     }
@@ -116,7 +116,7 @@ staffRouter.post("/applications/:id/decide", requireRole("SELLER_APPROVER"), asy
   res.status(204).send();
 });
 
-// ---- posts waiting for review (Post approver) ----------------------------------
+// ---- posts held for review (Post approver): see src/postRisk.ts ----------------------------------
 
 staffRouter.get("/posts", requireRole("POST_APPROVER"), async (_req, res) => {
   const listings = await prisma.listing.findMany({ where: { status: "PENDING", hiddenAt: null }, include: listingInclude, orderBy: { updatedAt: "asc" }, take: 60 });
@@ -140,7 +140,7 @@ staffRouter.post("/posts/:id/decide", requireRole("POST_APPROVER"), async (req, 
   if (!listing) return res.status(404).json({ error: "That post no longer exists." });
   const changed = await prisma.listing.updateMany({
     where: { id: listing.id, status: "PENDING" },
-    data: approve ? { status: "ACTIVE", reviewedAt: new Date(), rejectReason: null, createdAt: new Date() } : { status: "REJECTED", reviewedAt: new Date(), rejectReason: reason },
+    data: approve ? { status: "ACTIVE", reviewedAt: new Date(), rejectReason: null, holdReason: null, createdAt: new Date() } : { status: "REJECTED", reviewedAt: new Date(), rejectReason: reason },
   });
   if (!changed.count) return res.status(409).json({ error: "Someone already decided this one." });
   invalidate("home:");

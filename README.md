@@ -187,12 +187,21 @@ On a dev machine, open the app with `?site=admin` or `?site=portal`.
 
 - **Individual** (default) or **Store**, chosen at sign-up or in Profile >
   Seller account. Businesses must register as a store.
-- **Posting rules** (`backend/src/sellers.ts`):
-  1. Everyone's first 5 posts go live straight away.
-  2. After that, posts from sellers who aren't verified wait for a Post
-     approver. Verified sellers and approved stores always post instantly.
+- **Posting rules** (`backend/src/sellers.ts`, `backend/src/postRisk.ts`):
+  1. Posts go live at once. Staff don't review everything: a post from a
+     seller who isn't verified is held for a Post approver only when a risk
+     check trips (approvers see the reason):
+     - the text reads like a scam: pay up front, gift cards/crypto, links,
+       bank account numbers (the same patterns as the chat warnings)
+     - the seller has open reports, or had a post turned down in 30 days
+     - an account under 3 days old selling electronics, vehicles or property,
+       or anything at MVR 10,000+
+     - its photos match another seller's listing (checked just after posting)
+  2. Editing a live post runs the checks again; an edited turned-down post
+     goes back to the queue. Verified sellers and approved stores are never held.
   3. At most 30 new posts a month, unless the seller has Premium or a live
      Store plan (no limit).
+  4. Anything that slips through: 3 reports hide a listing until staff look.
 - **Verification is optional:** ID card number plus photos of both sides of the
   card (no selfie: Alibe doesn't collect faces). It skips the review, adds the blue tick and
   unlocks boosts and Premium.

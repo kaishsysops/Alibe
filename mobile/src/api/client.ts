@@ -235,6 +235,8 @@ export type Listing = {
   // PENDING: waiting for a Post approver; REJECTED: turned down (rejectReason).
   status: "ACTIVE" | "RESERVED" | "SOLD" | "DRAFT" | "PENDING" | "REJECTED";
   rejectReason?: string | null;
+  // Why a risk check held it for review (shown to Post approvers).
+  holdReason?: string | null;
   images: string[];
   deliveryOptions: DeliveryOption[];
   deliveryNote: string | null;
@@ -401,10 +403,8 @@ export type SellerMe = {
   premium: boolean;
   premiumEndsAt: string | null;
   liveCount: number;
-  // Posting rules: the first 5 posts go live; then sellers who aren't
-  // approved are reviewed; 30 new posts a month without Premium / Store.
-  freePostsLeft: number | null;
-  nextPostReviewed: boolean;
+  // Posting rules: posts go live at once (a risk check may hold one for
+  // review); 30 new posts a month without Premium / Store.
   postedThisMonth: number;
   monthlyLimit: number | null;
   canBoost: boolean;

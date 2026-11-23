@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { View, Text, ScrollView, TextInput, ActivityIndicator, RefreshControl } from "react-native";
 import { Image } from "expo-image";
-import { ClipboardCheck, MapPin, User } from "lucide-react-native";
+import { ClipboardCheck, MapPin, User, AlertTriangle } from "lucide-react-native";
 import { api, errorMessage, mediaUrl, PendingPost } from "../api/client";
 import { useToast } from "../components/Toast";
 import { useConsole } from "../components/ConsoleContext";
@@ -12,7 +12,7 @@ import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight } from
 import { timeAgo } from "../utils/time";
 import { useConsolePage } from "./layout";
 
-// Post approvers: items from sellers who aren't verified, oldest first. One
+// Post approvers: posts a risk check held back (backend/src/postRisk.ts), oldest first. One
 // tap approves; turning down needs a reason the seller sees.
 const REASONS = ["This item isn't allowed on Alibe", "Wrong category", "The photos don't show the item", "The description is misleading", "Looks like a business: please register as a store"];
 
@@ -63,7 +63,7 @@ export default function PostsScreen() {
 
   return (
     <ScrollView contentContainerStyle={[styles.list, page]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => (setRefreshing(true), load())} />}>
-      {posts.length === 0 && <EmptyState icon={ClipboardCheck} title="Nothing to approve" message="Posts from sellers who aren't verified show up here." />}
+      {posts.length === 0 && <EmptyState icon={ClipboardCheck} title="Nothing to approve" message="Posts only land here when a risk check holds one back." />}
       {posts.map((p) => (
         <View key={p.id} style={styles.card}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
@@ -72,6 +72,12 @@ export default function PostsScreen() {
             )}
           </ScrollView>
           <View style={styles.body}>
+            {!!p.holdReason && (
+              <View style={styles.hold}>
+                <AlertTriangle size={14} color={colors.gold} />
+                <Text style={styles.holdText}>Held because: {p.holdReason}</Text>
+              </View>
+            )}
             <View style={styles.titleRow}>
               <Text style={styles.title}>{p.title}</Text>
               <Text style={styles.price}>MVR {p.price.toLocaleString()}</Text>
@@ -143,6 +149,8 @@ const useStyles = makeStyles((colors) => ({
   photo: { width: 140, height: 140, borderRadius: radius.md, backgroundColor: colors.background },
   noPhoto: { alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   body: { gap: 6 },
+  hold: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: `${colors.gold}1F`, marginBottom: 2 },
+  holdText: { fontSize: fontSize.caption, fontWeight: fontWeight.bold, color: colors.text },
   titleRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.md },
   title: { flex: 1, fontSize: fontSize.lg, fontWeight: fontWeight.extrabold, color: colors.text },
   price: { fontSize: fontSize.lg, fontWeight: fontWeight.extrabold, color: colors.primary },

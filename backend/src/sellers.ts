@@ -5,9 +5,9 @@ import { moneySettings } from "./money.js";
 // Seller types and what each may do.
 //
 // Posting (everyone):
-//   - The first 5 posts go live straight away.
-//   - After that, posts from sellers who aren't approved wait for a Post
-//     approver. Approved sellers' posts always go live at once.
+//   - Posts go live at once. A post from a seller who isn't approved is held
+//     for a Post approver only if a risk check trips (src/postRisk.ts).
+//     Approved sellers' posts always go live.
 //   - At most 30 new posts a month, unless the seller has Premium or a live
 //     Store plan (then no limit).
 //
@@ -23,8 +23,6 @@ import { moneySettings } from "./money.js";
 // "Approved" (posts skip review) = ID-verified, or an approved store (whose
 // owner's ID was checked as part of the application).
 
-// Posts anyone can make before review kicks in (for sellers who aren't approved).
-export const FREE_POSTS = 5;
 // New posts a month without Premium or a Store plan.
 export const MONTHLY_POST_LIMIT = 30;
 // What counts towards the limit: everything that's up or on its way up.
@@ -88,11 +86,10 @@ export async function standing(userId: string) {
   const monthStart = new Date();
   monthStart.setUTCDate(1);
   monthStart.setUTCHours(0, 0, 0, 0);
-  const [user, plans, liveCount, totalPosts, postedThisMonth, m] = await Promise.all([
+  const [user, plans, liveCount, postedThisMonth, m] = await Promise.all([
     prisma.user.findUnique({ where: { id: userId }, select: { sellerKind: true, verificationStatus: true, store: true } }),
     plansFor([userId]),
     prisma.listing.count({ where: { sellerId: userId, status: { in: [...LIVE_STATUSES] }, hiddenAt: null } }),
-    prisma.listing.count({ where: { sellerId: userId, status: { not: "DRAFT" } } }),
     prisma.listing.count({ where: { sellerId: userId, status: { not: "DRAFT" }, createdAt: { gte: monthStart } } }),
     moneySettings(),
   ]);
@@ -116,10 +113,6 @@ export async function standing(userId: string) {
     premium,
     premiumEndsAt: p.premium,
     liveCount,
-    // The first FREE_POSTS go live without review; after that only approved
-    // sellers skip it.
-    freePostsLeft: approved ? null : Math.max(0, FREE_POSTS - totalPosts),
-    nextPostReviewed: !approved && totalPosts >= FREE_POSTS,
     // New posts this month, against the cap (null = no cap).
     postedThisMonth,
     monthlyLimit: unlimited ? null : MONTHLY_POST_LIMIT,

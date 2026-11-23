@@ -20,7 +20,7 @@ import { timeAgo } from "../utils/time";
 // Optional ID check. Verified sellers post without waiting for review, have
 // no listing limit, can buy boosts and get the blue tick.
 const PERKS = [
-  { Icon: Zap, title: "Posts go live instantly", text: "After your first 5 posts, unverified sellers wait for our team to check each one." },
+  { Icon: Zap, title: "Never wait for a check", text: "Your posts always go live straight away." },
   { Icon: InfinityIcon, title: "The blue tick", text: "Buyers see you're a real, ID-checked person." },
   { Icon: Rocket, title: "Boosts and Premium", text: "Put items at the top, and unlock Premium." },
 ];

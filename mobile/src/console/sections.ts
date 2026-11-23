@@ -21,7 +21,7 @@ export type Section = {
 export const SECTIONS: Section[] = [
   { key: "Overview", path: "", title: "Overview", blurb: "What's waiting for you.", Icon: LayoutDashboard, roles: ["SELLER_APPROVER", "POST_APPROVER", "MODERATOR", "SUPPORT"] },
   { key: "Applications", path: "applications", title: "Seller applications", blurb: "ID checks and stores waiting for approval.", Icon: BadgeCheck, roles: ["SELLER_APPROVER"], count: "applications" },
-  { key: "Posts", path: "posts", title: "Posts to approve", blurb: "Items from sellers who aren't verified yet.", Icon: ClipboardCheck, roles: ["POST_APPROVER"], count: "posts" },
+  { key: "Posts", path: "posts", title: "Posts to approve", blurb: "Posts a risk check held back. Everything else is already live.", Icon: ClipboardCheck, roles: ["POST_APPROVER"], count: "posts" },
   { key: "Reports", path: "reports", title: "Reports", blurb: "What people have flagged.", Icon: Flag, roles: ["MODERATOR"], count: "reports" },
   { key: "Disputes", path: "disputes", title: "Disputes", blurb: "Orders where buyer and seller disagree.", Icon: Scale, roles: ["SUPPORT", "MODERATOR"], count: "disputes" },
   { key: "Sellers", path: "sellers", title: "Sellers", blurb: "Look up anyone who sells.", Icon: Users, roles: ["SUPPORT", "SELLER_APPROVER", "MODERATOR"] },

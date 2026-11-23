@@ -456,13 +456,9 @@ function SellForm() {
     const nearFull = standing.monthlyLimit !== null && standing.monthlyLimit - standing.postedThisMonth <= 5;
     const note = full
       ? { title: `You've posted ${standing.monthlyLimit} items this month`, text: "That's the most without Premium. Premium or a Store plan has no limit.", to: "SellerAccount", tone: "danger" as const }
-      : standing.nextPostReviewed
-        ? { title: "Our team checks this post before it goes live", text: "Usually within a few hours. Get verified to skip the wait.", to: "Verify", tone: "info" as const }
-        : standing.freePostsLeft
-          ? { title: `Goes live straight away (${standing.freePostsLeft} of 5 left)`, text: "After your first 5 posts, new ones are checked by our team unless you're verified.", to: "Verify", tone: "info" as const }
-          : nearFull
-            ? { title: `${standing.monthlyLimit! - standing.postedThisMonth} posts left this month`, text: "Premium or a Store plan has no monthly limit.", to: "SellerAccount", tone: "info" as const }
-            : null;
+      : nearFull
+        ? { title: `${standing.monthlyLimit! - standing.postedThisMonth} posts left this month`, text: "Premium or a Store plan has no monthly limit.", to: "SellerAccount", tone: "info" as const }
+        : null;
     if (note) {
       const danger = note.tone === "danger";
       stepContent = (
