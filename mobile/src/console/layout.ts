@@ -21,9 +21,9 @@ export function useConsoleColumn() {
   return { width: "100%" as const, maxWidth: CONSOLE_WIDTH + pad * 2, alignSelf: "center" as const, paddingHorizontal: pad };
 }
 
-// The same column for a scroll view's content, also centred top to bottom:
-// a short page sits in the middle of the screen, a long one scrolls as usual.
+// The same column for a scroll view's content. Content starts at the top;
+// it fills the height so an empty-state message can centre itself in it.
 export function useConsolePage() {
   const column = useConsoleColumn();
-  return column && { ...column, flexGrow: 1, justifyContent: "center" as const };
+  return column && { ...column, flexGrow: 1 };
 }

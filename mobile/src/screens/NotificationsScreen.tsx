@@ -166,7 +166,7 @@ export default function NotificationsScreen() {
       renderItem={renderItem}
       stickySectionHeadersEnabled={false}
       renderSectionHeader={({ section }: any) => <Text style={styles.section}>{section.title}</Text>}
-      contentContainerStyle={{ paddingHorizontal: isDesktopWeb ? 0 : gutter, paddingBottom: spacing.xl, flexGrow: 1, justifyContent: "center" }}
+      contentContainerStyle={{ paddingHorizontal: isDesktopWeb ? 0 : gutter, paddingBottom: spacing.xl, flexGrow: 1 }}
       ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
       ListHeaderComponent={
         data.items.length ? (

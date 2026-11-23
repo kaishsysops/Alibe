@@ -426,7 +426,7 @@ function PlanCard({
 
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
-  scroll: { paddingVertical: spacing.md, paddingBottom: spacing.xl, gap: spacing.md, width: "100%", maxWidth: contentWidth.form, alignSelf: "center", flexGrow: 1, justifyContent: "center" },
+  scroll: { paddingVertical: spacing.md, paddingBottom: spacing.xl, gap: spacing.md, width: "100%", maxWidth: contentWidth.form, alignSelf: "center", flexGrow: 1 },
   hero: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.md + 4, gap: spacing.md, ...cardShadow },
   heroTop: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   heroLabel: { fontSize: fontSize.caption, fontWeight: fontWeight.bold, color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.6 },

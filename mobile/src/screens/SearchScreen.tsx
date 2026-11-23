@@ -872,7 +872,19 @@ export default function SearchScreen() {
     </View>
   );
 
-  const empty = (
+  // Just a category picked, nothing else: the category itself is empty.
+  const emptyCategory = !query.trim() && !!categorySlug && activeFilterCount === 0;
+  const empty = emptyCategory ? (
+    <EmptyState
+      icon={SearchX}
+      title={`Nothing in ${activeCategory?.name ?? "this category"} yet`}
+      message="Be the first to sell something here, or see everything for sale."
+      actionLabel="Sell something here"
+      onAction={() => navigation.navigate("Tabs", { screen: "SellTab" })}
+      secondaryLabel="See everything"
+      onSecondary={clearAll}
+    />
+  ) : (
     <EmptyState
       icon={SearchX}
       title={sellers.length > 0 ? "No items match" : "No matches"}

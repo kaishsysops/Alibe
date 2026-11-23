@@ -113,7 +113,7 @@ export default function OrdersScreen() {
       sections={sections}
       keyExtractor={(o) => o.id}
       stickySectionHeadersEnabled={false}
-      contentContainerStyle={{ paddingHorizontal: isDesktopWeb ? 0 : gutter, paddingBottom: spacing.xl, flexGrow: 1, justifyContent: "center" }}
+      contentContainerStyle={{ paddingHorizontal: isDesktopWeb ? 0 : gutter, paddingBottom: spacing.xl, flexGrow: 1 }}
       ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
       renderSectionHeader={({ section }) => (
         <View style={styles.sectionHead}>

@@ -307,7 +307,7 @@ export default function PurchasesScreen() {
 
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
-  list: { paddingVertical: spacing.md, gap: spacing.md, width: "100%", maxWidth: contentWidth.list, alignSelf: "center", flexGrow: 1, justifyContent: "center" },
+  list: { paddingVertical: spacing.md, gap: spacing.md, width: "100%", maxWidth: contentWidth.list, alignSelf: "center", flexGrow: 1 },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.md, ...cardShadow },
   kind: { fontSize: fontSize.caption, fontWeight: fontWeight.bold, color: colors.primary },
   title: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.text, marginTop: 2 },

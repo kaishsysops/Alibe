@@ -18,6 +18,7 @@ import Tap from "../components/Tap";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
+import EmptyState from "../components/EmptyState";
 
 // Browsing categories one level at a time: a banner in the category's colour,
 // then its subcategories as photo tiles. Tap a tile with more inside to go
@@ -86,7 +87,7 @@ export default function CategoriesScreen() {
       {/* White clock and battery on the coloured banner. */}
       {focused && <StatusBar style="light" />}
       <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: spacing.xl + insets.bottom }}
+        contentContainerStyle={{ paddingBottom: spacing.xl + insets.bottom, flexGrow: 1 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => (setRefreshing(true), load())} tintColor="#fff" />}
       >
         <LinearGradient colors={[look.color, shade(look.color, 0.35)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.hero, { paddingTop: (isDesktopWeb ? spacing.lg : insets.top + spacing.sm) }]}>
@@ -118,20 +119,33 @@ export default function CategoriesScreen() {
                 </Text>
               </View>
             </View>
+            {(!here || total > 0) && (
             <Tap style={styles.seeAll} onPress={() => shop(here)} scaleTo={0.96} accessibilityLabel={here ? `See all ${total} items in ${here.name}` : "See everything for sale"}>
               <Text style={[styles.seeAllText, { color: look.color }]}>{here ? `See all ${total.toLocaleString()} items` : "See everything for sale"}</Text>
               <ChevronRight size={18} color={look.color} strokeWidth={2.6} />
             </Tap>
+            )}
           </View>
         </LinearGradient>
 
-        <View style={[styles.body, { paddingHorizontal: gutter }]}>
+        <View style={[styles.body, { paddingHorizontal: gutter, flexGrow: 1, justifyContent: here && total === 0 ? "center" : "flex-start" }]}>
           {!categories ? (
             <View style={styles.grid}>
               {Array.from({ length: 6 }).map((_, i) => (
                 <Skeleton key={i} width={tileWidth} height={tileHeight} rounded={radius.lg} />
               ))}
             </View>
+          ) : here && total === 0 ? (
+            // Nothing for sale in this category yet: say so, and offer a way on.
+            <EmptyState
+              icon={look.Icon}
+              title={`Nothing in ${here.name} yet`}
+              message="Be the first to sell something here, or look around the rest of Alibe."
+              actionLabel="Sell something here"
+              onAction={() => navigation.navigate("Tabs", { screen: "SellTab" })}
+              secondaryLabel="Browse everything"
+              onSecondary={() => shop(undefined)}
+            />
           ) : (
             <View style={styles.grid}>
               {children.map((c, i) => {

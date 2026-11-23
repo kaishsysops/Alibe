@@ -33,7 +33,7 @@ export default function EmptyState({
   const { colors } = useTheme();
   const accent = tone === "error" ? colors.danger : colors.primary;
   return (
-    <FadeIn style={[styles.container, compact && { paddingVertical: spacing.lg }]}>
+    <FadeIn style={[styles.container, !compact && styles.fill, compact && { paddingVertical: spacing.lg }]}>
       <Float>
         <View style={[styles.halo, { backgroundColor: `${accent}0D` }]}>
           <View style={[styles.iconBadge, { backgroundColor: `${accent}1A` }]}>
@@ -59,6 +59,9 @@ export default function EmptyState({
 
 const useStyles = makeStyles((colors) => ({
   container: { alignItems: "center", justifyContent: "center", paddingVertical: spacing.xl * 1.5, paddingHorizontal: spacing.xl },
+  // Fills the space it's in (lists stretch to the screen), so "nothing here"
+  // sits in the middle while real content starts at the top.
+  fill: { flexGrow: 1 },
   halo: { width: 104, height: 104, borderRadius: 52, alignItems: "center", justifyContent: "center", marginBottom: spacing.md },
   iconBadge: { width: 68, height: 68, borderRadius: 34, alignItems: "center", justifyContent: "center" },
   title: { fontSize: fontSize.lg, fontWeight: fontWeight.bold, color: colors.text, textAlign: "center" },
