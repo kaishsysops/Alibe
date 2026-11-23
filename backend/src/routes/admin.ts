@@ -14,7 +14,7 @@ import { categoryIndex, clearCategoryCaches, descendants } from "../categories.j
 import { adminGate, Access } from "../roles.js";
 import { activatePurchase } from "../purchaseActivation.js";
 import { loadPromotions, promotionsSchema, savePromotions, todayMv } from "../promotions.js";
-import { bmlStatus } from "../bml.js";
+import { bmlStatus, setSimulation } from "../bml.js";
 
 // Feeds are cached for up to a minute; staff changes show at once on the
 // server that handled them (other replicas catch up within the minute).
@@ -106,7 +106,7 @@ adminRouter.get("/money", async (_req, res) => {
     orderBy: { updatedAt: "desc" },
   });
   // Slips are private: staff get links that work for an hour.
-  res.json({ settings: await moneySettings(), purchases: purchases.map((p) => ({ ...p, slipUrl: signedSlipUrl(p.slipUrl) })), cardPayments: bmlStatus() });
+  res.json({ settings: await moneySettings(), purchases: purchases.map((p) => ({ ...p, slipUrl: signedSlipUrl(p.slipUrl) })), cardPayments: await bmlStatus() });
 });
 
 adminRouter.put("/money/settings", async (req, res) => {
@@ -458,6 +458,12 @@ adminRouter.delete("/staff/:id", async (req, res) => {
     prisma.session.deleteMany({ where: { userId: user.id, staff: true } }),
   ]);
   res.json({ ok: true });
+});
+
+// Card payments test mode (no API key needed): 24 hours at a time.
+adminRouter.post("/card-test-mode", async (req, res) => {
+  await setSimulation(req.body?.on === true);
+  res.json(await bmlStatus());
 });
 
 // ---- promotions: banners, events, discounts, season, staff notices ----------

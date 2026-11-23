@@ -219,6 +219,13 @@ A purchase only starts once the server has asked BML itself and the
 transaction is CONFIRMED for the right amount; redirects and webhooks alone
 are never trusted.
 
+**Test mode (no API key needed):** Admin > Payments > Bank details > "Try it:
+turn on test mode". For 24 hours buyers see "Pay by card (test)", which opens
+a test checkout page (`/pay/bml/...`) standing in for BML's: Pay or Decline,
+then back to Payments, where it starts exactly as a real card payment would.
+No money moves; those purchases are marked TEST in Admin > Payments. Turn it
+off when you're done (it also switches itself off after 24 hours).
+
 ### Plans, grace period and reminders
 
 Store and Premium plans keep working for 5 days after their end date. Sellers

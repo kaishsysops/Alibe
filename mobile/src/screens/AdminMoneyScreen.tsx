@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { CheckCircle2, AlertTriangle, Landmark, Tag, Inbox, Clock, Play, ExternalLink, Receipt, Save, CreditCard } from "lucide-react-native";
-import { api, errorMessage, mediaUrl, MoneySettings, PlanPrices, Purchase, SellerPlanPrices } from "../api/client";
+import { api, CardStatus, errorMessage, mediaUrl, MoneySettings, PlanPrices, Purchase, SellerPlanPrices } from "../api/client";
 import { useToast } from "../components/Toast";
 import { useAppAlert } from "../components/AppAlertProvider";
 import ScreenHeader from "../components/ScreenHeader";
@@ -48,7 +48,19 @@ function AdminMoneyScreenInner() {
   const [tab, setTab] = useState<Tab>("QUEUE");
   const [filter, setFilter] = useState<Filter>("NEEDS");
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [card, setCard] = useState<{ enabled: boolean; mode: "sandbox" | "production"; tested: boolean } | null>(null);
+  const [card, setCard] = useState<CardStatus | null>(null);
+  const [toggling, setToggling] = useState(false);
+  const toggleTestMode = async (on: boolean) => {
+    setToggling(true);
+    try {
+      setCard(await api.setCardTestMode(on));
+      toast.success(on ? "Card test mode is on for 24 hours." : "Card test mode is off.");
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setToggling(false);
+    }
+  };
   // Two queue cards side by side once there's room (sidebar included).
   const twoColumns = width >= 1180;
 
@@ -174,6 +186,11 @@ function AdminMoneyScreenInner() {
           <View style={styles.kindPill}>
             <Text style={styles.kindText}>{KIND_LABEL[p.kind]}</Text>
           </View>
+          {p.note?.startsWith("Test card payment") && (
+            <View style={[styles.kindPill, { backgroundColor: "#7B5CF522" }]}>
+              <Text style={[styles.kindText, { color: "#7B5CF5" }]}>TEST</Text>
+            </View>
+          )}
           <Text style={styles.reference} selectable numberOfLines={1}>
             {p.reference}
           </Text>
@@ -378,17 +395,31 @@ function AdminMoneyScreenInner() {
                 <CreditCard size={20} color={card?.enabled ? colors.success : colors.textMuted} />
                 <Text style={[styles.cardTitle, { flex: 1 }]}>Card payments (BML)</Text>
                 <View style={[styles.statusPill, { backgroundColor: card?.enabled ? `${colors.success}18` : `${colors.textMuted}18` }]}>
-                  <Text style={[styles.statusText, { color: card?.enabled ? colors.success : colors.textMuted }]}>{card?.enabled ? (card.mode === "sandbox" ? "On (test mode)" : "On") : "Not set up"}</Text>
+                  <Text style={[styles.statusText, { color: card?.enabled ? colors.success : colors.textMuted }]}>{card?.mode === "live" ? "Live" : card?.mode === "simulated" ? "Test mode" : "Not set up"}</Text>
                 </View>
               </View>
-              {card?.enabled ? (
+              {card?.mode === "live" ? (
                 <Text style={styles.cardHelp}>
-                  Buyers see "Pay by card" and payments start as soon as BML confirms them. This hasn't been tested against BML yet: try a small payment{card.mode === "sandbox" ? " in test mode" : ""} and check it here before relying on it.
+                  Live with your BML key{card.liveMode === "sandbox" ? " (BML's sandbox)" : ""}. Buyers see "Pay by card" and payments start as soon as BML confirms them. Not tested against BML yet: try a small payment and check it here first.
                 </Text>
+              ) : card?.mode === "simulated" ? (
+                <>
+                  <Text style={styles.cardHelp}>
+                    Test mode until {card.simulatedUntil ? new Date(card.simulatedUntil).toLocaleString(undefined, { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "soon"}. Buyers see "Pay by card (test)" and a pretend checkout: the whole flow works, but no money moves. Anything paid this way starts for free and is marked TEST below, so only keep it on while you're trying it out.
+                  </Text>
+                  <Tap style={[styles.actionButton, styles.secondary, { alignSelf: "flex-start", maxWidth: 260 }]} onPress={() => toggleTestMode(false)} disabled={toggling} scaleTo={0.97}>
+                    <Text style={[styles.actionText, { color: colors.danger }]}>Turn test mode off</Text>
+                  </Tap>
+                </>
               ) : (
-                <Text style={styles.cardHelp}>
-                  Off: it doesn't work until it's set up, so buyers only see bank transfer. To switch it on, get an API key from BML's merchant portal and add BML_API_KEY (and BML_MODE=sandbox to test first) to the server's .env, then deploy. It hasn't been tested against BML yet.
-                </Text>
+                <>
+                  <Text style={styles.cardHelp}>
+                    Off, so buyers only see bank transfer. Card payments need an API key from BML's merchant portal (add BML_API_KEY to the server's .env and deploy). Until then you can try the whole flow in test mode: a pretend checkout, no money moves, switches itself off after 24 hours.
+                  </Text>
+                  <Tap style={[styles.actionButton, { alignSelf: "flex-start", maxWidth: 300, backgroundColor: "#7B5CF5" }]} onPress={() => toggleTestMode(true)} disabled={toggling} scaleTo={0.97}>
+                    {toggling ? <ActivityIndicator color="#fff" /> : <Text style={styles.actionText}>Try it: turn on test mode (24 h)</Text>}
+                  </Tap>
+                </>
               )}
             </View>
             <View style={[styles.card, styles.formCard]}>

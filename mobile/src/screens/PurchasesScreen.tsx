@@ -4,7 +4,7 @@ import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/nativ
 import * as ImagePicker from "expo-image-picker";
 import { Megaphone, Wallet, Copy, Check, ImageUp, CreditCard } from "lucide-react-native";
 import * as Clipboard from "expo-clipboard";
-import { api, BankDetails, errorMessage, Purchase, PurchaseStatus, uploadMedia } from "../api/client";
+import { api, BankDetails, CardMode, errorMessage, Purchase, PurchaseStatus, uploadMedia } from "../api/client";
 import { useToast } from "../components/Toast";
 import { useAppAlert } from "../components/AppAlertProvider";
 import ScreenHeader from "../components/ScreenHeader";
@@ -72,6 +72,7 @@ export default function PurchasesScreen() {
   const [purchases, setPurchases] = useState<Purchase[] | null>(null);
   const [bank, setBank] = useState<BankDetails | null>(null);
   const [cardPayments, setCardPayments] = useState(false);
+  const [cardMode, setCardMode] = useState<CardMode>("off");
   const [paying, setPaying] = useState<string | null>(null);
   const route = useRoute<any>();
 
@@ -95,7 +96,10 @@ export default function PurchasesScreen() {
     setPaying(p.id);
     try {
       const { url } = await api.payByCard(p.id);
-      if (Platform.OS === "web" && typeof window !== "undefined") window.location.href = url;
+      // Test mode's checkout is a page of this app; BML's is outside it.
+      const local = url.match(/\/pay\/bml\/([\w-]+)$/);
+      if (cardMode === "simulated" && local) navigation.navigate("TestCheckout", { id: local[1] });
+      else if (Platform.OS === "web" && typeof window !== "undefined") window.location.href = url;
       else await Linking.openURL(url);
     } catch (e) {
       toast.error(errorMessage(e));
@@ -113,6 +117,7 @@ export default function PurchasesScreen() {
           setPurchases(res.purchases);
           setBank(res.bank);
           setCardPayments(!!res.cardPayments);
+          setCardMode(res.cardMode ?? "off");
         })
         .catch((e) => {
           setPurchases((p) => p ?? []);
@@ -190,11 +195,13 @@ export default function PurchasesScreen() {
                   ) : (
                     <>
                       <CreditCard size={20} color="#fff" />
-                      <Text style={styles.buttonText}>Pay MVR {p.amount.toLocaleString()} by card</Text>
+                      <Text style={styles.buttonText}>
+                        Pay MVR {p.amount.toLocaleString()} by card{cardMode === "simulated" ? " (test)" : ""}
+                      </Text>
                     </>
                   )}
                 </Tap>
-                <Text style={styles.cardNote}>On Bank of Maldives' secure page. It starts as soon as you've paid.</Text>
+                <Text style={styles.cardNote}>{cardMode === "simulated" ? "Test mode: a pretend card checkout, no real money. It starts as soon as you 'pay'." : "On Bank of Maldives' secure page. It starts as soon as you've paid."}</Text>
                 <View style={styles.orRow}>
                   <View style={styles.orLine} />
                   <Text style={styles.orText}>or pay by bank transfer</Text>

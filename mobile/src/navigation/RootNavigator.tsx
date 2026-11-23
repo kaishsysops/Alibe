@@ -43,6 +43,7 @@ import VerifyScreen from "../screens/VerifyScreen";
 import SellerAccountScreen from "../screens/SellerAccountScreen";
 import StoreApplyScreen from "../screens/StoreApplyScreen";
 import StoreScreen from "../screens/StoreScreen";
+import TestCheckoutScreen from "../screens/TestCheckoutScreen";
 import OrdersScreen from "../screens/OrdersScreen";
 import OrderDetailScreen from "../screens/OrderDetailScreen";
 import SafetyScreen from "../screens/SafetyScreen";
@@ -102,6 +103,7 @@ const linking = {
       Status: "status",
       Help: "help/:topic?",
       Purchases: "purchases",
+      TestCheckout: "pay/bml/:id",
       Orders: "orders",
       BuyAd: "advertise",
       Boost: "boost/:id",
@@ -201,6 +203,7 @@ export default function RootNavigator() {
             <Stack.Screen name="SellerAccount" component={SellerAccountScreen} />
             <Stack.Screen name="StoreApply" component={StoreApplyScreen} />
             <Stack.Screen name="Store" component={StoreScreen} />
+            <Stack.Screen name="TestCheckout" component={TestCheckoutScreen} options={{ animation: "fade" }} />
             <Stack.Screen name="Orders" component={OrdersScreen} />
             <Stack.Screen name="OrderDetail" component={OrderDetailScreen} />
             <Stack.Screen name="Safety" component={SafetyScreen} />

@@ -549,6 +549,9 @@ export type Purchase = {
   user?: { id: string; name: string; phone: string | null; email: string | null };
 };
 export type PlanPrices = { "3": number; "7": number; "30": number };
+// Card payments: live (BML key), simulated (admin test mode) or off.
+export type CardMode = "live" | "simulated" | "off";
+export type CardStatus = { enabled: boolean; mode: CardMode; liveMode: "sandbox" | "production"; simulatedUntil: string | null; tested: boolean };
 export type SellerPlanPrices = { storeMonthly: number; storeYearly: number; premiumMonthly: number; premiumYearly: number };
 export type MoneySettings = { bankName: string; accountName: string; accountNumber: string; feePercent: number; feeMinimum: number; boostPrices: PlanPrices; adPrices: PlanPrices; sellerPlans: SellerPlanPrices; premiumFreeBoosts: number };
 export type MoneyConfig = Pick<MoneySettings, "boostPrices" | "adPrices" | "sellerPlans" | "premiumFreeBoosts"> & { ready: boolean };
@@ -681,7 +684,11 @@ export const api = {
   verifyEmailChange: (id: string, email: string, code: string) =>
     request<FullUser>(`/users/${id}/email/verify`, { method: "POST", body: JSON.stringify({ email, code }) }),
   moneyConfig: () => request<MoneyConfig>("/purchases/config"),
-  myPurchases: () => request<{ purchases: Purchase[]; bank: BankDetails; cardPayments?: boolean }>("/purchases/mine"),
+  myPurchases: () => request<{ purchases: Purchase[]; bank: BankDetails; cardPayments?: boolean; cardMode?: CardMode }>("/purchases/mine"),
+  // The test checkout that stands in for BML's page in test mode.
+  testCheckout: (tx: string) => request<{ id: string; amount: number; currency: string; reference: string; state: string; what: string; returnTo: string }>(`/purchases/test-checkout/${encodeURIComponent(tx)}`),
+  finishTestCheckout: (tx: string, approve: boolean) => request<{ state: string; returnTo: string }>(`/purchases/test-checkout/${encodeURIComponent(tx)}`, { method: "POST", body: JSON.stringify({ approve }) }),
+  setCardTestMode: (on: boolean) => request<CardStatus>("/admin/card-test-mode", { method: "POST", body: JSON.stringify({ on }) }),
   // Card payments (BML Connect): only when the server has it switched on.
   payByCard: (id: string) => request<{ url: string }>(`/purchases/${id}/pay-card`, { method: "POST" }),
   checkCardPayment: (id: string) => request<{ status: PurchaseStatus | null }>(`/purchases/${id}/check-card`, { method: "POST" }),
@@ -690,7 +697,7 @@ export const api = {
   cancelPurchase: (id: string) => request<void>(`/purchases/${id}/cancel`, { method: "POST", body: "{}" }),
   ads: () => request<RunningAd[]>("/ads"),
   adClicked: (id: string) => request<void>(`/ads/${id}/click`, { method: "POST", body: "{}" }),
-  adminMoney: () => request<{ settings: MoneySettings; purchases: Purchase[]; cardPayments?: { enabled: boolean; mode: "sandbox" | "production"; tested: boolean } }>("/admin/money"),
+  adminMoney: () => request<{ settings: MoneySettings; purchases: Purchase[]; cardPayments?: CardStatus }>("/admin/money"),
   saveMoneySettings: (settings: MoneySettings) => request<MoneySettings>("/admin/money/settings", { method: "PUT", body: JSON.stringify(settings) }),
   purchaseAction: (id: string, body: { action: "QUOTE"; amount: number } | { action: "APPROVE" } | { action: "COMPLETE" } | { action: "REJECT"; note: string }) =>
     request<void>(`/admin/purchases/${id}`, { method: "POST", body: JSON.stringify(body) }),
