@@ -18,6 +18,7 @@ import { useResponsive } from "../hooks/useResponsive";
 import { timeAgo } from "../utils/time";
 import StaffOnly from "../components/StaffOnly";
 import { useConsole } from "../components/ConsoleContext";
+import { useConsoleColumn, useConsolePage } from "../console/layout";
 
 const REASONS: Record<ReportReason, string> = {
   SCAM: "Scam",
@@ -29,6 +30,8 @@ const REASONS: Record<ReportReason, string> = {
 };
 
 function AdminReportsScreenInner() {
+  const consolePage = useConsolePage();
+  const consoleColumn = useConsoleColumn();
   const styles = useStyles();
   const { colors } = useTheme();
   // Moderators remove listings; only admins ban accounts.
@@ -133,7 +136,7 @@ function AdminReportsScreenInner() {
     <View style={styles.container}>
       {isDesktopWeb ? <WebNavBar active="profile" /> : <ScreenHeader title="Reports to review" />}
       {!groups ? (
-        <View style={{ paddingHorizontal: gutter }}>
+        <View style={[{ paddingHorizontal: gutter }, consoleColumn]}>
           <RowSkeleton count={5} />
         </View>
       ) : (
@@ -141,7 +144,7 @@ function AdminReportsScreenInner() {
           data={groups}
           keyExtractor={(g) => g.key}
           renderItem={renderItem}
-          contentContainerStyle={[styles.list, { paddingHorizontal: gutter }]}
+          contentContainerStyle={[styles.list, { paddingHorizontal: gutter }, consolePage]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load().finally(() => setRefreshing(false)); }} />}
           ListEmptyComponent={<EmptyState icon={CheckCircle2} title="Nothing to review" message="When someone reports a listing or an account, it appears here." />}
         />

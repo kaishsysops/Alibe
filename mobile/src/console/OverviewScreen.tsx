@@ -9,6 +9,7 @@ import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow } from "../theme/theme";
 import { SITE } from "../site";
 import { visibleSections, accessLabel } from "./sections";
+import { useConsolePage } from "./layout";
 
 // The first page: a card per queue this person works on, with what's waiting.
 export default function OverviewScreen() {
@@ -17,6 +18,7 @@ export default function OverviewScreen() {
   const navigation = useNavigation<any>();
   const { user } = useAuth();
   const { me } = useConsole();
+  const page = useConsolePage();
   if (!me) return null;
   const sections = visibleSections(me, SITE).filter((s) => s.key !== "Overview");
   const queues = sections.filter((s) => s.count);
@@ -26,7 +28,7 @@ export default function OverviewScreen() {
   const hello = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView contentContainerStyle={[styles.content, page]}>
       <Text style={styles.hello}>
         {hello}, {user?.name?.split(" ")[0]}
       </Text>
@@ -86,11 +88,11 @@ export default function OverviewScreen() {
 }
 
 const useStyles = makeStyles((colors) => ({
-  content: { padding: spacing.lg, gap: spacing.md, maxWidth: 1100 },
+  content: { paddingVertical: spacing.lg, gap: spacing.md },
   hello: { fontSize: fontSize.xl, fontWeight: fontWeight.extrabold, color: colors.text },
   sub: { fontSize: fontSize.base, color: colors.textMuted, marginTop: -8 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
-  card: { flexGrow: 1, flexBasis: 220, maxWidth: 340, backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.md + 4, gap: 6, ...cardShadow },
+  card: { flexGrow: 1, flexBasis: 200, backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.md + 4, gap: 6, ...cardShadow },
   iconWrap: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.primaryTint, alignItems: "center", justifyContent: "center", marginBottom: 4 },
   number: { fontSize: 34, fontWeight: fontWeight.extrabold, color: colors.text, letterSpacing: -1 },
   cardTitle: { fontSize: fontSize.base, fontWeight: fontWeight.semibold, color: colors.textMuted },

@@ -197,7 +197,7 @@ function Radio({ on, color }: { on: boolean; color: string }) {
 
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
-  scroll: { paddingVertical: spacing.md, paddingBottom: spacing.xl, width: "100%", maxWidth: contentWidth.form, alignSelf: "center", gap: spacing.md },
+  scroll: { paddingVertical: spacing.md, paddingBottom: spacing.xl, width: "100%", maxWidth: contentWidth.form, alignSelf: "center", gap: spacing.md, flexGrow: 1, justifyContent: "center" },
   hero: { height: 210, alignItems: "center", justifyContent: "center", borderRadius: radius.lg, backgroundColor: `${colors.gold}14`, overflow: "hidden" },
   glow: { position: "absolute", width: 260, height: 260, borderRadius: 130, backgroundColor: `${colors.gold}22` },
   preview: { width: 150, backgroundColor: colors.card, borderRadius: radius.md, overflow: "hidden", transform: [{ rotate: "-4deg" }], ...cardShadow },

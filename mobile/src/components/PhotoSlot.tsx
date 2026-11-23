@@ -19,6 +19,7 @@ export default function PhotoSlot({
   Icon = ImagePlus,
   camera,
   square,
+  style,
 }: {
   label: string;
   hint?: string;
@@ -28,6 +29,8 @@ export default function PhotoSlot({
   // Offer the camera first (selfies), on phones.
   camera?: boolean;
   square?: boolean;
+  // The slot's outer box; by default it shares a row with other slots.
+  style?: object;
 }) {
   const styles = useStyles();
   const { colors } = useTheme();
@@ -56,7 +59,7 @@ export default function PhotoSlot({
   };
 
   return (
-    <View style={{ flex: 1, minWidth: 140, gap: 6 }}>
+    <View style={[{ flexGrow: 1, flexBasis: 140, minWidth: 120, gap: 6 }, style]}>
       <Tap style={[styles.box, square && { aspectRatio: 1 }, !!value && styles.boxDone]} onPress={pick} disabled={busy} scaleTo={0.98} accessibilityLabel={value ? `Replace ${label}` : `Add ${label}`}>
         {value ? (
           <>

@@ -19,6 +19,7 @@ import { formatPhone } from "../utils/phone";
 import { WhatsAppIcon, ViberIcon } from "../components/BrandIcons";
 import AvatarPhoto from "../components/AvatarPhoto";
 import { useAuthMethods } from "../hooks/useAuthMethods";
+import PremiumPromo from "../components/PremiumPromo";
 
 export default function ProfileScreen() {
   const { phone: phoneSignIn } = useAuthMethods();
@@ -145,6 +146,10 @@ export default function ProfileScreen() {
             <Text style={styles.statLabel}>{s.label}</Text>
           </View>
         ))}
+      </View>
+
+      <View style={{ marginBottom: spacing.md }}>
+        <PremiumPromo />
       </View>
 
       {groups.map((items, gi) => (

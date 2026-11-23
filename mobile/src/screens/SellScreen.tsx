@@ -21,6 +21,7 @@ import { useSingleFlight } from "../hooks/useSingleFlight";
 import { useKeyboardVisible } from "../hooks/useKeyboardVisible";
 import IslandPicker, { defaultIslandId, findIsland } from "../components/IslandPicker";
 import { useAuthMethods } from "../hooks/useAuthMethods";
+import PremiumPromo from "../components/PremiumPromo";
 
 const CONDITIONS: Array<{ value: Listing["condition"]; label: string; hint: string }> = [
   { value: "NEW", label: "New", hint: "Unused, in original packaging" },
@@ -465,6 +466,18 @@ function SellForm() {
           <ChevronRight size={16} color={colors.textMuted} />
         </Tap>
         {stepContent}
+      </>
+    );
+  }
+
+  // The last step: a word about Premium before they publish.
+  if (step === STEPS.length - 1 && standing && !standing.premium) {
+    stepContent = (
+      <>
+        {stepContent}
+        <View style={{ marginTop: spacing.lg }}>
+          <PremiumPromo variant="banner" />
+        </View>
       </>
     );
   }

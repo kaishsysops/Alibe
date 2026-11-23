@@ -191,7 +191,7 @@ function Section({ n, title, done, children }: { n: number; title: string; done:
 
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
-  scroll: { padding: spacing.md, paddingBottom: spacing.xl, width: "100%", maxWidth: contentWidth.form, alignSelf: "center", gap: spacing.md },
+  scroll: { padding: spacing.md, paddingBottom: spacing.xl, width: "100%", maxWidth: contentWidth.form, alignSelf: "center", gap: spacing.md, flexGrow: 1, justifyContent: "center" },
   hero: { flexDirection: "row", gap: spacing.sm + 4, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.primaryTint },
   heroIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   heroTitle: { fontSize: fontSize.md, fontWeight: fontWeight.extrabold, color: colors.text },

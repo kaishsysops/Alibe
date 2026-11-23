@@ -132,7 +132,7 @@ export default function VerifyScreen() {
 
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
-  scroll: { paddingVertical: spacing.lg, gap: spacing.md, width: "100%", maxWidth: contentWidth.form, alignSelf: "center" },
+  scroll: { paddingVertical: spacing.lg, gap: spacing.md, width: "100%", maxWidth: contentWidth.form, alignSelf: "center", flexGrow: 1, justifyContent: "center" },
   hero: { alignItems: "center", gap: spacing.xs, paddingHorizontal: spacing.md },
   heroIcon: { width: 76, height: 76, borderRadius: 38, backgroundColor: `${colors.verified}1A`, alignItems: "center", justifyContent: "center", marginBottom: spacing.sm },
   title: { fontSize: fontSize.xxl, fontWeight: fontWeight.extrabold, color: colors.text, textAlign: "center" },

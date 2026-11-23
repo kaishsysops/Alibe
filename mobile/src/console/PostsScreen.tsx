@@ -10,6 +10,7 @@ import Tap from "../components/Tap";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight } from "../theme/theme";
 import { timeAgo } from "../utils/time";
+import { useConsolePage } from "./layout";
 
 // Post approvers: items from sellers who aren't verified, oldest first. One
 // tap approves; turning down needs a reason the seller sees.
@@ -20,6 +21,7 @@ export default function PostsScreen() {
   const { colors } = useTheme();
   const toast = useToast();
   const { refresh } = useConsole();
+  const page = useConsolePage();
   const [posts, setPosts] = useState<PendingPost[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -60,7 +62,7 @@ export default function PostsScreen() {
   if (!posts) return <ActivityIndicator color={colors.primary} style={{ margin: spacing.xl }} />;
 
   return (
-    <ScrollView contentContainerStyle={styles.list} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => (setRefreshing(true), load())} />}>
+    <ScrollView contentContainerStyle={[styles.list, page]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => (setRefreshing(true), load())} />}>
       {posts.length === 0 && <EmptyState icon={ClipboardCheck} title="Nothing to approve" message="Posts from sellers who aren't verified show up here." />}
       {posts.map((p) => (
         <View key={p.id} style={styles.card}>
@@ -136,9 +138,9 @@ export default function PostsScreen() {
 }
 
 const useStyles = makeStyles((colors) => ({
-  list: { padding: spacing.lg, gap: spacing.md, maxWidth: 820 },
+  list: { paddingVertical: spacing.lg, gap: spacing.md },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.md + 4, gap: spacing.md, ...cardShadow },
-  photo: { width: 150, height: 150, borderRadius: radius.md, backgroundColor: colors.background },
+  photo: { width: 140, height: 140, borderRadius: radius.md, backgroundColor: colors.background },
   noPhoto: { alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   body: { gap: 6 },
   titleRow: { flexDirection: "row", alignItems: "flex-start", gap: spacing.md },
@@ -153,8 +155,8 @@ const useStyles = makeStyles((colors) => ({
   reasonChipOn: { backgroundColor: colors.text, borderColor: colors.text },
   reasonText: { fontSize: fontSize.caption, fontWeight: fontWeight.semibold, color: colors.text },
   input: { height: controlHeight.input, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, fontSize: fontSize.base, color: colors.text, backgroundColor: colors.background, outlineStyle: "none" as any },
-  actions: { flexDirection: "row", gap: spacing.sm, justifyContent: "flex-end" },
-  button: { minWidth: 130, height: 44, paddingHorizontal: spacing.md, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
+  actions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, justifyContent: "flex-end" },
+  button: { flexGrow: 1, maxWidth: 220, minWidth: 120, height: 44, paddingHorizontal: spacing.md, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
   secondary: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
   buttonText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.base },
 }));

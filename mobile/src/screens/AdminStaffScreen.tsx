@@ -18,6 +18,7 @@ import { useResponsive } from "../hooks/useResponsive";
 import StaffOnly from "../components/StaffOnly";
 import { ROLE_HELP, ROLE_LABEL } from "../console/sections";
 import { staffInviteUrl } from "../site";
+import { useConsolePage } from "../console/layout";
 
 const ROLES: StaffRole[] = ["SELLER_APPROVER", "POST_APPROVER", "MODERATOR", "SUPPORT"];
 
@@ -73,6 +74,7 @@ const USERNAME = /^[a-z0-9._-]{3,30}$/;
 // forgot their password) get a one-time sign-in link to choose a password;
 // admins never see or set anyone's password.
 function AdminStaffScreenInner() {
+  const consolePage = useConsolePage();
   const styles = useStyles();
   const { colors } = useTheme();
   const toast = useToast();
@@ -282,7 +284,7 @@ function AdminStaffScreenInner() {
       {isDesktopWeb ? <WebNavBar active="profile" /> : <ScreenHeader title="Staff and roles" />}
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.list, { paddingHorizontal: gutter }]}
+        contentContainerStyle={[styles.list, { paddingHorizontal: gutter }, consolePage]}
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => (setRefreshing(true), load())} tintColor={colors.primary} />}
       >

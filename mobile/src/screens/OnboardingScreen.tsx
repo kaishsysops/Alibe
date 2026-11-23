@@ -4,7 +4,7 @@ import { View, Text, TextInput, ActivityIndicator, KeyboardAvoidingView, Keyboar
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
-import { ShoppingBag, ArrowRight, Check, ShieldCheck, ChevronLeft, Mail, Phone, MapPin, Tag, MessageCircle, BadgePercent, KeyRound, PackageCheck, LucideIcon, Camera, Bell, MessageCircleMore, TrendingDown, Truck, Sparkles, Search, Map as MapIcon, Heart, BadgeCheck, Store, Star, Rocket, TrendingUp, User as UserIcon } from "lucide-react-native";
+import { ShoppingBag, ArrowRight, Check, ShieldCheck, ChevronLeft, Mail, Phone, MapPin, Tag, MessageCircle, BadgePercent, KeyRound, PackageCheck, LucideIcon, Camera, Bell, MessageCircleMore, TrendingDown, Truck, Sparkles, Search, Map as MapIcon, Heart, BadgeCheck, Store, Star, Rocket, TrendingUp, User as UserIcon, Crown } from "lucide-react-native";
 import { api, Atoll, Category, errorMessage, ProfileUpdate, setAuthToken, SignedIn, uploadMedia, User } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import { useToast } from "../components/Toast";
@@ -116,6 +116,7 @@ const SLIDES: Slide[] = [
   { Icon: ShieldCheck, left: KeyRound, right: PackageCheck, tag: "Safety", title: "Stay safe when you buy", text: "A private code confirms your item reached you." },
   { Icon: BadgeCheck, left: Store, right: Star, tag: "Trust", title: "Verified sellers and stores", text: "Look for the badges: ID-checked sellers, real stores and honest reviews." },
   { Icon: Rocket, left: Sparkles, right: TrendingUp, tag: "Boost", title: "Get seen with a boost", text: "Put your item at the top of search and the home page." },
+  { Icon: Crown, left: Rocket, right: Sparkles, tag: "Premium", title: "Grow with Premium", text: "Free boosts every month, your new items featured and a gold badge." },
 ];
 const SLIDE_MS = 4200;
 
@@ -951,7 +952,7 @@ export default function OnboardingScreen() {
                 {(
                   [
                     ["INDIVIDUAL", UserIcon, "As an individual", "Things you own: clothes, phones, furniture."],
-                    ["STORE", Store, "As a store", "A registered business. Get a store page and the Store badge."],
+                    ["STORE", Store, "As a store", "A registered business. A store page and the Store badge, on a paid monthly or yearly plan."],
                   ] as const
                 ).map(([kind, Icon, title, text], i) => {
                   const on = sellerKind === kind;

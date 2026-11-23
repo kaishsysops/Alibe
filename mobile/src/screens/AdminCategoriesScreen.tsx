@@ -17,6 +17,7 @@ import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow, contentWidth, controlHeight } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
 import StaffOnly from "../components/StaffOnly";
+import { useConsoleColumn, useConsolePage } from "../console/layout";
 
 type Editing = { mode: "add"; parentId: string | null } | { mode: "edit"; category: AdminCategory };
 
@@ -24,6 +25,8 @@ type Editing = { mode: "add"; parentId: string | null } | { mode: "edit"; catego
 // depth, rename, set search words, hide, reorder, delete. Changes show in the
 // app within a minute.
 function AdminCategoriesScreenInner() {
+  const consolePage = useConsolePage();
+  const consoleColumn = useConsoleColumn();
   const styles = useStyles();
   const { colors } = useTheme();
   const toast = useToast();
@@ -142,11 +145,11 @@ function AdminCategoriesScreenInner() {
     <View style={styles.container}>
       {isDesktopWeb ? <WebNavBar active="profile" /> : <ScreenHeader title={parent?.name ?? "Categories"} />}
       {!rows ? (
-        <View style={{ padding: gutter }}>
+        <View style={[{ padding: gutter }, consoleColumn]}>
           <RowSkeleton count={8} />
         </View>
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.list, { paddingHorizontal: gutter }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => (setRefreshing(true), load())} tintColor={colors.primary} />}>
+        <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.list, { paddingHorizontal: gutter }, consolePage]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => (setRefreshing(true), load())} tintColor={colors.primary} />}>
           <Text style={styles.help}>
             {parent ? `Subcategories of ${tree.pathOf(parent.slug).map((c) => c.name).join(" › ")}. ` : ""}Shown in this order everywhere. Tap a row to see what's inside it.
           </Text>

@@ -18,12 +18,15 @@ import AvatarPhoto from "../components/AvatarPhoto";
 import StaffOnly from "../components/StaffOnly";
 import { useConsole } from "../components/ConsoleContext";
 import { openOnMarketplace } from "../site";
+import { useConsoleColumn, useConsolePage } from "../console/layout";
 
 const joined = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
 // Staff only: everyone who has listed something, with contact details, counts,
 // rating and open reports, and a ban/unban switch.
 function AdminSellersScreenInner() {
+  const consolePage = useConsolePage();
+  const consoleColumn = useConsoleColumn();
   const styles = useStyles();
   const { colors } = useTheme();
   const toast = useToast();
@@ -187,7 +190,7 @@ function AdminSellersScreenInner() {
   return (
     <View style={styles.container}>
       {isDesktopWeb ? <WebNavBar active="profile" /> : <ScreenHeader title="Sellers" />}
-      <View style={[styles.searchWrap, { paddingHorizontal: gutter }]}>
+      <View style={[styles.searchWrap, { paddingHorizontal: gutter }, consoleColumn]}>
         <View style={styles.search}>
           <Search size={18} color={colors.textMuted} />
           <TextInput
@@ -222,7 +225,7 @@ function AdminSellersScreenInner() {
           data={sellers}
           keyExtractor={(s) => s.id}
           renderItem={renderItem}
-          contentContainerStyle={[styles.list, { paddingHorizontal: gutter }]}
+          contentContainerStyle={[styles.list, { paddingHorizontal: gutter }, consolePage]}
           keyboardShouldPersistTaps="handled"
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}

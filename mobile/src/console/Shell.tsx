@@ -13,11 +13,12 @@ import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight } from "../theme/theme";
 import { SITE, siteUrl } from "../site";
 import { SECTIONS, SectionKey, accessLabel, visibleSections } from "./sections";
+import { CONSOLE_WIDE, useConsoleColumn } from "./layout";
 
 // The admin and portal layout: a sidebar of sections (with live counts of
 // what's waiting) beside the content. On narrow screens the sidebar becomes a
 // menu behind a button.
-const WIDE = 900;
+const WIDE = CONSOLE_WIDE;
 const SIDEBAR = 256;
 
 export default function Shell({ section, children }: { section: SectionKey; children: React.ReactNode }) {
@@ -29,9 +30,11 @@ export default function Shell({ section, children }: { section: SectionKey; chil
   const wide = width >= WIDE;
   const current = SECTIONS.find((s) => s.key === section)!;
   const { refresh } = useConsole();
+  const page = useConsoleColumn();
 
   const header = (
-    <View style={styles.header}>
+    <View style={styles.headerBar}>
+    <View style={[styles.header, page]}>
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={styles.title} numberOfLines={1}>
           {current.title}
@@ -43,6 +46,7 @@ export default function Shell({ section, children }: { section: SectionKey; chil
       <Tap style={styles.iconButton} onPress={refresh} scaleTo={0.9} accessibilityLabel="Refresh counts">
         <RefreshCw size={16} color={colors.textMuted} />
       </Tap>
+    </View>
     </View>
   );
 
@@ -191,7 +195,8 @@ const useStyles = makeStyles((colors) => ({
   row: { flex: 1, flexDirection: "row", backgroundColor: colors.background },
   sidebar: { width: SIDEBAR, backgroundColor: colors.card, borderRightWidth: 1, borderRightColor: colors.border },
   main: { flex: 1, minWidth: 0 },
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.background },
+  headerBar: { borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: colors.background },
+  header: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingTop: spacing.lg, paddingBottom: spacing.md },
   title: { fontSize: fontSize.xxl, fontWeight: fontWeight.extrabold, color: colors.text, letterSpacing: -0.3 },
   blurb: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2 },
   iconButton: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },

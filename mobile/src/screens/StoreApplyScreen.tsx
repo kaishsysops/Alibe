@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, ScrollView, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { Store, Building2, CheckCircle2, AlertTriangle } from "lucide-react-native";
+import { Store, Building2, CheckCircle2, AlertTriangle, Receipt } from "lucide-react-native";
 import { api, errorMessage, SellerMe } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import { useToast } from "../components/Toast";
@@ -72,13 +72,27 @@ export default function StoreApplyScreen() {
             <Store size={30} color={colors.primary} />
           </View>
           <Text style={styles.title}>Sell as a store</Text>
-          <Text style={styles.lead}>For registered businesses. Once approved, pick a Store plan to open your store page and get the Store badge.</Text>
+          <Text style={styles.lead}>For registered businesses. A store gets its own page, the Store badge and a place above individual sellers.</Text>
         </View>
 
         <View style={styles.warning}>
           <AlertTriangle size={18} color={colors.gold} />
           <Text style={styles.warningText}>Businesses must register as a store. Staff ban shops that sell as individuals.</Text>
         </View>
+
+        {me && (
+          <View style={styles.fee}>
+            <View style={styles.feeIcon}>
+              <Receipt size={19} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.feeTitle}>
+                Stores pay MVR {me.prices.storeMonthly.toLocaleString()} a month or MVR {me.prices.storeYearly.toLocaleString()} a year
+              </Text>
+              <Text style={styles.feeText}>Applying is free. You pay for the Store plan only once your store is approved; your store page opens when the payment is confirmed.</Text>
+            </View>
+          </View>
+        )}
 
         {!me ? (
           <SkeletonGroup>
@@ -106,10 +120,8 @@ export default function StoreApplyScreen() {
             <View style={styles.card}>
               <Text style={styles.cardTitle}>Your business</Text>
               <View style={styles.logoRow}>
-                <View style={{ width: 120 }}>
-                  <PhotoSlot label="Logo" value={logo} onChange={setLogo} Icon={Store} square />
-                </View>
-                <View style={{ flex: 1, gap: spacing.sm + 4, minWidth: 200 }}>
+                <PhotoSlot label="Logo" hint="Square works best" value={logo} onChange={setLogo} Icon={Store} square style={styles.logoSlot} />
+                <View style={styles.logoFields}>
                   <View>
                     <Text style={styles.label}>Business name</Text>
                     <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="e.g. Coral Electronics" placeholderTextColor={colors.textMuted} maxLength={60} accessibilityLabel="Business name" />
@@ -150,7 +162,7 @@ export default function StoreApplyScreen() {
 
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
-  scroll: { paddingVertical: spacing.lg, gap: spacing.md, width: "100%", maxWidth: contentWidth.form, alignSelf: "center" },
+  scroll: { paddingVertical: spacing.lg, gap: spacing.md, width: "100%", maxWidth: contentWidth.form, alignSelf: "center", flexGrow: 1, justifyContent: "center" },
   hero: { alignItems: "center", gap: spacing.xs, paddingHorizontal: spacing.md },
   heroIcon: { width: 72, height: 72, borderRadius: 24, backgroundColor: colors.primaryTint, alignItems: "center", justifyContent: "center", marginBottom: spacing.sm },
   title: { fontSize: fontSize.xxl, fontWeight: fontWeight.extrabold, color: colors.text, textAlign: "center" },
@@ -160,7 +172,13 @@ const useStyles = makeStyles((colors) => ({
   card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.md + 4, gap: spacing.md, ...cardShadow },
   cardTitle: { fontSize: fontSize.lg, fontWeight: fontWeight.extrabold, color: colors.text },
   cardText: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: -8, lineHeight: 19 },
-  logoRow: { flexDirection: "row", gap: spacing.md, flexWrap: "wrap" },
+  logoRow: { flexDirection: "row", gap: spacing.md, flexWrap: "wrap", alignItems: "flex-start" },
+  logoSlot: { flexGrow: 0, flexBasis: "auto", width: 128, minWidth: 0 },
+  logoFields: { flexGrow: 1, flexBasis: 240, gap: spacing.sm + 4 },
+  fee: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 4, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.primary },
+  feeIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.primaryTint, alignItems: "center", justifyContent: "center" },
+  feeTitle: { fontSize: fontSize.base, fontWeight: fontWeight.extrabold, color: colors.text },
+  feeText: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 2, lineHeight: 19 },
   label: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.text, marginBottom: 6 },
   input: { height: controlHeight.input, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border, paddingHorizontal: spacing.md, fontSize: fontSize.md, color: colors.text, backgroundColor: colors.background, outlineStyle: "none" as any },
   inputRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, height: controlHeight.input, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border, paddingHorizontal: spacing.md, backgroundColor: colors.background },

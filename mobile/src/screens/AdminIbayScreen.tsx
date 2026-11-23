@@ -13,10 +13,13 @@ import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, contentWidth } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
 import StaffOnly from "../components/StaffOnly";
+import { useConsoleColumn, useConsolePage } from "../console/layout";
 
 // Staff only: every item copied from iBay, including ones the public showcase
 // leaves out, plus the switch for the showcase itself.
 function AdminIbayScreenInner() {
+  const consolePage = useConsolePage();
+  const consoleColumn = useConsoleColumn();
   const styles = useStyles();
   const { colors } = useTheme();
   const toast = useToast();
@@ -107,7 +110,7 @@ function AdminIbayScreenInner() {
   return (
     <View style={styles.container}>
       {isDesktopWeb ? <WebNavBar active="profile" /> : <ScreenHeader title="iBay items" />}
-      <View style={[styles.searchWrap, { paddingHorizontal: gutter }]}>
+      <View style={[styles.searchWrap, { paddingHorizontal: gutter }, consoleColumn]}>
         <View style={styles.search}>
           <Search size={18} color={colors.textMuted} />
           <TextInput
@@ -139,7 +142,7 @@ function AdminIbayScreenInner() {
           data={items}
           keyExtractor={(i) => i.id}
           renderItem={renderItem}
-          contentContainerStyle={[styles.list, { paddingHorizontal: gutter }]}
+          contentContainerStyle={[styles.list, { paddingHorizontal: gutter }, consolePage]}
           keyboardShouldPersistTaps="handled"
           onEndReached={loadMore}
           onEndReachedThreshold={0.5}

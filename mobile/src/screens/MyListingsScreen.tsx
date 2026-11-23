@@ -14,6 +14,7 @@ import { useToast } from "../components/Toast";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow } from "../theme/theme";
 import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
+import PremiumPromo from "../components/PremiumPromo";
 
 type TabKey = "ACTIVE" | "REVIEW" | "RESERVED" | "SOLD";
 const TABS: Array<{ key: TabKey; label: string; statuses: Listing["status"][] }> = [
@@ -104,6 +105,7 @@ export default function MyListingsScreen() {
           </View>
         </View>
       )}
+      {!loading && allListings.length > 0 && <PremiumPromo variant="banner" />}
       {rejected.length > 0 && tab !== "REVIEW" && (
         <Tap style={styles.alert} onPress={() => setTab("REVIEW")} scaleTo={0.98}>
           <AlertCircle size={18} color={colors.danger} />

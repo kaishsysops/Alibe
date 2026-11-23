@@ -11,6 +11,7 @@ import Tap from "../components/Tap";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight } from "../theme/theme";
 import { timeAgo } from "../utils/time";
+import { useConsoleColumn, useConsolePage } from "./layout";
 
 // Seller approvers: ID checks and store applications. Photos open through
 // links that last 10 minutes, and are deleted the moment it's decided.
@@ -27,6 +28,8 @@ export default function ApplicationsScreen() {
   const { colors } = useTheme();
   const toast = useToast();
   const { refresh } = useConsole();
+  const page = useConsolePage();
+  const column = useConsoleColumn();
   const [tab, setTab] = useState<Tab>("PENDING");
   const [items, setItems] = useState<SellerApplicationItem[] | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -84,7 +87,7 @@ export default function ApplicationsScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <View style={styles.tabs}>
+      <View style={[styles.tabs, column]}>
         {TABS.map(([key, label]) => (
           <Tap key={key} style={[styles.tab, tab === key && styles.tabOn]} onPress={() => setTab(key)} scaleTo={0.96}>
             <Text style={[styles.tabText, tab === key && styles.tabTextOn]}>{label}</Text>
@@ -94,7 +97,7 @@ export default function ApplicationsScreen() {
       {!items ? (
         <ActivityIndicator color={colors.primary} style={{ margin: spacing.xl }} />
       ) : (
-        <ScrollView contentContainerStyle={styles.list} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => (setRefreshing(true), load())} />}>
+        <ScrollView contentContainerStyle={[styles.list, page]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => (setRefreshing(true), load())} />}>
           {items.length === 0 && <EmptyState icon={BadgeCheck} title={tab === "PENDING" ? "Nothing waiting" : "Nothing here yet"} message={tab === "PENDING" ? "New ID checks and store applications appear here." : "Decided applications show here."} />}
           {items.map((a) => {
             const isStore = a.kind === "STORE";
@@ -203,12 +206,12 @@ export default function ApplicationsScreen() {
 }
 
 const useStyles = makeStyles((colors) => ({
-  tabs: { flexDirection: "row", gap: spacing.sm, paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+  tabs: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, paddingTop: spacing.md },
   tab: { paddingHorizontal: spacing.md, height: 36, justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   tabOn: { backgroundColor: colors.text, borderColor: colors.text },
   tabText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text },
   tabTextOn: { color: colors.inverseText },
-  list: { padding: spacing.lg, gap: spacing.md, maxWidth: 820 },
+  list: { paddingVertical: spacing.lg, gap: spacing.md },
   card: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.md + 4, gap: spacing.md, ...cardShadow },
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   kind: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, height: 26, borderRadius: radius.pill, backgroundColor: colors.primaryTint },
@@ -225,7 +228,7 @@ const useStyles = makeStyles((colors) => ({
   idRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   photos: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm + 4 },
   photoBox: { gap: 4 },
-  photo: { width: 168, height: 112, borderRadius: radius.md, backgroundColor: colors.background },
+  photo: { width: 168, maxWidth: "100%", height: 112, borderRadius: radius.md, backgroundColor: colors.background },
   photoGone: { alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.border },
   photoLabel: { fontSize: fontSize.caption, fontWeight: fontWeight.semibold, color: colors.textMuted },
   outcome: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.sm + 4, borderRadius: radius.md },
@@ -235,8 +238,8 @@ const useStyles = makeStyles((colors) => ({
   reasonChipOn: { backgroundColor: colors.text, borderColor: colors.text },
   reasonText: { fontSize: fontSize.caption, fontWeight: fontWeight.semibold, color: colors.text },
   input: { height: controlHeight.input, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, fontSize: fontSize.base, color: colors.text, backgroundColor: colors.background, outlineStyle: "none" as any },
-  actions: { flexDirection: "row", gap: spacing.sm, justifyContent: "flex-end" },
-  button: { minWidth: 130, height: 44, paddingHorizontal: spacing.md, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
+  actions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, justifyContent: "flex-end" },
+  button: { flexGrow: 1, maxWidth: 220, minWidth: 120, height: 44, paddingHorizontal: spacing.md, borderRadius: radius.pill, alignItems: "center", justifyContent: "center" },
   secondary: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
   buttonText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.base },
   zoomBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.85)", alignItems: "center", justifyContent: "center", padding: spacing.lg },

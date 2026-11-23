@@ -16,10 +16,12 @@ import { useResponsive } from "../hooks/useResponsive";
 import { timeAgo } from "../utils/time";
 import StaffOnly from "../components/StaffOnly";
 import { useConsole } from "../components/ConsoleContext";
+import { useConsolePage } from "../console/layout";
 
 // Staff only: open disputes, oldest first. Open one to read both sides'
 // evidence and settle it.
 function AdminDisputesScreenInner() {
+  const consolePage = useConsolePage();
   // Support reads disputes; admins settle them.
   const { me } = useConsole();
   const canSettle = me ? me.admin : true;
@@ -53,7 +55,7 @@ function AdminDisputesScreenInner() {
           <RowSkeleton count={4} />
         </View>
       ) : (
-        <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.list, { paddingHorizontal: gutter }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => (setRefreshing(true), load())} tintColor={colors.primary} />}>
+        <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.list, { paddingHorizontal: gutter }, consolePage]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => (setRefreshing(true), load())} tintColor={colors.primary} />}>
           {disputes.length === 0 && <EmptyState icon={Scale} title="No open disputes" message="When a buyer reports a problem with an order, it shows up here." />}
           {disputes.map((d) => {
             const open = openId === d.id;
