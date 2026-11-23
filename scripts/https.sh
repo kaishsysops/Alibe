@@ -222,4 +222,29 @@ https_apply() {
       fi
       ;;
   esac
+  public_check
+}
+
+# From the outside, through Cloudflare. The classic trap: Cloudflare's SSL mode
+# on "Flexible" talks to this server over plain http, nginx answers "use
+# https", and browsers loop ("The page isn't redirecting properly").
+public_check() {
+  local n headers code location
+  for n in "${https_names[@]}"; do
+    headers=$(curl -sS -o /dev/null -D - --max-redirs 0 --max-time 10 "https://$n/" 2>/dev/null || true)
+    code=$(printf '%s' "$headers" | awk 'toupper($1) ~ /^HTTP/ {print $2; exit}')
+    location=$(printf '%s' "$headers" | awk 'tolower($1) == "location:" {print $2; exit}' | tr -d '\r')
+    if [[ "$code" =~ ^30 ]] && [ "${location%/}" = "https://$n" ]; then
+      cat <<MSG
+
+  ${RED}${B}https://$n redirects to itself${R} (browsers show "The page isn't
+  redirecting properly"). Cloudflare is talking to this server over plain
+  http. Fix: Cloudflare > alibe.online > SSL/TLS > Overview > Configure >
+  "Full (strict)". The certificate here is valid, so nothing else is needed.
+
+MSG
+      return 0
+    fi
+  done
+  info "Public check: ${https_names[*]} answer over HTTPS"
 }
