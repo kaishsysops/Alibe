@@ -50,6 +50,30 @@ import SafetyScreen from "../screens/SafetyScreen";
 const Stack = createNativeStackNavigator();
 
 // URL paths for web (and shared links): /listing/abc opens that listing.
+// Browser tab and search-result titles, per page.
+const TITLES: Record<string, string> = {
+  HomeTab: "Alibe Maldives: Buy and Sell Online | Phones, Cars, Furniture",
+  SearchTab: "Browse items for sale in the Maldives | Alibe",
+  SellTab: "Sell on Alibe: free to list in the Maldives",
+  ChatsTab: "Chats | Alibe",
+  ProfileTab: "Your profile | Alibe",
+  Help: "Help and FAQ | Alibe Maldives",
+  Safety: "How Alibe keeps you safe | Alibe",
+  Privacy: "Privacy policy | Alibe",
+  Terms: "Terms of use | Alibe",
+  Status: "System status | Alibe",
+  Store: "Store | Alibe Maldives",
+  SellerProfile: "Seller | Alibe Maldives",
+  ProductDetail: "For sale in the Maldives | Alibe",
+};
+function pageTitle(name?: string, params?: Record<string, string>) {
+  if (name === "Categories" && params?.slug) {
+    const words = params.slug.replace(/-/g, " ");
+    return `${words.charAt(0).toUpperCase()}${words.slice(1)} for sale in the Maldives | Alibe`;
+  }
+  return (name && TITLES[name]) || "Alibe Maldives: Buy and Sell Online";
+}
+
 const linking = {
   // alibe://listing/123 from other apps, and alibe.online links on the web.
   prefixes: ["alibe://", "https://alibe.online", "https://www.alibe.online"],
@@ -144,7 +168,7 @@ export default function RootNavigator() {
       ref={navigationRef}
       linking={linking as any}
       theme={{ ...DefaultTheme, colors: { ...DefaultTheme.colors, background: colors.background, primary: colors.primary } }}
-      documentTitle={{ formatter: () => "Alibe" }}
+      documentTitle={{ formatter: (_options, route) => pageTitle(route?.name, route?.params as Record<string, string> | undefined) }}
     >
       {/* Every pushed screen renders its own compact ScreenHeader, so native headers stay off. */}
       {/* Same slide-in on both platforms (Android's default is a plain fade). */}
