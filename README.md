@@ -159,6 +159,44 @@ STAFF_CODE=12345678  ./scripts/admin.sh set-staff-code
 
 Staff sign-in: type the 8-digit staff code into the email field.
 
+### Admin and staff portal
+
+The same web app answers on two more addresses (add both as DNS A records to
+this server, proxied like the others; `./deploy.sh` adds them to `DOMAINS` and
+the certificate):
+
+- **admin.alibe.online**: admins. Everything: payments and plan prices, staff
+  and roles, categories, iBay, plus every portal queue.
+- **portal.alibe.online**: staff with a portal role. Each sees only their part:
+  - *Seller approver*: ID checks and store applications (sees ID photos).
+  - *Post approver*: posts from sellers who aren't verified.
+  - *Moderator*: reports, removing listings (no bans, no money).
+  - *Support*: looks up sellers and disputes, changes nothing.
+
+Staff sign in with their normal Alibe account (email code or Google); the
+account's role decides what they see. Admins add people in Admin > Staff and
+roles (by email: if they haven't signed up yet, the role applies at their first
+sign-in). For Google sign-in on these sites, add `https://admin.alibe.online`
+and `https://portal.alibe.online` to the OAuth client's authorised JavaScript
+origins in Google Cloud. On a dev machine, open the app with `?site=admin` or
+`?site=portal`.
+
+### Sellers
+
+- **Individual** (default) or **Store**, chosen at sign-up or in Profile >
+  Seller account. Businesses must register as a store.
+- **Verification is optional.** Unverified sellers: every post waits for a Post
+  approver, at most 5 items up at once, no badge, no boosts. Verified sellers
+  and approved stores post instantly.
+- **Stores** send a name, logo, registration number and the owner's ID +
+  selfie. ID photos are private (signed 10-minute links for approvers) and are
+  deleted as soon as a decision is made; only the last 4 characters of the ID
+  number are kept.
+- **Plans** (prices in Admin > Payments): *Store* (store page, Store badge,
+  placed above individuals) and *Premium* (free 7-day boosts each month, new
+  items featured for a week, gold badge). Monthly or yearly; a store with
+  Premium pays both. Paid by bank transfer like boosts.
+
 ## Releasing the phone apps
 
 The app is built in the cloud with Expo's EAS (free tier is enough). Builds talk

@@ -32,8 +32,28 @@ async function sendDueReminders() {
   }
 }
 
+// Seller plans ending within 3 days get one "renew" reminder.
+async function sendPlanReminders() {
+  const soon = new Date(Date.now() + 3 * 86_400_000);
+  const ending = await prisma.purchase.findMany({
+    where: { kind: { in: ["STORE_PLAN", "PREMIUM_PLAN"] }, status: "ACTIVE", renewalReminded: false, endsAt: { gt: new Date(), lte: soon } },
+    take: 200,
+  });
+  for (const p of ending) {
+    // A newer paid period already queued up means there's nothing to remind.
+    const next = await prisma.purchase.count({ where: { userId: p.userId, kind: p.kind, status: "ACTIVE", endsAt: { gt: p.endsAt! } } });
+    const claimed = await prisma.purchase.updateMany({ where: { id: p.id, renewalReminded: false }, data: { renewalReminded: true } });
+    if (!claimed.count || next) continue;
+    const plan = p.kind === "STORE_PLAN" ? "Store" : "Premium";
+    notifyUser(p.userId, `Your ${plan} plan ends soon`, `It ends on ${p.endsAt!.toLocaleDateString("en-GB", { day: "numeric", month: "long", timeZone: "Indian/Maldives" })}. Renew in Profile > Seller account to keep its benefits.`, { type: "seller" });
+  }
+}
+
 export function startReminders() {
-  const run = () => sendDueReminders().catch((e) => console.error("[reminders]", e));
+  const run = () => {
+    sendDueReminders().catch((e) => console.error("[reminders]", e));
+    sendPlanReminders().catch((e) => console.error("[plan reminders]", e));
+  };
   run();
   return setInterval(run, 10 * 60 * 1000);
 }

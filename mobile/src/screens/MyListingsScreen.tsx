@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, RefreshControl } from "react-native";
+import { View, Text, RefreshControl, ScrollView } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
-import { PackagePlus, BadgeCheck } from "lucide-react-native";
+import { PackagePlus, BadgeCheck, Clock, AlertCircle } from "lucide-react-native";
 import { api, errorMessage, Listing } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import ProductGrid from "../components/ProductGrid";
@@ -12,13 +12,15 @@ import EmptyState from "../components/EmptyState";
 import Tap from "../components/Tap";
 import { useToast } from "../components/Toast";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
-import { spacing, radius, fontSize, fontWeight } from "../theme/theme";
+import { spacing, radius, fontSize, fontWeight, cardShadow } from "../theme/theme";
 import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
 
-const TABS: Array<{ key: Listing["status"]; label: string }> = [
-  { key: "ACTIVE", label: "Active" },
-  { key: "RESERVED", label: "Reserved" },
-  { key: "SOLD", label: "Sold" },
+type TabKey = "ACTIVE" | "REVIEW" | "RESERVED" | "SOLD";
+const TABS: Array<{ key: TabKey; label: string; statuses: Listing["status"][] }> = [
+  { key: "ACTIVE", label: "For sale", statuses: ["ACTIVE"] },
+  { key: "REVIEW", label: "In review", statuses: ["PENDING", "REJECTED"] },
+  { key: "RESERVED", label: "Reserved", statuses: ["RESERVED"] },
+  { key: "SOLD", label: "Sold", statuses: ["SOLD"] },
 ];
 
 export default function MyListingsScreen() {
@@ -29,7 +31,7 @@ export default function MyListingsScreen() {
   const navigation = useNavigation<any>();
   const { isDesktopWeb, gutter, contentWidth } = useResponsive();
   const [allListings, setAllListings] = useState<Listing[]>([]);
-  const [tab, setTab] = useState<Listing["status"]>("ACTIVE");
+  const [tab, setTab] = useState<TabKey>("ACTIVE");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -74,12 +76,46 @@ export default function MyListingsScreen() {
   };
 
   const goToProduct = (l: Listing) => navigation.navigate("ProductDetail", { id: l.id });
-  const listings = allListings.filter((l) => l.status === tab);
+  const current = TABS.find((t) => t.key === tab)!;
+  const listings = allListings.filter((l) => current.statuses.includes(l.status));
+  const rejected = allListings.filter((l) => l.status === "REJECTED");
+  const soldValue = allListings.filter((l) => l.status === "SOLD").reduce((n, l) => n + l.price, 0);
+  const forSale = allListings.filter((l) => l.status === "ACTIVE").length;
 
   const tabRow = (
-    <View style={[styles.tabRow, { paddingHorizontal: isDesktopWeb ? 0 : gutter }]}>
+    <View style={{ paddingHorizontal: isDesktopWeb ? 0 : gutter, gap: spacing.sm + 4, marginBottom: spacing.sm }}>
+      {!loading && allListings.length > 0 && (
+        <View style={styles.stats}>
+          <View style={styles.stat}>
+            <Text style={styles.statValue}>{forSale}</Text>
+            <Text style={styles.statLabel}>For sale</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.stat}>
+            <Text style={styles.statValue}>{allListings.filter((l) => l.status === "SOLD").length}</Text>
+            <Text style={styles.statLabel}>Sold</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.stat}>
+            <Text style={styles.statValue} numberOfLines={1}>
+              {soldValue >= 10000 ? `${Math.round(soldValue / 1000)}k` : soldValue.toLocaleString()}
+            </Text>
+            <Text style={styles.statLabel}>MVR sold</Text>
+          </View>
+        </View>
+      )}
+      {rejected.length > 0 && tab !== "REVIEW" && (
+        <Tap style={styles.alert} onPress={() => setTab("REVIEW")} scaleTo={0.98}>
+          <AlertCircle size={18} color={colors.danger} />
+          <Text style={styles.alertText}>
+            {rejected.length === 1 ? "1 post wasn't approved." : `${rejected.length} posts weren't approved.`} See why and fix it.
+          </Text>
+        </Tap>
+      )}
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabRow}>
       {TABS.map((t) => {
-        const count = allListings.filter((l) => l.status === t.key).length;
+        const count = allListings.filter((l) => t.statuses.includes(l.status)).length;
+        if (t.key === "REVIEW" && !count) return null;
         const active = tab === t.key;
         return (
           <Tap key={t.key} style={[styles.tab, active && styles.tabActive]} onPress={() => setTab(t.key)} scaleTo={0.94}>
@@ -89,12 +125,15 @@ export default function MyListingsScreen() {
           </Tap>
         );
       })}
+    </ScrollView>
     </View>
   );
 
   const empty =
     tab === "ACTIVE" ? (
       <EmptyState icon={PackagePlus} title="Nothing for sale yet" message="List something in under a minute. Buyers can message you straight away." actionLabel="List an item" onAction={() => navigation.navigate("Tabs", { screen: "SellTab" })} />
+    ) : tab === "REVIEW" ? (
+      <EmptyState icon={Clock} title="Nothing waiting" message="Posts from sellers who aren't verified are checked by our team before going live." actionLabel="Get verified" onAction={() => navigation.navigate("Verify")} />
     ) : tab === "RESERVED" ? (
       <EmptyState icon={BadgeCheck} title="Nothing reserved" message="When you accept an offer, the item is reserved for that buyer and shows here." />
     ) : (
@@ -110,7 +149,20 @@ export default function MyListingsScreen() {
       horizontalPadding={isDesktopWeb ? 0 : gutter}
       bottomPadding={spacing.xl}
       ListEmptyComponent={empty}
-      renderCard={(l, width) => <ListingCard listing={l} width={width} onPress={() => goToProduct(l)} sellerView onToggleSold={() => toggleSold(l)} onEdit={() => navigation.navigate("EditListing", { id: l.id })} />}
+      renderCard={(l, width) => (
+        <View style={{ width }}>
+          <ListingCard listing={l} width={width} onPress={() => goToProduct(l)} sellerView onToggleSold={() => toggleSold(l)} onEdit={() => navigation.navigate("EditListing", { id: l.id })} />
+          {l.status === "REJECTED" && (
+            <Tap style={styles.reason} onPress={() => navigation.navigate("EditListing", { id: l.id })} scaleTo={0.98}>
+              <Text style={styles.reasonText} numberOfLines={3}>
+                {l.rejectReason ?? "Not approved."}
+              </Text>
+              <Text style={styles.reasonAction}>Edit and resend</Text>
+            </Tap>
+          )}
+          {l.status === "PENDING" && <Text style={styles.pendingText}>Our team is checking it</Text>}
+        </View>
+      )}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -151,7 +203,18 @@ const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
   desktopColumn: { maxWidth: MAX_CONTENT_WIDTH, width: "100%", alignSelf: "center", paddingTop: spacing.lg, flex: 1 },
   header: { fontSize: fontSize.xxl, fontWeight: fontWeight.extrabold, color: colors.text, marginBottom: spacing.md },
-  tabRow: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.sm },
+  tabRow: { flexDirection: "row", gap: spacing.sm },
+  stats: { flexDirection: "row", alignItems: "center", backgroundColor: colors.card, borderRadius: radius.lg, paddingVertical: spacing.md, ...cardShadow },
+  stat: { flex: 1, alignItems: "center", gap: 2 },
+  statValue: { fontSize: fontSize.xl, fontWeight: fontWeight.extrabold, color: colors.text },
+  statLabel: { fontSize: fontSize.caption, fontWeight: fontWeight.semibold, color: colors.textMuted },
+  statDivider: { width: 1, height: 30, backgroundColor: colors.border },
+  alert: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.sm + 4, borderRadius: radius.md, backgroundColor: `${colors.danger}12` },
+  alertText: { flex: 1, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text },
+  reason: { marginTop: -spacing.sm, marginBottom: spacing.md, padding: spacing.sm + 2, borderRadius: radius.md, backgroundColor: `${colors.danger}10`, gap: 4 },
+  reasonText: { fontSize: fontSize.caption, color: colors.text, lineHeight: 16 },
+  reasonAction: { fontSize: fontSize.caption, fontWeight: fontWeight.extrabold, color: colors.danger },
+  pendingText: { marginTop: -spacing.sm, marginBottom: spacing.md, fontSize: fontSize.caption, color: colors.textMuted, fontWeight: fontWeight.semibold },
   tab: { paddingHorizontal: spacing.md, height: 38, justifyContent: "center", borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
   tabActive: { backgroundColor: colors.text, borderColor: colors.text },
   tabText: { fontSize: fontSize.sm, color: colors.text, fontWeight: fontWeight.semibold },

@@ -72,7 +72,7 @@ const reportSchema = z
     reporterId: z.string(),
     listingId: z.string().optional(),
     reportedUserId: z.string().optional(),
-    reason: z.enum(["SCAM", "PROHIBITED", "WRONG_CATEGORY", "OFFENSIVE", "OTHER"]),
+    reason: z.enum(["SCAM", "PROHIBITED", "WRONG_CATEGORY", "OFFENSIVE", "OTHER", "BUSINESS_AS_INDIVIDUAL"]),
     details: z.string().trim().max(500).optional(),
   })
   .refine((r) => !!r.listingId !== !!r.reportedUserId, { message: "target" });

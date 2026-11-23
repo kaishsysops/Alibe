@@ -61,6 +61,8 @@ const PUBLIC: Array<[string, RegExp]> = [
   ["GET", /^\/uploads\/.+/],
   // Signed, expiring links handed out to staff; the signature is the check.
   ["GET", /^\/slips\/[^/]+$/],
+  ["GET", /^\/ids\/[^/]+$/],
+  ["GET", /^\/stores\/[^/]+$/],
   ["POST", /^\/auth\/(otp|email)\/(request|verify)$/],
   ["POST", /^\/auth\/create$/],
   ["POST", /^\/auth\/google$/],

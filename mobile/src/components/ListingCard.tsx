@@ -9,6 +9,7 @@ import { useFavorites } from "../api/FavoritesContext";
 import { useAuth } from "../api/AuthContext";
 import Tap from "./Tap";
 import PhotoBadge from "./PhotoBadge";
+import { SellerBadgeIcon } from "./Badges";
 
 // Photo with a graceful fallback: listings created on another device can
 // carry image URIs this device can't load (e.g. a simulator file:// path).
@@ -88,6 +89,11 @@ export default function ListingCard({
             <Text style={styles.soldOverlayText}>{listing.status === "SOLD" ? "SOLD" : "RESERVED"}</Text>
           </View>
         )}
+        {(listing.status === "PENDING" || listing.status === "REJECTED") && (
+          <View style={[styles.reviewTag, { backgroundColor: listing.status === "PENDING" ? colors.primary : colors.danger }]} pointerEvents="none">
+            <Text style={styles.reviewTagText}>{listing.status === "PENDING" ? "In review" : "Not approved"}</Text>
+          </View>
+        )}
         {sellerView ? (
           <>
             <Tap nested style={styles.statusButton} onPress={onToggleSold} hitSlop={8} scaleTo={0.85} accessibilityLabel={listing.status === "ACTIVE" ? "Mark as sold" : "Mark as available"}>
@@ -110,6 +116,11 @@ export default function ListingCard({
         <View style={styles.priceRow}>
           <Text style={styles.price}>{ibayItemId && !listing.price ? "Ask the seller" : `MVR ${listing.price.toLocaleString()}`}</Text>
           {!!listing.previousPrice && <Text style={styles.wasPrice}>{listing.previousPrice.toLocaleString()}</Text>}
+          {!sellerView && !!listing.seller.badge && (
+            <View style={{ marginLeft: "auto" }}>
+              <SellerBadgeIcon badge={listing.seller.badge} size={15} />
+            </View>
+          )}
         </View>
         <Text style={styles.title} numberOfLines={2}>
           {listing.title}
@@ -128,6 +139,8 @@ export default function ListingCard({
 }
 
 const useStyles = makeStyles((colors) => ({
+  reviewTag: { position: "absolute", left: spacing.sm, bottom: spacing.sm, paddingHorizontal: 8, height: 22, borderRadius: 11, justifyContent: "center" },
+  reviewTagText: { color: "#fff", fontSize: 11, fontWeight: "800" },
   card: { marginBottom: spacing.md },
   cardDefaultWidth: { width: "48%" },
   imageWrap: { position: "relative", borderRadius: radius.md, overflow: "hidden", backgroundColor: colors.skeleton },

@@ -7,6 +7,11 @@ Order detail screen, order banner in chat, "Sell to this buyer", order notificat
 
 Built 2026-11-02: email sign-in, real one-time codes, new onboarding, report queue with auto-hide and bans, verified phone before selling, new-account limits, prohibited items filter, price drop alerts, photo zoom, private iBay catalogue. Scam phrase/link/bank/handover-code warnings and trust levels were already in place.
 
+Built 2026-11-23: admin.alibe.online and portal.alibe.online with roles (admin, seller approver, post approver, moderator, support; admins add staff by email), seller types (individual / store), optional ID verification with private photos deleted after review, post review for unverified sellers (5-item limit), Store and Premium plans (monthly/yearly, free Premium boosts), badges on cards/profiles/details, store pages (/store/:slug), "business posing as individual" report reason, plan renewal reminders. UI pass on Boost, Notifications, Saved items, My listings, Orders, Advertise, onboarding (feature carousel, seller step). Back button on Terms/Privacy.
+
+- [ ] DNS: re-add the `www` A record (deploys skip names without DNS until it's back).
+- [ ] Google Cloud: add the admin and portal origins to the OAuth client.
+
 ### Push notifications
 - [ ] Push no longer works in Expo Go (SDK 53+): needs a development build. Run `npx eas init` (free Expo account) so the app gets a project id; real lock-screen push then works automatically (token registration + server sending are built).
 - [ ] Test on a physical device. Until then, phones get in-app banners and local notifications only while the app is running.

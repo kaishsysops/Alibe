@@ -44,3 +44,15 @@ export function deliveryMethods() {
     phone: process.env.PHONE_SIGN_IN === "true",
   };
 }
+
+// A short plain email (application results and the like). Never throws: the
+// in-app notification is the main channel; this is the copy in their inbox.
+export async function sendNoticeEmail(to: string | null | undefined, subject: string, text: string) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!to || !apiKey) return;
+  await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: process.env.MAIL_FROM ?? "Alibe <no-reply@alibe.online>", to, subject, text: `${text}\n\nAlibe` }),
+  }).catch((e) => console.error("Notice email:", e));
+}

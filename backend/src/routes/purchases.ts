@@ -7,6 +7,8 @@ import { notifyUser } from "../push.js";
 import { isShowcaseOn } from "./ibay.js";
 import { alibePrice, isReady, moneySettings } from "../money.js";
 import { makeSlipPrivate } from "./slips.js";
+import { standing } from "../sellers.js";
+import { invalidate } from "../cache.js";
 
 // Boosts, ads and buy-for-you: what people buy from Alibe. Payment is a bank
 // transfer with a reference and a slip; staff check the bank and approve, and only
@@ -23,7 +25,7 @@ const newReference = () => `AL-${crypto.randomBytes(4).toString("hex").toUpperCa
 // and the buy-for-you margin isn't theirs to see.
 purchasesRouter.get("/config", async (_req, res) => {
   const m = await moneySettings();
-  res.json({ boostPrices: m.boostPrices, adPrices: m.adPrices, ready: isReady(m) });
+  res.json({ boostPrices: m.boostPrices, adPrices: m.adPrices, sellerPlans: m.sellerPlans, premiumFreeBoosts: m.premiumFreeBoosts, ready: isReady(m) });
 });
 
 // The seller's price stays on staff screens.
@@ -39,7 +41,10 @@ const planField = z.union([z.literal(3), z.literal(7), z.literal(30)]);
 const uploadPath = z.string().regex(/^\/uploads\/[\w.-]+$/);
 
 const createSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("BOOST"), clientRequestId: z.string().min(6).max(64), listingId: z.string(), days: planField }),
+  // useFree: one of Premium's free monthly boosts (always 7 days).
+  z.object({ kind: z.literal("BOOST"), clientRequestId: z.string().min(6).max(64), listingId: z.string(), days: planField, useFree: z.boolean().optional() }),
+  // Seller plans: a month or a year of Store or Premium.
+  z.object({ kind: z.enum(["STORE_PLAN", "PREMIUM_PLAN"]), clientRequestId: z.string().min(6).max(64), period: z.enum(["MONTHLY", "YEARLY"]) }),
   z.object({
     kind: z.literal("AD"),
     clientRequestId: z.string().min(6).max(64),
@@ -78,13 +83,46 @@ purchasesRouter.post("/", async (req, res) => {
   if (existing) return existing.userId === userId ? res.json(forBuyer(existing)) : res.status(409).json({ error: "Please try again." });
 
   const m = await moneySettings();
-  if (!isReady(m)) return res.status(503).json({ error: "Alibe isn't taking payments just yet. Please try again soon." });
   const base = { userId, clientRequestId: body.clientRequestId, reference: newReference() };
+  const st = await standing(userId);
+  if (!st) return res.status(404).json({ error: "Your account couldn't be found. Please sign in again." });
+
+  // A free Premium boost needs no payment: live at once for 7 days.
+  if (body.kind === "BOOST" && body.useFree) {
+    const listing = await prisma.listing.findUnique({ where: { id: body.listingId } });
+    if (!listing || listing.sellerId !== userId) return res.status(403).json({ error: "You can only boost your own listings." });
+    if (listing.status !== "ACTIVE" || listing.hiddenAt) return res.status(400).json({ error: "Only items on sale right now can be boosted." });
+    if (st.freeBoosts.left < 1) return res.status(400).json({ error: "You've used this month's free boosts. They come back on the 1st." });
+    const now = new Date();
+    const purchase = await prisma.purchase.create({
+      data: { ...base, kind: "BOOST", status: "ACTIVE", listingId: listing.id, adTitle: listing.title, days: 7, amount: 0, startsAt: now, endsAt: new Date(now.getTime() + 7 * 86_400_000) },
+    });
+    invalidate("boosted");
+    return res.status(201).json(forBuyer(purchase));
+  }
+
+  if (!isReady(m)) return res.status(503).json({ error: "Alibe isn't taking payments just yet. Please try again soon." });
+
+  if (body.kind === "STORE_PLAN" || body.kind === "PREMIUM_PLAN") {
+    if (body.kind === "STORE_PLAN" && st.store?.status !== "APPROVED") {
+      return res.status(400).json({ error: "Your store needs to be approved first. Apply in Profile > Seller account." });
+    }
+    if (body.kind === "PREMIUM_PLAN" && !st.approved) {
+      return res.status(400).json({ error: "Premium is for verified sellers and approved stores. Get verified first (it's free)." });
+    }
+    const yearly = body.period === "YEARLY";
+    const p = m.sellerPlans;
+    const amount = body.kind === "STORE_PLAN" ? (yearly ? p.storeYearly : p.storeMonthly) : yearly ? p.premiumYearly : p.premiumMonthly;
+    const label = `${body.kind === "STORE_PLAN" ? "Store" : "Premium"} plan, ${yearly ? "1 year" : "1 month"}`;
+    const purchase = await prisma.purchase.create({ data: { ...base, kind: body.kind, status: "AWAITING_PAYMENT", days: yearly ? 365 : 30, amount, adTitle: label } });
+    return res.status(201).json(forBuyer(purchase));
+  }
 
   if (body.kind === "BOOST") {
     const listing = await prisma.listing.findUnique({ where: { id: body.listingId } });
     if (!listing || listing.sellerId !== userId) return res.status(403).json({ error: "You can only boost your own listings." });
     if (listing.status !== "ACTIVE" || listing.hiddenAt) return res.status(400).json({ error: "Only items on sale right now can be boosted." });
+    if (!st.canBoost) return res.status(403).json({ error: "Boosts are for verified sellers and stores. Get verified (it's free) to boost.", code: "VERIFY_TO_BOOST" });
     const purchase = await prisma.purchase.create({
       data: { ...base, kind: "BOOST", status: "AWAITING_PAYMENT", listingId: listing.id, adTitle: listing.title, days: body.days, amount: m.boostPrices[String(body.days) as Plan] },
     });
@@ -104,6 +142,7 @@ purchasesRouter.post("/", async (req, res) => {
     return res.status(201).json(forBuyer(purchase));
   }
 
+  if (body.kind !== "BUY_FOR_YOU") return res.status(400).json({ error: "Please check the details and try again." });
   const item = (await isShowcaseOn()) ? await prisma.ibayItem.findUnique({ where: { id: body.ibayItemId } }) : null;
   if (!item || item.hiddenAt || item.claimedListingId) return res.status(404).json({ error: "This item is no longer available." });
   // A starting figure: staff confirm the final total, with delivery, before any payment.

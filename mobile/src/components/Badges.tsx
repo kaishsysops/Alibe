@@ -1,9 +1,9 @@
 import React from "react";
 import { Text, View } from "react-native";
-import { BadgeCheck, Star } from "lucide-react-native";
-import { SellerRating } from "../api/client";
+import { BadgeCheck, Star, Crown, Store } from "lucide-react-native";
+import { SellerBadge, SellerRating } from "../api/client";
 import { useTheme } from "../theme/ThemeContext";
-import { fontSize, fontWeight } from "../theme/theme";
+import { fontSize, fontWeight, radius } from "../theme/theme";
 
 export function VerifiedBadge({ size = 16 }: { size?: number }) {
   const { colors } = useTheme();
@@ -47,6 +47,36 @@ export function CountBadge({ count, style }: { count: number; style?: object }) 
       ]}
     >
       <Text style={{ color: "#fff", fontSize: fontSize.micro, fontWeight: fontWeight.extrabold }}>{count > 99 ? "99+" : count}</Text>
+    </View>
+  );
+}
+
+// Premium (gold crown), Store (shop) or Verified (blue tick) next to a name.
+export function SellerBadgeIcon({ badge, verified, size = 16 }: { badge?: SellerBadge; verified?: boolean; size?: number }) {
+  const { colors } = useTheme();
+  const b = badge ?? (verified ? "VERIFIED" : null);
+  if (b === "PREMIUM") return <Crown size={size} color="#fff" fill={colors.gold} strokeWidth={1.6} accessibilityLabel="Premium seller" />;
+  if (b === "STORE")
+    return (
+      <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }} accessibilityLabel="Registered store">
+        <Store size={size * 0.62} color="#fff" strokeWidth={2.4} />
+      </View>
+    );
+  if (b === "VERIFIED") return <VerifiedBadge size={size} />;
+  return null;
+}
+
+const PILL = { PREMIUM: "Premium", STORE: "Store", VERIFIED: "Verified" } as const;
+
+// The same, with a word: for profiles and store pages.
+export function SellerBadgePill({ badge }: { badge?: SellerBadge }) {
+  const { colors } = useTheme();
+  if (!badge) return null;
+  const tint = badge === "PREMIUM" ? colors.gold : badge === "STORE" ? colors.primary : colors.verified;
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingLeft: 4, paddingRight: 9, height: 24, borderRadius: radius.pill, backgroundColor: `${tint}1F` }}>
+      <SellerBadgeIcon badge={badge} size={16} />
+      <Text style={{ fontSize: fontSize.caption, fontWeight: fontWeight.extrabold, color: tint }}>{PILL[badge]}</Text>
     </View>
   );
 }

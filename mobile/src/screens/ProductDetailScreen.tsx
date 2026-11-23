@@ -5,7 +5,7 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { MapPin, MessageCircle, Heart, CheckCircle2, RotateCcw, PackageSearch, ChevronRight, ChevronLeft, Clock, Tag, Share2, MoreHorizontal, Pencil, Truck, Ship, Hand, Flag, Ban, ShieldCheck, Rocket } from "lucide-react-native";
 import { api, Category, errorMessage, Listing, newClientId, DeliveryOption } from "../api/client";
 import { buildCategoryTree } from "../utils/categoryTree";
-import { VerifiedBadge } from "../components/Badges";
+import { VerifiedBadge, SellerBadgeIcon } from "../components/Badges";
 import { OfferSheet, useTrustActions } from "../components/TrustSheets";
 import { useActionSheet } from "../components/Sheet";
 import { shareListing } from "../utils/share";
@@ -341,7 +341,7 @@ export default function ProductDetailScreen() {
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
             <Text style={styles.sellerName}>{isOwner ? "You" : listing.seller.name}</Text>
-            {listing.seller.verified && <VerifiedBadge size={15} />}
+            <SellerBadgeIcon badge={listing.seller.badge} verified={listing.seller.verified} size={15} />
           </View>
           <TrustBadge userId={listing.seller.id} />
         </View>
@@ -371,13 +371,27 @@ export default function ProductDetailScreen() {
       {(specs.length > 0 || categoryPath.length > 0) && (
         <>
           <Text style={styles.sectionTitle}>Details</Text>
+          {/* Breadcrumb: every level opens its own category; long paths wrap
+              instead of being cut off. */}
           {categoryPath.length > 0 && (
-            <Tap style={styles.pathChip} onPress={() => navigation.navigate("Tabs", { screen: "SearchTab", params: { categorySlug: listing.category.slug } })} scaleTo={0.97} accessibilityLabel={`See more in ${listing.category.name}`}>
-              <Text style={styles.pathText} numberOfLines={1}>
-                {categoryPath.map((c) => c.name).join("  ›  ")}
-              </Text>
-              <ChevronRight size={16} color={colors.primary} />
-            </Tap>
+            <View style={styles.crumbs} accessibilityRole="header">
+              {categoryPath.map((c, i) => {
+                const last = i === categoryPath.length - 1;
+                return (
+                  <React.Fragment key={c.slug}>
+                    {i > 0 && <ChevronRight size={14} color={colors.textMuted} style={styles.crumbSep} />}
+                    <Tap
+                      onPress={() => navigation.navigate("Tabs", { screen: "SearchTab", params: { categorySlug: c.slug } })}
+                      hitSlop={{ top: 10, bottom: 10, left: 4, right: 4 }}
+                      scaleTo={0.96}
+                      accessibilityLabel={`See everything in ${c.name}`}
+                    >
+                      <Text style={[styles.crumb, last && styles.crumbLast]}>{c.name}</Text>
+                    </Tap>
+                  </React.Fragment>
+                );
+              })}
+            </View>
           )}
           {specs.length > 0 && (
             <View style={styles.specGrid}>
@@ -526,8 +540,10 @@ const useStyles = makeStyles((colors) => ({
   thumbActive: { opacity: 1, borderWidth: 2, borderColor: colors.primary },
   // Stays in view while the photos scroll, so Chat and Offer are always there.
   desktopInfo: { width: 420, ...(Platform.OS === "web" ? ({ position: "sticky", top: spacing.md, alignSelf: "flex-start" } as object) : {}) },
-  pathChip: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", maxWidth: "100%", gap: 4, minHeight: 44, paddingHorizontal: spacing.md, borderRadius: radius.pill, backgroundColor: colors.primaryTint, marginBottom: spacing.sm },
-  pathText: { flexShrink: 1, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.primary },
+  crumbs: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", rowGap: 6, marginBottom: spacing.md },
+  crumbSep: { marginHorizontal: 4 },
+  crumb: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.textMuted },
+  crumbLast: { color: colors.primary, fontWeight: fontWeight.bold },
   specGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   specTile: { flexBasis: "48%", flexGrow: 1, backgroundColor: colors.card, borderRadius: radius.md, paddingHorizontal: spacing.md, paddingVertical: spacing.sm + 4, ...cardShadow },
   specLabel: { fontSize: fontSize.caption, color: colors.textMuted, fontWeight: fontWeight.semibold },

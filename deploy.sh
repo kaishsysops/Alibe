@@ -84,6 +84,7 @@ run_step() {
 }
 
 info() { printf '    %s%s%s\n' "$GREY" "$*" "$R"; }
+warn() { printf '  %s!%s %s\n' "$ORANGE" "$R" "$*"; }
 fail() { printf '\n  %s%s%s\n\n' "$RED$B" "$*" "$R" >&2; exit 1; }
 
 # Polls a URL until it answers, for up to 3 minutes.
@@ -134,6 +135,11 @@ for old in SHOW_CODES_IN_APP SEED_DEMO RATE_LIMITS LAN_IP; do env_del "$old"; do
 [ -n "$(env_get DOMAINS)" ] || env_set DOMAINS "alibe.online, www.alibe.online, beta.alibe.online"
 # "Continue with Google" (public OAuth client id; set GOOGLE_CLIENT_ID= to turn it off).
 grep -qE '^GOOGLE_CLIENT_ID=' .env || env_set GOOGLE_CLIENT_ID "660515526310-csake8e57vh3eqk8glqf60vbls8admlk.apps.googleusercontent.com"
+# The staff sites (admin.<domain>, portal.<domain>) ride on the same certificate.
+root_domain=$(env_get DOMAINS | cut -d, -f1 | tr -d ' ' | sed -E 's/^(www|beta|admin|portal)\.//')
+for sub in admin portal; do
+  env_get DOMAINS | tr ',' '\n' | tr -d ' ' | grep -qx "$sub.$root_domain" || env_set DOMAINS "$(env_get DOMAINS), $sub.$root_domain"
+done
 domains=$(env_get DOMAINS)
 first_domain=$(printf '%s' "$domains" | cut -d, -f1 | tr -d ' ')
 env_set PUBLIC_URL "https://$first_domain"

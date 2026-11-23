@@ -11,6 +11,7 @@ import { signedSlipUrl } from "./slips.js";
 import { invalidate } from "../cache.js";
 import { Prisma } from "@prisma/client";
 import { categoryIndex, clearCategoryCaches, descendants } from "../categories.js";
+import { adminGate, Access } from "../roles.js";
 
 // Feeds are cached for up to a minute; staff changes show at once on the
 // server that handled them (other replicas catch up within the minute).
@@ -19,16 +20,8 @@ const clearFeedCaches = () => ["categories", "home:", "ibay:", "boosted"].forEac
 // The report queue: what people have flagged, and what staff did about it.
 export const adminRouter = safeRouter();
 
-async function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  try {
-    const user = req.userId ? await prisma.user.findUnique({ where: { id: req.userId }, select: { isAdmin: true } }) : null;
-    if (!user?.isAdmin) return res.status(403).json({ error: "You can't do that from this account." });
-    next();
-  } catch (e) {
-    next(e);
-  }
-}
-adminRouter.use(requireAdmin);
+// Admins only, except the few routes shared with portal roles (src/roles.ts).
+adminRouter.use(adminGate);
 
 // Open reports grouped by what they're about, most-reported first.
 adminRouter.get("/reports", async (_req, res) => {
@@ -99,6 +92,8 @@ const settingsSchema = z.object({
   feeMinimum: money,
   boostPrices: planPrices,
   adPrices: planPrices,
+  sellerPlans: z.object({ storeMonthly: money, storeYearly: money, premiumMonthly: money, premiumYearly: money }),
+  premiumFreeBoosts: z.coerce.number().int().min(0).max(31),
 });
 
 adminRouter.get("/money", async (_req, res) => {
@@ -148,8 +143,16 @@ adminRouter.post("/purchases/:id", async (req, res) => {
     message = ["It's available", `${label}: pay MVR ${body.amount.toLocaleString()} and we'll get it for you.`];
   } else if (body.action === "APPROVE") {
     const timed = purchase.kind !== "BUY_FOR_YOU";
-    changed = (await move(["SUBMITTED"], { status: "ACTIVE", ...(timed ? { startsAt: now, endsAt: new Date(now.getTime() + (purchase.days ?? 0) * DAY_MS) } : {}) })).count;
+    // A plan renewed early starts where the current one ends, so no days are lost.
+    let start = now;
+    if (purchase.kind === "STORE_PLAN" || purchase.kind === "PREMIUM_PLAN") {
+      const current = await prisma.purchase.findFirst({ where: { userId: purchase.userId, kind: purchase.kind, status: "ACTIVE", endsAt: { gt: now } }, orderBy: { endsAt: "desc" } });
+      if (current?.endsAt) start = current.endsAt;
+    }
+    changed = (await move(["SUBMITTED"], { status: "ACTIVE", ...(timed ? { startsAt: start, endsAt: new Date(start.getTime() + (purchase.days ?? 0) * DAY_MS) } : {}) })).count;
     message = ["Payment confirmed", timed ? `${label} is live now.` : `We're getting ${label} for you.`];
+    clearFeedCaches();
+    invalidate("premium-sellers");
   } else if (body.action === "COMPLETE") {
     changed = (await move(["ACTIVE"], { status: "COMPLETED" })).count;
     message = ["All done", `${label} is complete. Thanks for using Alibe.`];
@@ -179,6 +182,11 @@ adminRouter.post("/reports/resolve", async (req, res) => {
   const listing = listingId ? await prisma.listing.findUnique({ where: { id: listingId }, select: { id: true, title: true, sellerId: true } }) : null;
   if (listingId && !listing) return res.status(404).json({ error: "This listing is no longer available." });
   const targetReports = listingId ? { listingId } : { reportedUserId };
+
+  // Moderators handle reports; closing an account is for admins.
+  if (action === "BAN" && !(res.locals.access as Access | undefined)?.admin) {
+    return res.status(403).json({ error: "Only admins can ban accounts. Remove the listing, or ask an admin." });
+  }
 
   if (action === "DISMISS") {
     await prisma.$transaction([
@@ -338,59 +346,84 @@ adminRouter.get("/disputes", async (_req, res) => {
   res.json(orders.map((o) => ({ id: o.id, amount: o.amount, problem: o.problem, updatedAt: o.updatedAt, conversationId: o.conversationId, deliveryMethod: o.deliveryMethod, cargoReceiptUrl: o.cargoReceiptUrl, listing: o.listing, buyer: o.buyer, seller: o.seller, evidenceCount: o._count.evidence })));
 });
 
-// ---- staff -----------------------------------------------------------------
-// Staff are ordinary accounts with isAdmin. Adding an email that has an account
-// makes it staff now; otherwise it waits as an invite until that email signs in.
+// ---- staff and roles -----------------------------------------------------------
+// Admins add admins and give portal roles. Adding an email that has an account
+// applies at once; otherwise it waits as an invite until that email signs in.
+
+const roleList = z.array(z.enum(["SELLER_APPROVER", "POST_APPROVER", "MODERATOR", "SUPPORT"])).max(4);
+const staffSelect = { id: true, name: true, email: true, username: true, avatarColor: true, avatarUrl: true, isAdmin: true, staffRoles: true } as const;
 
 adminRouter.get("/staff", async (_req, res) => {
   const fromEnv = envStaffEmails();
   const [staff, invites] = await Promise.all([
     prisma.user.findMany({
-      where: { isAdmin: true, isSystem: false },
-      select: { id: true, name: true, email: true, username: true, avatarColor: true, avatarUrl: true },
-      orderBy: { name: "asc" },
+      where: { isSystem: false, OR: [{ isAdmin: true }, { staffRoles: { isEmpty: false } }] },
+      select: staffSelect,
+      orderBy: [{ isAdmin: "desc" }, { name: "asc" }],
     }),
     staffInvites(),
   ]);
   res.json({
-    // fixed: listed in the server's STAFF_EMAILS, so removing them here wouldn't stick.
-    staff: staff.map((s) => ({ ...s, fixed: !!s.email && fromEnv.includes(s.email.toLowerCase()) })),
+    // fixed: an admin listed in the server's STAFF_EMAILS (can't be removed here).
+    staff: staff.map((s) => ({ ...s, fixed: s.isAdmin && !!s.email && fromEnv.includes(s.email.toLowerCase()) })),
     invites,
   });
 });
 
-const staffEmailSchema = z.object({ email: z.string().transform(normalizeEmail).pipe(z.string().email()) });
+const staffAddSchema = z.object({ email: z.string().transform(normalizeEmail).pipe(z.string().email()), admin: z.boolean().default(false), roles: roleList.default([]) });
 
 adminRouter.post("/staff", async (req, res) => {
-  const parsed = staffEmailSchema.safeParse(req.body);
+  const parsed = staffAddSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Please enter a valid email address." });
-  const { email } = parsed.data;
+  const { email, admin, roles } = parsed.data;
+  if (!admin && !roles.length) return res.status(400).json({ error: "Choose admin or at least one role." });
   const user = await prisma.user.findUnique({ where: { email } });
   if (user?.bannedAt) return res.status(400).json({ error: "That account is banned. Unban it first." });
   if (user) {
-    await prisma.user.update({ where: { id: user.id }, data: { isAdmin: true } });
+    await prisma.user.update({ where: { id: user.id }, data: { isAdmin: user.isAdmin || admin, staffRoles: [...new Set([...user.staffRoles, ...roles])] } });
     return res.json({ added: "now", name: user.name });
   }
-  await saveStaffInvites([...(await staffInvites()), email]);
+  await saveStaffInvites([...(await staffInvites()).filter((i) => i.email !== email), { email, admin, roles }]);
   res.json({ added: "invite" });
+});
+
+const staffEditSchema = z.object({ admin: z.boolean(), roles: roleList });
+
+// Change someone's access. Removing admin from the last admin isn't allowed.
+adminRouter.patch("/staff/:id", async (req, res) => {
+  const parsed = staffEditSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Please try again." });
+  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  if (!user) return res.status(404).json({ error: "We couldn't find that account." });
+  const { admin, roles } = parsed.data;
+  if (user.isAdmin && !admin) {
+    if (user.email && envStaffEmails().includes(user.email.toLowerCase())) return res.status(400).json({ error: "This admin is set on the server (STAFF_EMAILS). Remove it there." });
+    if (req.params.id === req.userId) return res.status(400).json({ error: "You can't remove your own admin access. Ask another admin." });
+    const others = await prisma.user.count({ where: { isAdmin: true, isSystem: false, id: { not: user.id } } });
+    if (others === 0) return res.status(400).json({ error: "Alibe needs at least one admin." });
+  }
+  const updated = await prisma.user.update({ where: { id: user.id }, data: { isAdmin: admin, staffRoles: roles }, select: staffSelect });
+  res.json(updated);
 });
 
 adminRouter.delete("/staff/invites/:email", async (req, res) => {
   const email = normalizeEmail(String(req.params.email));
-  await saveStaffInvites((await staffInvites()).filter((e) => e !== email));
+  await saveStaffInvites((await staffInvites()).filter((i) => i.email !== email));
   res.json({ ok: true });
 });
 
+// Takes away all staff access (admin and roles).
 adminRouter.delete("/staff/:id", async (req, res) => {
-  if (req.params.id === req.userId) return res.status(400).json({ error: "You can't remove yourself. Ask another staff member." });
+  if (req.params.id === req.userId) return res.status(400).json({ error: "You can't remove yourself. Ask another admin." });
   const user = await prisma.user.findUnique({ where: { id: req.params.id } });
-  if (!user?.isAdmin) return res.status(404).json({ error: "That person isn't staff." });
-  if (user.email && envStaffEmails().includes(user.email.toLowerCase())) {
-    return res.status(400).json({ error: "This email is set as staff on the server (STAFF_EMAILS). Remove it there." });
+  if (!user || (!user.isAdmin && !user.staffRoles.length)) return res.status(404).json({ error: "That person isn't staff." });
+  if (user.isAdmin && user.email && envStaffEmails().includes(user.email.toLowerCase())) {
+    return res.status(400).json({ error: "This admin is set on the server (STAFF_EMAILS). Remove it there." });
   }
-  const others = await prisma.user.count({ where: { isAdmin: true, isSystem: false, id: { not: user.id } } });
-  if (others === 0) return res.status(400).json({ error: "Alibe needs at least one staff member." });
-  await prisma.user.update({ where: { id: user.id }, data: { isAdmin: false } });
+  if (user.isAdmin && (await prisma.user.count({ where: { isAdmin: true, isSystem: false, id: { not: user.id } } })) === 0) {
+    return res.status(400).json({ error: "Alibe needs at least one admin." });
+  }
+  await prisma.user.update({ where: { id: user.id }, data: { isAdmin: false, staffRoles: [] } });
   res.json({ ok: true });
 });
 

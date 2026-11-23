@@ -11,6 +11,10 @@ export type MoneySettings = {
   feeMinimum: number;
   boostPrices: Record<Plan, number>;
   adPrices: Record<Plan, number>;
+  // Seller plans (MVR). Premium is on top of Store for stores.
+  sellerPlans: { storeMonthly: number; storeYearly: number; premiumMonthly: number; premiumYearly: number };
+  // Free 7-day boosts a Premium seller gets each month.
+  premiumFreeBoosts: number;
 };
 
 // Starting prices until staff set their own. No bank details by default: without
@@ -23,11 +27,15 @@ const DEFAULTS: MoneySettings = {
   feeMinimum: 0,
   boostPrices: { "3": 50, "7": 100, "30": 300 },
   adPrices: { "3": 150, "7": 300, "30": 1000 },
+  sellerPlans: { storeMonthly: 500, storeYearly: 5000, premiumMonthly: 300, premiumYearly: 3000 },
+  premiumFreeBoosts: 4,
 };
 
 export async function moneySettings(): Promise<MoneySettings> {
   const row = await prisma.appSetting.findUnique({ where: { key: MONEY_KEY } });
-  return row ? { ...DEFAULTS, ...JSON.parse(row.value) } : DEFAULTS;
+  if (!row) return DEFAULTS;
+  const saved = JSON.parse(row.value);
+  return { ...DEFAULTS, ...saved, sellerPlans: { ...DEFAULTS.sellerPlans, ...(saved.sellerPlans ?? {}) } };
 }
 
 export const isReady = (m: MoneySettings) => !!(m.bankName && m.accountName && m.accountNumber);

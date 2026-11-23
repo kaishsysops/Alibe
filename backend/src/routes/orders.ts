@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { z } from "zod";
 import { Prisma, Order } from "@prisma/client";
+import { accessOf, can } from "../roles.js";
 import { prisma } from "../db.js";
 import { safeRouter, sendValidationError } from "../http.js";
 import { publicUser, listingInclude, serializeListing } from "../serializers.js";
@@ -208,17 +209,11 @@ ordersRouter.post("/:id/confirm", async (req, res) => {
   const current = await prisma.order.findUniqueOrThrow({ where: { id: order.id }, include: orderInclude });
   if (!delivered) return res.json({ order: serializeOrder(current, userId), becameVerified: false });
 
-  // Five verified deliveries earn the verified-seller badge.
+  // "Verified" now means an approved ID check (seller applications), so
+  // deliveries no longer earn it; the count still shows on profiles.
   const count = await deliveredCount(order.sellerId);
-  let becameVerified = false;
-  if (count >= DELIVERIES_TO_VERIFY) {
-    const result = await prisma.user.updateMany({ where: { id: order.sellerId, verificationStatus: "NONE" }, data: { verificationStatus: "VERIFIED", verifiedAt: new Date() } });
-    becameVerified = result.count > 0;
-  }
+  const becameVerified = false;
   notifyUser(order.buyerId, "Delivery complete", `${order.listing.title} is marked as delivered.`, { type: "order", orderId: order.id, conversationId: order.conversationId });
-  if (becameVerified) {
-    notifyUser(order.sellerId, "You're now a verified seller", `${DELIVERIES_TO_VERIFY} verified deliveries. The blue tick now shows on your listings.`, { type: "order", orderId: order.id, conversationId: order.conversationId });
-  }
   res.json({ order: serializeOrder(current, userId), becameVerified, delivered: count });
 });
 
@@ -299,7 +294,8 @@ ordersRouter.get("/:id/dispute", async (req, res) => {
   });
   if (!order) return res.status(404).json({ error: "This order no longer exists." });
   const party = req.userId === order.buyerId || req.userId === order.sellerId;
-  if (!party && !(await isAdmin(req.userId))) return res.status(403).json({ error: "You can't see this dispute." });
+  // Support and moderators can read disputes; only admins settle them.
+  if (!party && !can(await accessOf(req.userId), ["SUPPORT", "MODERATOR"])) return res.status(403).json({ error: "You can't see this dispute." });
   res.json({
     status: order.status,
     problem: order.problem,

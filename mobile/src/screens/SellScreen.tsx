@@ -3,8 +3,8 @@ import { View, Text, TextInput, Image, ScrollView, ActivityIndicator, KeyboardAv
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import { ImagePlus, ChevronLeft, Check, TrendingUp, Star, X, Plus, Phone } from "lucide-react-native";
-import { api, Category, Atoll, Island, newClientId, errorMessage, Listing, ListingAttributes, DeliveryOption, uploadMedia, mediaUrl } from "../api/client";
+import { ImagePlus, ChevronLeft, ChevronRight, Check, TrendingUp, Star, X, Plus, Phone, ShieldCheck } from "lucide-react-native";
+import { api, Category, Atoll, Island, newClientId, errorMessage, Listing, ListingAttributes, DeliveryOption, uploadMedia, mediaUrl, SellerMe } from "../api/client";
 import { useAuth, DRAFT_PREFIX } from "../api/AuthContext";
 import { useToast } from "../components/Toast";
 import WebNavBar from "../components/WebNavBar";
@@ -181,6 +181,13 @@ function SellForm() {
     }));
 
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const [standing, setStanding] = useState<SellerMe | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      if (user) api.sellerMe().then(setStanding).catch(() => {});
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id])
+  );
   const [publish, publishing] = useSingleFlight(async () => {
     if (!user || !categoryId || !islandId) return;
     try {
@@ -215,6 +222,12 @@ function SellForm() {
         clientRequestId: draft.requestId,
       });
       clear();
+      if (listing.status === "PENDING") {
+        toast.success("Sent for review. We'll tell you when it's live, usually within a few hours.");
+        api.sellerMe().then(setStanding).catch(() => {});
+        navigation.navigate("MyListings");
+        return;
+      }
       toast.success("Your listing is live.", { label: "View", onPress: () => navigation.navigate("ProductDetail", { id: listing.id }) });
       navigation.navigate("ProductDetail", { id: listing.id });
     } catch (e) {
@@ -436,6 +449,26 @@ function SellForm() {
     );
   }
 
+  // Sellers who aren't verified: posts are reviewed, 5 items at most.
+  if (step === 0 && standing && !standing.approved && standing.listingLimit) {
+    const full = standing.liveCount >= standing.listingLimit;
+    stepContent = (
+      <>
+        <Tap style={[styles.reviewBanner, full && styles.reviewBannerFull]} onPress={() => navigation.navigate("Verify")} scaleTo={0.98} accessibilityLabel="Get verified">
+          <View style={[styles.reviewIcon, full && { backgroundColor: `${colors.danger}22` }]}>
+            <ShieldCheck size={18} color={full ? colors.danger : colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.limitTitle}>{full ? `You have ${standing.liveCount} of ${standing.listingLimit} items up` : `Reviewed before it goes live · ${standing.liveCount} of ${standing.listingLimit} items`}</Text>
+            <Text style={styles.limitText}>{full ? "Mark something sold or remove it, or get verified to post without limits." : "Get verified to post instantly with no limit."}</Text>
+          </View>
+          <ChevronRight size={16} color={colors.textMuted} />
+        </Tap>
+        {stepContent}
+      </>
+    );
+  }
+
   const isLastStep = step === STEPS.length - 1;
   const footer = (
     <View style={[styles.footerWrap, { paddingHorizontal: gutter, paddingBottom: isDesktopWeb ? spacing.md : keyboardVisible ? spacing.sm : tabBarClearance - spacing.md }]}>
@@ -512,6 +545,11 @@ function ImageTile({ uri, style }: { uri: string; style?: object }) {
 }
 
 const useStyles = makeStyles((colors) => ({
+  reviewBanner: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 2, padding: spacing.sm + 4, borderRadius: radius.lg, backgroundColor: colors.primaryTint, marginBottom: spacing.md },
+  reviewBannerFull: { backgroundColor: `${colors.danger}12` },
+  reviewIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: colors.card, alignItems: "center", justifyContent: "center" },
+  limitTitle: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.text },
+  limitText: { fontSize: fontSize.caption, color: colors.textMuted, marginTop: 2 },
   container: { flex: 1, backgroundColor: colors.background },
   topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: spacing.sm },
   backButton: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center" },

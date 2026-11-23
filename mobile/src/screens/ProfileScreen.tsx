@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { View, Text, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, Linking } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { LogOut, Archive, Heart, Phone, Mail, Palette, HelpCircle, Info, ChevronRight, Pencil, Trash2, MessageSquareText, Package, ShieldCheck, BellRing, Bell, Ban, SunMoon, Flag, Store, Megaphone, Wallet, Landmark, Users, Scale, Activity, UserCog, FolderTree, FileText } from "lucide-react-native";
@@ -19,6 +19,13 @@ import { formatPhone } from "../utils/phone";
 import { WhatsAppIcon, ViberIcon } from "../components/BrandIcons";
 import AvatarPhoto from "../components/AvatarPhoto";
 import { useAuthMethods } from "../hooks/useAuthMethods";
+import { siteUrl, Site } from "../site";
+
+const openStaffSite = (site: Site) => {
+  const url = siteUrl(site);
+  if (url) Linking.openURL(url).catch(() => {});
+  else if (typeof window !== "undefined") window.open(`${window.location.origin}/?site=${site}`, "_blank");
+};
 
 export default function ProfileScreen() {
   const { phone: phoneSignIn } = useAuthMethods();
@@ -80,6 +87,12 @@ export default function ProfileScreen() {
 
   const groups: Array<Array<{ icon: any; label: string; value?: React.ReactNode; onPress: () => void }>> = [
     [
+      {
+        icon: Store,
+        label: "Seller account",
+        value: user?.sellerKind === "STORE" ? "Store" : user?.verificationStatus === "VERIFIED" ? "Verified" : "Get verified",
+        onPress: () => navigation.navigate("SellerAccount"),
+      },
       { icon: Package, label: "My orders", onPress: () => navigation.navigate("Orders") },
       { icon: Archive, label: "My listings", value: counts ? String(counts.active) : undefined, onPress: () => navigation.navigate("MyListings") },
       { icon: Heart, label: "Saved items", value: String(favoriteIds.size), onPress: () => navigation.navigate("Favorites") },
@@ -97,17 +110,9 @@ export default function ProfileScreen() {
       { icon: Ban, label: "Blocked people", onPress: () => navigation.navigate("BlockedUsers") },
     ],
     [
-      ...(user?.isAdmin
-        ? [
-            { icon: Flag, label: "Reports to review", onPress: () => navigation.navigate("AdminReports") },
-            { icon: Users, label: "Sellers", onPress: () => navigation.navigate("AdminSellers") },
-            { icon: Scale, label: "Disputes", onPress: () => navigation.navigate("AdminDisputes") },
-            { icon: Store, label: "iBay items", onPress: () => navigation.navigate("AdminIbay") },
-            { icon: Landmark, label: "Payments and prices", onPress: () => navigation.navigate("AdminMoney") },
-            { icon: UserCog, label: "Staff", onPress: () => navigation.navigate("AdminStaff") },
-            { icon: FolderTree, label: "Categories", onPress: () => navigation.navigate("AdminCategories") },
-          ]
-        : []),
+      // Staff work on their own sites now: admin.alibe.online / portal.alibe.online.
+      ...(user?.isAdmin ? [{ icon: UserCog, label: "Open Alibe Admin", onPress: () => openStaffSite("admin") }] : []),
+      ...(user?.isAdmin || user?.staffRoles?.length ? [{ icon: Scale, label: "Open the staff portal", onPress: () => openStaffSite("portal") }] : []),
       { icon: ShieldCheck, label: "How Alibe keeps you safe", onPress: () => navigation.navigate("Safety") },
       { icon: Activity, label: "System status", onPress: () => navigation.navigate("Status") },
       { icon: HelpCircle, label: "Help and support", onPress: () => toast.info("Support chat is coming soon. For now, email help@alibe.mv.") },

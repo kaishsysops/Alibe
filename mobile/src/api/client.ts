@@ -222,6 +222,9 @@ export type PublicSeller = {
   phone: string | null;
   whatsapp: string | null;
   viber: string | null;
+  // Verified / Store / Premium, and the store when its page is open.
+  badge?: SellerBadge;
+  store?: StoreSummary | null;
 };
 export type Listing = {
   id: string;
@@ -229,7 +232,9 @@ export type Listing = {
   description: string;
   price: number;
   condition: "NEW" | "LIKE_NEW" | "GOOD" | "FAIR";
-  status: "ACTIVE" | "RESERVED" | "SOLD" | "DRAFT";
+  // PENDING: waiting for a Post approver; REJECTED: turned down (rejectReason).
+  status: "ACTIVE" | "RESERVED" | "SOLD" | "DRAFT" | "PENDING" | "REJECTED";
+  rejectReason?: string | null;
   images: string[];
   deliveryOptions: DeliveryOption[];
   deliveryNote: string | null;
@@ -259,6 +264,9 @@ export type User = {
   avatarColor?: string | null;
   avatarUrl?: string | null;
   // The island they said they live on (onboarding / profile).
+  // Staff: portal roles (admins have isAdmin).
+  staffRoles?: StaffRole[];
+  sellerKind?: "INDIVIDUAL" | "STORE";
   islandId?: string | null;
   // Category slugs they follow; those rows come first on Home.
   interests?: string[];
@@ -358,7 +366,50 @@ export type Order = {
 export type DispatchDetails = { method: DeliveryOption; boatName?: string; boatDeparture?: string; cargoReference?: string; courierName?: string; pickupNote?: string; cargoReceiptUrl?: string };
 export type DisputeEvidence = { id: string; text: string; photoUrl: string | null; createdAt: string; by: { id: string; name: string }; role: "BUYER" | "SELLER" | "STAFF" };
 export type DisputeInfo = { status: OrderStatus; problem: string | null; outcome: "DELIVERED" | "CANCELLED" | null; note: string | null; resolvedAt: string | null; evidence: DisputeEvidence[] };
-export type StaffMember = { id: string; name: string; email: string | null; username: string | null; avatarColor: string | null; avatarUrl: string | null; fixed: boolean };
+export type StaffRole = "SELLER_APPROVER" | "POST_APPROVER" | "MODERATOR" | "SUPPORT";
+export type StaffMember = { id: string; name: string; email: string | null; username: string | null; avatarColor: string | null; avatarUrl: string | null; isAdmin: boolean; staffRoles: StaffRole[]; fixed: boolean };
+export type StaffInvite = { email: string; admin: boolean; roles: StaffRole[] };
+// What the signed-in staff member can do, and what's waiting (null = not theirs).
+export type StaffMe = { admin: boolean; roles: StaffRole[]; counts: { applications: number | null; posts: number | null; reports: number | null; disputes: number | null } };
+export type SellerApplicationItem = {
+  id: string;
+  kind: "VERIFY" | "STORE";
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  idNumberLast4: string | null;
+  note: string | null;
+  createdAt: string;
+  decidedAt: string | null;
+  decidedBy: string | null;
+  user: { id: string; name: string; email: string | null; phone: string | null; avatarColor: string | null; avatarUrl: string | null; createdAt: string; verificationStatus: "NONE" | "VERIFIED" };
+  store: StoreRecord | null;
+  photos: { idFront: string | null; idBack: string | null; selfie: string | null };
+};
+export type StoreRecord = { id: string; name: string; slug: string; logoUrl: string | null; registrationNumber: string; status: "PENDING" | "APPROVED" | "REJECTED"; rejectReason: string | null; approvedAt: string | null };
+export type PendingPost = Listing & { sellerPublishedCount: number; sellerEmail: string | null };
+export type SellerBadge = "PREMIUM" | "STORE" | "VERIFIED" | null;
+export type StoreSummary = { name: string; slug: string; logoUrl: string | null };
+type ApplicationSummary = { id: string; kind: "VERIFY" | "STORE"; status: "PENDING" | "APPROVED" | "REJECTED"; note: string | null; createdAt: string; decidedAt: string | null } | null;
+// Someone's own seller standing (Profile > Seller account, plans).
+export type SellerMe = {
+  kind: "INDIVIDUAL" | "STORE";
+  verified: boolean;
+  approved: boolean;
+  store: StoreRecord | null;
+  storeLive: boolean;
+  storeEndsAt: string | null;
+  premium: boolean;
+  premiumEndsAt: string | null;
+  liveCount: number;
+  listingLimit: number | null;
+  canBoost: boolean;
+  freeBoosts: { allowance: number; used: number; left: number };
+  verifyApplication: ApplicationSummary;
+  storeApplication: ApplicationSummary;
+  prices: SellerPlanPrices;
+  premiumFreeBoosts: number;
+};
+export type IdPhotos = { idNumber: string; idFront: string; idBack?: string; selfie: string };
+export type StorePage = { store: { name: string; slug: string; logoUrl: string | null; since: string }; owner: PublicSeller & { rating: SellerRating }; listingCount: number; listings: Listing[] };
 
 export type AdminDispute = {
   id: string;
@@ -382,7 +433,7 @@ export type Review = {
   reviewer: PublicSeller;
   listing: { id: string; title: string };
 };
-export type ReportReason = "SCAM" | "PROHIBITED" | "WRONG_CATEGORY" | "OFFENSIVE" | "OTHER";
+export type ReportReason = "SCAM" | "PROHIBITED" | "WRONG_CATEGORY" | "OFFENSIVE" | "OTHER" | "BUSINESS_AS_INDIVIDUAL";
 export type BlockedUser = { id: string; createdAt: string; user: PublicSeller };
 export type ListingFilters = Partial<{
   q: string;
@@ -402,7 +453,9 @@ export type NotificationItem =
   | { type: "order"; id: string; orderId: string; conversationId: string; role: "BUYER" | "SELLER"; status: OrderStatus; fromName: string; listingTitle: string; image: string | null; createdAt: string }
   | { type: "purchase"; id: string; purchaseId: string; label: string; amount: number; createdAt: string }
   | { type: "price_drop"; id: string; listingId: string; listingTitle: string; image: string | null; price: number; previousPrice: number; createdAt: string }
-  | { type: "saved_search"; id: string; savedSearchId: string; label: string; params: ListingFilters; newCount: number; createdAt: string };
+  | { type: "saved_search"; id: string; savedSearchId: string; label: string; params: ListingFilters; newCount: number; createdAt: string }
+  | { type: "seller"; id: string; kind: "VERIFY" | "STORE"; approved: boolean; note: string | null; createdAt: string }
+  | { type: "post_review"; id: string; listingId: string; listingTitle: string; image: string | null; approved: boolean; note: string | null; createdAt: string };
 export type Notifications = { unreadChats: number; total: number; items: NotificationItem[] };
 export type Conversation = {
   id: string;
@@ -433,7 +486,7 @@ export type ProfileUpdate = Partial<{
   viberEnabled: boolean;
   viberNumber: string | null;
 }>;
-export type PurchaseKind = "BOOST" | "AD" | "BUY_FOR_YOU";
+export type PurchaseKind = "BOOST" | "AD" | "BUY_FOR_YOU" | "STORE_PLAN" | "PREMIUM_PLAN";
 export type PurchaseStatus = "REQUESTED" | "AWAITING_PAYMENT" | "SUBMITTED" | "ACTIVE" | "COMPLETED" | "REJECTED" | "CANCELLED";
 export type Purchase = {
   id: string;
@@ -461,12 +514,14 @@ export type Purchase = {
   user?: { id: string; name: string; phone: string | null; email: string | null };
 };
 export type PlanPrices = { "3": number; "7": number; "30": number };
-export type MoneySettings = { bankName: string; accountName: string; accountNumber: string; feePercent: number; feeMinimum: number; boostPrices: PlanPrices; adPrices: PlanPrices };
-export type MoneyConfig = Pick<MoneySettings, "boostPrices" | "adPrices"> & { ready: boolean };
+export type SellerPlanPrices = { storeMonthly: number; storeYearly: number; premiumMonthly: number; premiumYearly: number };
+export type MoneySettings = { bankName: string; accountName: string; accountNumber: string; feePercent: number; feeMinimum: number; boostPrices: PlanPrices; adPrices: PlanPrices; sellerPlans: SellerPlanPrices; premiumFreeBoosts: number };
+export type MoneyConfig = Pick<MoneySettings, "boostPrices" | "adPrices" | "sellerPlans" | "premiumFreeBoosts"> & { ready: boolean };
 export type BankDetails = Pick<MoneySettings, "bankName" | "accountName" | "accountNumber">;
 export type RunningAd = { id: string; adTitle: string; adImage: string; adUrl: string | null; listingId: string | null };
 export type NewPurchase =
-  | { kind: "BOOST"; listingId: string; days: number }
+  | { kind: "BOOST"; listingId: string; days: number; useFree?: boolean }
+  | { kind: "STORE_PLAN" | "PREMIUM_PLAN"; period: "MONTHLY" | "YEARLY" }
   | { kind: "AD"; days: number; adTitle: string; adImage: string; listingId?: string; adUrl?: string }
   | { kind: "BUY_FOR_YOU"; ibayItemId: string; deliveryNote: string; contactPhone: string };
 export type ReportAction = "DISMISS" | "REMOVE_LISTING" | "BAN";
@@ -625,8 +680,22 @@ export const api = {
   addDisputeEvidence: (id: string, userId: string, text: string, photoUrl?: string) =>
     request<{ ok: true }>(`/orders/${id}/evidence`, { method: "POST", body: JSON.stringify({ userId, text, photoUrl }) }),
   resolveDispute: (id: string, outcome: "DELIVERED" | "CANCELLED", note: string) => request<void>(`/orders/${id}/resolve`, { method: "POST", body: JSON.stringify({ outcome, note }) }),
-  adminStaff: () => request<{ staff: StaffMember[]; invites: string[] }>("/admin/staff"),
-  addStaff: (email: string) => request<{ added: "now" | "invite"; name?: string }>("/admin/staff", { method: "POST", body: JSON.stringify({ email }) }),
+  adminStaff: () => request<{ staff: StaffMember[]; invites: StaffInvite[] }>("/admin/staff"),
+  addStaff: (email: string, admin: boolean, roles: StaffRole[]) => request<{ added: "now" | "invite"; name?: string }>("/admin/staff", { method: "POST", body: JSON.stringify({ email, admin, roles }) }),
+  updateStaff: (id: string, admin: boolean, roles: StaffRole[]) => request<StaffMember>(`/admin/staff/${id}`, { method: "PATCH", body: JSON.stringify({ admin, roles }) }),
+  // ---- portal ----
+  staffMe: () => request<StaffMe>("/staff/me"),
+  staffApplications: (status: "PENDING" | "APPROVED" | "REJECTED" = "PENDING") => request<SellerApplicationItem[]>(`/staff/applications?status=${status}`),
+  decideApplication: (id: string, approve: boolean, reason?: string) => request<void>(`/staff/applications/${id}/decide`, { method: "POST", body: JSON.stringify({ approve, reason }) }),
+  staffPosts: () => request<PendingPost[]>("/staff/posts"),
+  decidePost: (id: string, approve: boolean, reason?: string) => request<void>(`/staff/posts/${id}/decide`, { method: "POST", body: JSON.stringify({ approve, reason }) }),
+  // ---- seller account ----
+  sellerMe: () => request<SellerMe>("/sellers/me"),
+  setSellerKind: (kind: "INDIVIDUAL" | "STORE") => request<{ kind: string }>("/sellers/kind", { method: "POST", body: JSON.stringify({ kind }) }),
+  applyVerify: (body: IdPhotos) => request<{ id: string }>("/sellers/apply/verify", { method: "POST", body: JSON.stringify(body) }),
+  applyStore: (body: { name: string; logoUrl?: string; registrationNumber: string } & Partial<IdPhotos>) =>
+    request<{ ok: true; slug: string }>("/sellers/apply/store", { method: "POST", body: JSON.stringify(body) }),
+  storePage: (slug: string) => request<StorePage>(`/stores/${encodeURIComponent(slug)}`),
   removeStaff: (id: string) => request<void>(`/admin/staff/${id}`, { method: "DELETE" }),
   cancelStaffInvite: (email: string) => request<void>(`/admin/staff/invites/${encodeURIComponent(email)}`, { method: "DELETE" }),
   adminDisputes: () => request<AdminDispute[]>("/admin/disputes"),

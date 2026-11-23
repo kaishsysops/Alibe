@@ -107,6 +107,13 @@ model User {
   conversationsAsBuyer   Conversation[] @relation("BuyerConversations")
   conversationsAsSeller  Conversation[] @relation("SellerConversations")
   sessions               Session[]
+  // Portal roles (admins, isAdmin, can do everything without them).
+  staffRoles             StaffRole[]    @default([])
+  // Chosen when they start selling: an individual or a store.
+  sellerKind             SellerKind     @default(INDIVIDUAL)
+  store                  Store?
+  applications           SellerApplication[] @relation("Applicant")
+  decidedApplications    SellerApplication[] @relation("Decider")
   disputeEvidence        DisputeEvidence[]
 }
 
@@ -122,6 +129,10 @@ enum ListingStatus {
   RESERVED
   SOLD
   DRAFT
+  // Posted by a seller who isn't approved yet: waits for a Post approver.
+  PENDING
+  // Turned down by a Post approver (rejectReason says why).
+  REJECTED
 }
 
 enum DeliveryOption {
@@ -164,6 +175,9 @@ model Listing {
   // Answers to the category's questions, e.g. {"brand":"Apple","storage":"128 GB"}.
   attributes    Json           @default("{}")
   imageHashes   ImageHash[]
+  // Post approval for sellers who aren't approved yet.
+  rejectReason  String?
+  reviewedAt    DateTime?
   favoritedBy   Favorite[]
   conversations Conversation[]
   reviews       Review[]
@@ -356,6 +370,8 @@ enum ReportReason {
   WRONG_CATEGORY
   OFFENSIVE
   OTHER
+  // A business posting as an individual seller (stores must register).
+  BUSINESS_AS_INDIVIDUAL
 }
 
 model Report {
@@ -422,6 +438,9 @@ enum PurchaseKind {
   BOOST
   AD
   BUY_FOR_YOU
+  // Paid seller plans (days = 30 or 365).
+  STORE_PLAN
+  PREMIUM_PLAN
 }
 
 enum PurchaseStatus {
@@ -466,6 +485,8 @@ model Purchase {
   contactPhone    String?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+  // Seller plans: a "renews soon" reminder was sent.
+  renewalReminded Boolean        @default(false)
 
   @@index([status])
   @@index([kind, status, endsAt])
@@ -588,4 +609,78 @@ model SearchEvent {
 
   @@unique([term, userKey, day])
   @@index([day])
+}
+
+// ---- roles and seller types ----------------------------------------------------
+
+// What a staff member can do in the portal (portal.alibe.online). Admins
+// (User.isAdmin) can do everything, on the admin site too.
+enum StaffRole {
+  SELLER_APPROVER // verification and store applications (sees ID photos)
+  POST_APPROVER   // posts from sellers who aren't approved
+  MODERATOR       // reports, removing listings (not bans, not money)
+  SUPPORT         // looks things up, changes nothing
+}
+
+enum SellerKind {
+  INDIVIDUAL
+  STORE
+}
+
+enum ApplicationKind {
+  VERIFY // an individual's ID check
+  STORE  // a store: business details + the owner's ID check
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum StoreStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// A business selling on Alibe. Its page (alibe.online/store/<slug>) and badge
+// show while it's approved and its Store plan is paid up.
+model Store {
+  id                 String      @id @default(cuid())
+  userId             String      @unique
+  user               User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name               String
+  slug               String      @unique
+  logoUrl            String?
+  registrationNumber String
+  status             StoreStatus @default(PENDING)
+  rejectReason       String?
+  approvedAt         DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+}
+
+// An ID check (and, for stores, the business details) waiting for a Seller
+// approver. The ID and selfie photos sit in private storage and are deleted
+// as soon as it's decided; only the ID number's last 4 digits are kept.
+model SellerApplication {
+  id            String            @id @default(cuid())
+  userId        String
+  user          User              @relation("Applicant", fields: [userId], references: [id], onDelete: Cascade)
+  kind          ApplicationKind
+  status        ApplicationStatus @default(PENDING)
+  idNumberLast4 String?
+  idFront       String?
+  idBack        String?
+  selfie        String?
+  // Why it was turned down (the applicant sees it).
+  note          String?
+  decidedById   String?
+  decidedBy     User?             @relation("Decider", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt     DateTime?
+  createdAt     DateTime          @default(now())
+
+  @@index([status, createdAt])
+  @@index([userId])
 }

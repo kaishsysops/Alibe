@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
-import { ImagePlus } from "lucide-react-native";
+import { ImagePlus, Megaphone, Check, Globe } from "lucide-react-native";
 import { api, errorMessage, Listing, mediaUrl, MoneyConfig, newClientId, uploadMedia } from "../api/client";
 import { useAuth, DRAFT_PREFIX } from "../api/AuthContext";
 import { useToast } from "../components/Toast";
@@ -68,56 +68,104 @@ export default function BuyAdScreen() {
     }
   });
 
+  const price = config ? config.adPrices[String(draft.days) as keyof typeof config.adPrices] : null;
+  const step = !draft.image || draft.title.trim().length < 3 ? 1 : !(isWebsite ? draft.url.trim().startsWith("https://") : !!draft.target) ? 2 : 3;
+
   return (
     <View style={styles.container}>
       {isDesktopWeb ? <WebNavBar /> : <ScreenHeader title="Advertise on Alibe" />}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <Text style={styles.intro}>Your ad appears on the Alibe home page with an "Ad" label. We check each ad first, and it starts once your payment is confirmed.</Text>
-
-          <Text style={styles.label}>Photo</Text>
-          <Tap style={styles.photo} onPress={() => pickPhoto()} disabled={uploading} scaleTo={0.98} accessibilityLabel="Choose a photo for your ad">
-            {draft.image ? (
-              <Image source={{ uri: mediaUrl(draft.image) }} style={styles.photoImage} resizeMode="cover" />
-            ) : uploading ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : (
-              <>
-                <ImagePlus size={26} color={colors.primary} />
-                <Text style={styles.photoText}>Add a wide photo</Text>
-              </>
-            )}
-          </Tap>
-
-          <Text style={styles.label}>Headline</Text>
-          <TextInput style={styles.input} value={draft.title} onChangeText={(title) => set({ title })} placeholder="e.g. Fresh tuna delivered in Malé" placeholderTextColor={colors.textMuted} maxLength={60} accessibilityLabel="Headline" />
-
-          <Text style={styles.label}>When people tap your ad, show them</Text>
-          <View style={styles.chips}>
-            {listings.slice(0, 8).map((l) => (
-              <Tap key={l.id} style={[styles.chip, draft.target === l.id && styles.chipActive]} onPress={() => set({ target: l.id })} scaleTo={0.95}>
-                <Text style={[styles.chipText, draft.target === l.id && { color: "#fff" }]} numberOfLines={1}>
-                  {l.title}
-                </Text>
-              </Tap>
-            ))}
-            <Tap style={[styles.chip, isWebsite && styles.chipActive]} onPress={() => set({ target: WEBSITE })} scaleTo={0.95}>
-              <Text style={[styles.chipText, isWebsite && { color: "#fff" }]}>My website</Text>
-            </Tap>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+          <View style={styles.hero}>
+            <View style={styles.heroIcon}>
+              <Megaphone size={22} color="#fff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroTitle}>Reach everyone who opens Alibe</Text>
+              <Text style={styles.heroText}>Your ad sits on the home page with an "Ad" label. We check it first, and it starts once your payment is confirmed.</Text>
+            </View>
           </View>
-          {isWebsite && (
-            <TextInput style={[styles.input, { marginTop: spacing.sm }]} value={draft.url} onChangeText={(url) => set({ url })} placeholder="https://" placeholderTextColor={colors.textMuted} autoCapitalize="none" autoCorrect={false} keyboardType="url" accessibilityLabel="Website address" maxLength={300} />
-          )}
 
-          <Text style={styles.label}>How long?</Text>
-          {config ? (
-            <PlanPicker prices={config.adPrices} days={draft.days} onChange={(days) => set({ days })} />
-          ) : (
-            <SkeletonGroup>
-              <Skeleton width="100%" height={76} rounded={radius.lg} />
-            </SkeletonGroup>
-          )}
+          {/* Live preview */}
+          <Text style={styles.label}>Preview</Text>
+          <View style={styles.preview}>
+            {draft.image ? (
+              <Image source={{ uri: mediaUrl(draft.image) }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            ) : (
+              <View style={[StyleSheet.absoluteFill, styles.previewEmpty]}>
+                <ImagePlus size={26} color={colors.textMuted} />
+              </View>
+            )}
+            <View style={styles.previewShade} />
+            <View style={styles.adTag}>
+              <Text style={styles.adTagText}>Ad</Text>
+            </View>
+            <Text style={styles.previewTitle} numberOfLines={2}>
+              {draft.title.trim() || "Your headline here"}
+            </Text>
+          </View>
 
+          <Section n={1} title="Photo and headline" done={step > 1}>
+            <Tap style={styles.photo} onPress={() => pickPhoto()} disabled={uploading} scaleTo={0.98} accessibilityLabel="Choose a photo for your ad">
+              {uploading ? (
+                <ActivityIndicator color={colors.primary} />
+              ) : (
+                <>
+                  <ImagePlus size={20} color={colors.primary} />
+                  <Text style={styles.photoText}>{draft.image ? "Change photo" : "Add a wide photo"}</Text>
+                </>
+              )}
+            </Tap>
+            <View>
+              <TextInput style={styles.input} value={draft.title} onChangeText={(title) => set({ title })} placeholder="e.g. Fresh tuna delivered in Malé" placeholderTextColor={colors.textMuted} maxLength={60} accessibilityLabel="Headline" />
+              <Text style={styles.counter}>{draft.title.length}/60</Text>
+            </View>
+          </Section>
+
+          <Section n={2} title="Where it leads" done={step > 2}>
+            <View style={styles.targets}>
+              {listings.slice(0, 8).map((l) => {
+                const on = draft.target === l.id;
+                return (
+                  <Tap key={l.id} style={[styles.target, on && styles.targetOn]} onPress={() => set({ target: l.id })} scaleTo={0.97}>
+                    <Image source={{ uri: mediaUrl(l.images[0]) }} style={styles.targetThumb} />
+                    <Text style={[styles.targetText, on && { color: colors.primary }]} numberOfLines={1}>
+                      {l.title}
+                    </Text>
+                    {on && <Check size={16} color={colors.primary} strokeWidth={3} />}
+                  </Tap>
+                );
+              })}
+              <Tap style={[styles.target, isWebsite && styles.targetOn]} onPress={() => set({ target: WEBSITE })} scaleTo={0.97}>
+                <View style={[styles.targetThumb, styles.targetIcon]}>
+                  <Globe size={18} color={colors.primary} />
+                </View>
+                <Text style={[styles.targetText, isWebsite && { color: colors.primary }]}>My website</Text>
+                {isWebsite && <Check size={16} color={colors.primary} strokeWidth={3} />}
+              </Tap>
+            </View>
+            {isWebsite && (
+              <TextInput style={styles.input} value={draft.url} onChangeText={(url) => set({ url })} placeholder="https://" placeholderTextColor={colors.textMuted} autoCapitalize="none" autoCorrect={false} keyboardType="url" accessibilityLabel="Website address" maxLength={300} />
+            )}
+          </Section>
+
+          <Section n={3} title="How long" done={false}>
+            {config ? (
+              <PlanPicker prices={config.adPrices} days={draft.days} onChange={(days) => set({ days })} />
+            ) : (
+              <SkeletonGroup>
+                <Skeleton width="100%" height={76} rounded={radius.lg} />
+              </SkeletonGroup>
+            )}
+          </Section>
+
+          <View style={styles.total}>
+            <View>
+              <Text style={styles.totalLabel}>Total</Text>
+              <Text style={styles.totalSub}>{draft.days} days on the home page</Text>
+            </View>
+            <Text style={styles.totalPrice}>{price !== null ? `MVR ${price.toLocaleString()}` : "..."}</Text>
+          </View>
           <Tap style={[styles.button, !ready && { opacity: 0.45 }]} onPress={() => buy()} disabled={buying || !config} scaleTo={0.97}>
             {buying ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Continue to payment</Text>}
           </Tap>
@@ -127,19 +175,53 @@ export default function BuyAdScreen() {
   );
 }
 
+function Section({ n, title, done, children }: { n: number; title: string; done: boolean; children: React.ReactNode }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
+  return (
+    <View style={styles.section}>
+      <View style={styles.sectionHead}>
+        <View style={[styles.num, done && { backgroundColor: colors.success }]}>{done ? <Check size={13} color="#fff" strokeWidth={3} /> : <Text style={styles.numText}>{n}</Text>}</View>
+        <Text style={styles.sectionTitle}>{title}</Text>
+      </View>
+      {children}
+    </View>
+  );
+}
+
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
-  scroll: { padding: spacing.md, paddingBottom: spacing.xl, width: "100%", maxWidth: contentWidth.form, alignSelf: "center" },
-  intro: { fontSize: fontSize.md, color: colors.textMuted, lineHeight: fontSize.md * 1.4 },
-  label: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text, marginTop: spacing.lg, marginBottom: spacing.sm },
-  photo: { width: "100%", aspectRatio: 2.4, borderRadius: radius.lg, borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.border, backgroundColor: colors.card, alignItems: "center", justifyContent: "center", overflow: "hidden", gap: spacing.xs, ...cardShadow },
-  photoImage: { width: "100%", height: "100%" },
-  photoText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.textMuted },
-  input: { minHeight: controlHeight.input, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card, paddingHorizontal: spacing.md, fontSize: fontSize.md, color: colors.text, outlineStyle: "none" as any },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  chip: { maxWidth: "100%", height: 42, justifyContent: "center", paddingHorizontal: spacing.md, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text },
-  button: { height: controlHeight.primary, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", marginTop: spacing.lg },
+  scroll: { padding: spacing.md, paddingBottom: spacing.xl, width: "100%", maxWidth: contentWidth.form, alignSelf: "center", gap: spacing.md },
+  hero: { flexDirection: "row", gap: spacing.sm + 4, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.primaryTint },
+  heroIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  heroTitle: { fontSize: fontSize.md, fontWeight: fontWeight.extrabold, color: colors.text },
+  heroText: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: 3, lineHeight: 19 },
+  label: { fontSize: fontSize.caption, fontWeight: fontWeight.extrabold, color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: -spacing.sm },
+  preview: { width: "100%", aspectRatio: 2.4, borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.card, justifyContent: "flex-end", padding: spacing.md, ...cardShadow },
+  previewEmpty: { alignItems: "center", justifyContent: "center", backgroundColor: colors.skeleton },
+  previewShade: { position: "absolute", left: 0, right: 0, bottom: 0, height: "60%", backgroundColor: "rgba(0,0,0,0.35)" },
+  adTag: { position: "absolute", top: 10, left: 10, paddingHorizontal: 8, height: 20, borderRadius: 6, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center" },
+  adTagText: { color: "#fff", fontSize: 11, fontWeight: fontWeight.extrabold },
+  previewTitle: { color: "#fff", fontSize: fontSize.lg, fontWeight: fontWeight.extrabold },
+  section: { backgroundColor: colors.card, borderRadius: radius.lg, padding: spacing.md, gap: spacing.sm + 4, ...cardShadow },
+  sectionHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  num: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  numText: { color: "#fff", fontSize: fontSize.caption, fontWeight: fontWeight.extrabold },
+  sectionTitle: { fontSize: fontSize.md, fontWeight: fontWeight.extrabold, color: colors.text },
+  photo: { flexDirection: "row", gap: spacing.sm, height: 46, borderRadius: radius.md, borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.primary, alignItems: "center", justifyContent: "center", backgroundColor: colors.primaryTint },
+  photoText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.primary },
+  input: { minHeight: controlHeight.input, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.background, paddingHorizontal: spacing.md, fontSize: fontSize.md, color: colors.text, outlineStyle: "none" as any },
+  counter: { fontSize: fontSize.micro, color: colors.textMuted, alignSelf: "flex-end", marginTop: 4 },
+  targets: { gap: 6 },
+  target: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 2, padding: 6, paddingRight: spacing.md, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.background },
+  targetOn: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
+  targetThumb: { width: 38, height: 38, borderRadius: 9, backgroundColor: colors.skeleton },
+  targetIcon: { backgroundColor: colors.primaryTint, alignItems: "center", justifyContent: "center" },
+  targetText: { flex: 1, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text },
+  total: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.xs, marginTop: spacing.xs },
+  totalLabel: { fontSize: fontSize.md, fontWeight: fontWeight.extrabold, color: colors.text },
+  totalSub: { fontSize: fontSize.caption, color: colors.textMuted },
+  totalPrice: { fontSize: fontSize.xl, fontWeight: fontWeight.extrabold, color: colors.primary },
+  button: { height: controlHeight.primary, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   buttonText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.lg },
 }));

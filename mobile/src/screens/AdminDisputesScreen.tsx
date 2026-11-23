@@ -15,10 +15,14 @@ import { spacing, radius, fontSize, fontWeight, cardShadow, contentWidth } from 
 import { useResponsive } from "../hooks/useResponsive";
 import { timeAgo } from "../utils/time";
 import StaffOnly from "../components/StaffOnly";
+import { useConsole } from "../components/ConsoleContext";
 
 // Staff only: open disputes, oldest first. Open one to read both sides'
 // evidence and settle it.
 function AdminDisputesScreenInner() {
+  // Support reads disputes; admins settle them.
+  const { me } = useConsole();
+  const canSettle = me ? me.admin : true;
   const styles = useStyles();
   const { colors } = useTheme();
   const toast = useToast();
@@ -78,7 +82,7 @@ function AdminDisputesScreenInner() {
                         <Text style={styles.receiptText}>Open the seller's cargo receipt</Text>
                       </Tap>
                     )}
-                    <DisputePanel orderId={d.id} staff onSettled={() => (setOpenId(undefined), load())} />
+                    <DisputePanel orderId={d.id} staff viewOnly={!canSettle} onSettled={() => (setOpenId(undefined), load())} />
                   </View>
                 )}
               </View>

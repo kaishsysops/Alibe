@@ -187,7 +187,35 @@ notificationsRouter.get("/:userId", async (req, res) => {
     createdAt: p.updatedAt,
   }));
 
-  const items = [...chatItems, ...offerItems, ...orderItems, ...searchItems, ...priceItems, ...purchaseItems].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
+  // Decisions from the approval team in the last week: ID checks, stores and
+  // posts. Shown in the list, but not counted on the badge (push already told them).
+  const weekAgo = new Date(Date.now() - 7 * 86_400_000);
+  const [decided, reviewed] = await Promise.all([
+    prisma.sellerApplication.findMany({ where: { userId, decidedAt: { gte: weekAgo } }, orderBy: { decidedAt: "desc" }, take: 5 }),
+    prisma.listing.findMany({ where: { sellerId: userId, reviewedAt: { gte: weekAgo }, status: { in: ["ACTIVE", "REJECTED"] } }, select: { id: true, title: true, images: true, status: true, rejectReason: true, reviewedAt: true }, orderBy: { reviewedAt: "desc" }, take: 10 }),
+  ]);
+  const sellerItems = [
+    ...decided.map((a) => ({
+      type: "seller" as const,
+      id: `app-${a.id}`,
+      kind: a.kind,
+      approved: a.status === "APPROVED",
+      note: a.note,
+      createdAt: a.decidedAt!,
+    })),
+    ...reviewed.map((l) => ({
+      type: "post_review" as const,
+      id: `review-${l.id}-${l.reviewedAt!.getTime()}`,
+      listingId: l.id,
+      listingTitle: l.title,
+      image: l.images[0] ?? null,
+      approved: l.status === "ACTIVE",
+      note: l.rejectReason,
+      createdAt: l.reviewedAt!,
+    })),
+  ];
+
+  const items = [...chatItems, ...offerItems, ...orderItems, ...searchItems, ...priceItems, ...purchaseItems, ...sellerItems].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
   res.json({
     unreadChats: chatItems.reduce((n, c) => n + c.count, 0),
     total: chatItems.length + offerItems.length + orderItems.length + searchItems.length + priceItems.length + purchaseItems.length,

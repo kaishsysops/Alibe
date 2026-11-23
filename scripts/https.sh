@@ -17,7 +17,16 @@ CERT_NAME=alibe
 https_prepare() {
   local domains
   domains=$(env_get DOMAINS)
-  read -r -a https_names <<<"${domains//,/ }"
+  local wanted skipped=()
+  read -r -a wanted <<<"${domains//,/ }"
+  # Names without a DNS record yet (say www was deleted) would make Let's
+  # Encrypt fail for all of them: leave them out until the record exists.
+  https_names=()
+  for n in "${wanted[@]}"; do
+    if getent ahosts "$n" >/dev/null 2>&1; then https_names+=("$n"); else skipped+=("$n"); fi
+  done
+  [ ${#https_names[@]} -gt 0 ] || fail "None of ${wanted[*]} has a DNS record yet. Point them at this server, then run ./deploy.sh again."
+  [ ${#skipped[@]} -eq 0 ] || warn "No DNS record yet for ${skipped[*]}: skipped for now. Add an A record pointing here, then deploy again."
 
   # Already set up? The site file matches, HTTPS answers and 8081 is local only.
   local site

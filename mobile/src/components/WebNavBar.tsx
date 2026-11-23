@@ -11,6 +11,7 @@ import { useAuth } from "../api/AuthContext";
 import Tap from "./Tap";
 import AvatarPhoto from "./AvatarPhoto";
 import AlibeMark from "./AlibeMark";
+import { useConsole } from "./ConsoleContext";
 
 const LINKS = [
   { key: "home", label: "Home", route: "HomeTab" },
@@ -21,7 +22,13 @@ const LINKS = [
 
 // Desktop-web top bar: one 64px row with logo, primary links, search and
 // account actions (mobile uses the floating tab bar instead).
-export default function WebNavBar({ active, onSearch }: { active?: string; onSearch?: (query: string) => void }) {
+type NavProps = { active?: string; onSearch?: (query: string) => void };
+export default function WebNavBar(props: NavProps) {
+  // The admin/portal console draws its own layout.
+  return useConsole().inConsole ? null : <WebNavBarInner {...props} />;
+}
+
+function WebNavBarInner({ active, onSearch }: NavProps) {
   const styles = useStyles();
   const { colors } = useTheme();
   const navigation = useNavigation<any>();

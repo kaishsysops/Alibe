@@ -1,5 +1,6 @@
 import type { User } from "@prisma/client";
 import { prisma } from "./db.js";
+import { sellerBadges } from "./sellers.js";
 
 // The seller/buyer shape every public endpoint returns. Contact channels are
 // only exposed when the user has switched them on in their profile.
@@ -32,17 +33,22 @@ export async function ratingsFor(sellerIds: string[]): Promise<Map<string, Selle
   return new Map(rows.map((r) => [r.sellerId, { average: Math.round((r._avg.rating ?? 0) * 10) / 10, count: r._count.rating }]));
 }
 
-export function serializeListing<T extends { seller: User }>(listing: T, ratings?: Map<string, SellerRating>) {
+type Badges = Awaited<ReturnType<typeof sellerBadges>>;
+
+export function serializeListing<T extends { seller: User }>(listing: T, ratings?: Map<string, SellerRating>, badges?: Badges) {
+  const b = badges?.get(listing.seller.id);
   return {
     ...listing,
-    seller: { ...publicUser(listing.seller), rating: ratings?.get(listing.seller.id) ?? { average: 0, count: 0 } },
+    seller: { ...publicUser(listing.seller), rating: ratings?.get(listing.seller.id) ?? { average: 0, count: 0 }, badge: b?.badge ?? null, store: b?.store ?? null },
   };
 }
 
-// Serialises a batch of listings with one extra query for all seller ratings.
+// Serialises a batch of listings with one query each for seller ratings and
+// badges (Verified / Store / Premium).
 export async function serializeListings<T extends { seller: User }>(listings: T[]) {
-  const ratings = await ratingsFor(listings.map((l) => l.seller.id));
-  return listings.map((l) => serializeListing(l, ratings));
+  const ids = listings.map((l) => l.seller.id);
+  const [ratings, badges] = await Promise.all([ratingsFor(ids), sellerBadges(ids)]);
+  return listings.map((l) => serializeListing(l, ratings, badges));
 }
 
 export function serializeConversation<T extends { seller: User; buyer: User }>(c: T) {

@@ -1,10 +1,12 @@
 import React from "react";
 import { View, Text, ScrollView } from "react-native";
 import { useRoute } from "@react-navigation/native";
-import ScreenHeader from "../components/ScreenHeader";
+import ScreenHeader, { useGoBack } from "../components/ScreenHeader";
+import Tap from "../components/Tap";
+import { ChevronLeft } from "lucide-react-native";
 import WebNavBar from "../components/WebNavBar";
-import { makeStyles } from "../theme/ThemeContext";
-import { spacing, fontSize, fontWeight, lineHeight, contentWidth } from "../theme/theme";
+import { makeStyles, useTheme } from "../theme/ThemeContext";
+import { spacing, fontSize, fontWeight, lineHeight, contentWidth, radius } from "../theme/theme";
 import { useResponsive } from "../hooks/useResponsive";
 
 // Privacy policy and terms, in plain language. Both app stores require a
@@ -102,10 +104,18 @@ export default function LegalScreen() {
   const privacy = route.name === "Privacy";
   const sections = privacy ? PRIVACY : TERMS;
   const title = privacy ? "Privacy policy" : "Terms of use";
+  const { colors } = useTheme();
+  const goBack = useGoBack();
   return (
     <View style={styles.container}>
       {isDesktopWeb ? <WebNavBar /> : <ScreenHeader title={title} />}
       <ScrollView contentContainerStyle={[styles.body, { paddingHorizontal: gutter }]} showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}>
+        {isDesktopWeb && (
+          <Tap style={styles.back} onPress={goBack} scaleTo={0.96} accessibilityLabel="Go back">
+            <ChevronLeft size={18} color={colors.text} strokeWidth={2.4} />
+            <Text style={styles.backText}>Back</Text>
+          </Tap>
+        )}
         {isDesktopWeb && <Text style={styles.pageTitle}>{title}</Text>}
         <Text style={styles.updated}>Last updated {UPDATED}</Text>
         {sections.map((s) => (
@@ -127,6 +137,8 @@ export default function LegalScreen() {
 const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
   body: { paddingVertical: spacing.lg, width: "100%", maxWidth: contentWidth.list, alignSelf: "center", paddingBottom: spacing.xl * 2 },
+  back: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", height: 38, paddingLeft: 10, paddingRight: 16, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.md },
+  backText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.text },
   pageTitle: { fontSize: fontSize.display, fontWeight: fontWeight.extrabold, color: colors.text, marginBottom: spacing.xs },
   updated: { fontSize: fontSize.sm, color: colors.textMuted, marginBottom: spacing.md },
   section: { marginBottom: spacing.lg, gap: spacing.sm },

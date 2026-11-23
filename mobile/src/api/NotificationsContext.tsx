@@ -61,7 +61,7 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
 
       // Messages and incoming offers each have a stable id; anything not seen
       // on the previous poll is new and gets announced.
-      const alertable = next.items.filter((i) => i.type !== "saved_search" && i.type !== "purchase");
+      const alertable = next.items.filter((i): i is Extract<typeof i, { type: "message" | "offer" | "order" | "price_drop" }> => i.type === "message" || i.type === "offer" || i.type === "order" || i.type === "price_drop");
       if (seen.current) {
         for (const item of alertable) {
           if (seen.current.has(item.id)) continue;

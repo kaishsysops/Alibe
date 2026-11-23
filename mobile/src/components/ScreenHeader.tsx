@@ -6,10 +6,17 @@ import { ChevronLeft } from "lucide-react-native";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, fontSize, fontWeight } from "../theme/theme";
 import Tap from "./Tap";
+import { useConsole } from "./ConsoleContext";
 
 export function useGoBack() {
   const navigation = useNavigation<any>();
-  return () => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Tabs"));
+  return () => {
+    if (navigation.canGoBack()) return navigation.goBack();
+    // Opened straight from a link (e.g. alibe.online/terms): go to the app's
+    // first page, which is the welcome screen when signed out.
+    const names: string[] = navigation.getState()?.routeNames ?? [];
+    navigation.navigate(names.includes("Tabs") ? "Tabs" : names[0] ?? "Tabs");
+  };
 }
 
 export function BackButton({ variant = "plain" }: { variant?: "plain" | "floating" }) {
@@ -44,8 +51,10 @@ export default function ScreenHeader({
   // full-bleed hero image (product detail).
   floating?: boolean;
 }) {
+  const inConsole = useConsole().inConsole;
   const insets = useSafeAreaInsets();
   const styles = useStyles();
+  if (inConsole) return null;
   return (
     <View
       style={[floating ? styles.floatingBar : styles.bar, { paddingTop: insets.top + (floating ? spacing.sm : spacing.xs) }]}

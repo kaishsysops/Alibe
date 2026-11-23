@@ -18,6 +18,8 @@ import { spacing, radius, cardShadow, fontSize, fontWeight } from "../theme/them
 import { useResponsive, MAX_CONTENT_WIDTH } from "../hooks/useResponsive";
 import TrustBadge from "../components/TrustBadge";
 import AvatarPhoto from "../components/AvatarPhoto";
+import { SellerBadgePill } from "../components/Badges";
+import { Store as StoreIcon } from "lucide-react-native";
 
 export default function SellerProfileScreen() {
   const styles = useStyles();
@@ -91,12 +93,21 @@ export default function SellerProfileScreen() {
           <AvatarPhoto uri={seller.avatarUrl} />
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.name}>{seller.name}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <Text style={styles.name}>{seller.name}</Text>
+            <SellerBadgePill badge={seller.badge} />
+          </View>
           <Text style={styles.meta}>
             {seller.username ? `@${seller.username}  ·  ` : ""}Since {memberSince}
           </Text>
           <TrustBadge userId={seller.id} />
           {!!seller.bio && <Text style={styles.bio}>{seller.bio}</Text>}
+          {!!seller.store && (
+            <Tap style={styles.storeLink} onPress={() => navigation.navigate("Store", { slug: seller.store!.slug })} scaleTo={0.97} accessibilityLabel={`Visit ${seller.store.name}`}>
+              <StoreIcon size={15} color={colors.primary} />
+              <Text style={styles.storeLinkText}>Visit {seller.store.name}</Text>
+            </Tap>
+          )}
         </View>
       </View>
       {!isMe && hasContactOptions(seller) && (
@@ -180,6 +191,8 @@ export default function SellerProfileScreen() {
 }
 
 const useStyles = makeStyles((colors) => ({
+  storeLink: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", marginTop: 10, paddingHorizontal: 12, height: 34, borderRadius: 17, backgroundColor: colors.primaryTint },
+  storeLinkText: { fontSize: 13, fontWeight: "700", color: colors.primary },
   container: { flex: 1, backgroundColor: colors.background },
   desktopColumn: { maxWidth: MAX_CONTENT_WIDTH, width: "100%", alignSelf: "center", paddingTop: spacing.lg, flex: 1 },
   card: { flexDirection: "row", gap: spacing.md, alignItems: "center", backgroundColor: colors.card, borderRadius: radius.lg, ...cardShadow, padding: spacing.md, marginTop: spacing.sm },

@@ -85,12 +85,12 @@ export default function OrdersScreen() {
   const actionCount = (role: "BUYER" | "SELLER") => orders.filter((o) => o.role === role && orderStatusMeta(o.status, role, colors).needsAction).length;
 
   const tabs = (
-    <View style={[styles.tabRow, { paddingHorizontal: isDesktopWeb ? 0 : gutter }]}>
+    <View style={[styles.tabWrap, { marginHorizontal: isDesktopWeb ? 0 : gutter }]}>
       {(["BUYING", "SELLING"] as const).map((t) => {
         const active = tab === t;
         const count = actionCount(t === "BUYING" ? "BUYER" : "SELLER");
         return (
-          <Tap key={t} style={[styles.tab, active && styles.tabActive]} onPress={() => setTab(t)} scaleTo={0.94}>
+          <Tap key={t} style={[styles.tab, active && styles.tabActive]} onPress={() => setTab(t)} scaleTo={0.97} accessibilityRole="tab" accessibilityState={{ selected: active }}>
             <Text style={[styles.tabText, active && styles.tabTextActive]}>{t === "BUYING" ? "Buying" : "Selling"}</Text>
             {count > 0 && (
               <View style={styles.tabCount}>
@@ -158,6 +158,7 @@ export default function OrdersScreen() {
                 <View style={[styles.status, { backgroundColor: `${meta.color}1A` }]}>
                   <Text style={[styles.statusText, { color: meta.color }]}>{meta.label}</Text>
                 </View>
+                {(item.status === "AWAITING_DISPATCH" || item.status === "DISPATCHED") && <Steps step={item.status === "AWAITING_DISPATCH" ? 1 : 2} color={meta.color} />}
                 <Text style={styles.time}>
                   {item.status === "DELIVERED" && item.deliveredAt
                     ? `on ${new Date(item.deliveredAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
@@ -165,7 +166,13 @@ export default function OrdersScreen() {
                 </Text>
               </View>
             </View>
-            <ChevronRight size={18} color={colors.textMuted} />
+            {meta.needsAction ? (
+              <View style={styles.actionPill}>
+                <Text style={styles.actionPillText}>Open</Text>
+              </View>
+            ) : (
+              <ChevronRight size={18} color={colors.textMuted} />
+            )}
           </Tap>
           </FadeIn>
         );
@@ -198,11 +205,15 @@ const useStyles = makeStyles((colors) => ({
   container: { flex: 1, backgroundColor: colors.background },
   desktopColumn: { maxWidth: contentWidth.list, width: "100%", alignSelf: "center", flex: 1, paddingTop: spacing.lg, paddingHorizontal: spacing.lg },
   header: { fontSize: fontSize.xxl, fontWeight: fontWeight.extrabold, color: colors.text, marginBottom: spacing.md },
-  tabRow: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.sm },
-  tab: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.md, height: 38, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
-  tabActive: { backgroundColor: colors.text, borderColor: colors.text },
-  tabText: { fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.text },
+  tabWrap: { flexDirection: "row", padding: 4, borderRadius: radius.pill, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.sm },
+  tab: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 38, borderRadius: radius.pill },
+  tabActive: { backgroundColor: colors.text },
+  tabText: { fontSize: fontSize.base, fontWeight: fontWeight.bold, color: colors.textMuted },
   tabTextActive: { color: colors.inverseText },
+  actionPill: { paddingHorizontal: 14, height: 32, borderRadius: 16, backgroundColor: colors.primary, justifyContent: "center" },
+  actionPillText: { color: "#fff", fontSize: fontSize.caption, fontWeight: fontWeight.extrabold },
+  steps: { flexDirection: "row", alignItems: "center", gap: 3 },
+  stepDot: { width: 14, height: 4, borderRadius: 2 },
   tabCount: { minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4, backgroundColor: colors.danger, alignItems: "center", justifyContent: "center" },
   tabCountText: { color: "#fff", fontSize: fontSize.micro, fontWeight: fontWeight.extrabold },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 4, padding: spacing.sm + 4, borderRadius: radius.lg, backgroundColor: colors.card, ...cardShadow },
@@ -218,3 +229,16 @@ const useStyles = makeStyles((colors) => ({
   status: { paddingHorizontal: spacing.sm + 2, height: 26, borderRadius: radius.pill, justifyContent: "center" },
   statusText: { fontSize: fontSize.caption, fontWeight: fontWeight.bold },
 }));
+
+// Ordered > sent > delivered, as three short bars.
+function Steps({ step, color }: { step: number; color: string }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
+  return (
+    <View style={styles.steps} accessibilityLabel={`Step ${step} of 3`}>
+      {[0, 1, 2].map((i) => (
+        <View key={i} style={[styles.stepDot, { backgroundColor: i < step ? color : colors.border }]} />
+      ))}
+    </View>
+  );
+}

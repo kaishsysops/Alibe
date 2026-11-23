@@ -16,6 +16,8 @@ import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, conte
 import { useResponsive } from "../hooks/useResponsive";
 import AvatarPhoto from "../components/AvatarPhoto";
 import StaffOnly from "../components/StaffOnly";
+import { useConsole } from "../components/ConsoleContext";
+import { openOnMarketplace } from "../site";
 
 const joined = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 
@@ -27,6 +29,9 @@ function AdminSellersScreenInner() {
   const toast = useToast();
   const showAlert = useAppAlert();
   const navigation = useNavigation<any>();
+  // Support and moderators look people up; only admins ban and unban.
+  const { inConsole, me } = useConsole();
+  const canBan = me ? me.admin : true;
   const { isDesktopWeb, gutter } = useResponsive();
   const [query, setQuery] = useState("");
   const [bannedOnly, setBannedOnly] = useState(false);
@@ -119,7 +124,7 @@ function AdminSellersScreenInner() {
   const renderItem = ({ item: s }: { item: AdminSeller }) => {
     const banned = !!s.bannedAt;
     return (
-      <Tap style={[styles.row, banned && styles.rowBanned]} onPress={() => navigation.navigate("SellerProfile", { id: s.id })} scaleTo={0.98} accessibilityLabel={`Open ${s.name}'s profile`}>
+      <Tap style={[styles.row, banned && styles.rowBanned]} onPress={() => (inConsole ? openOnMarketplace(`seller/${s.id}`) : navigation.navigate("SellerProfile", { id: s.id }))} scaleTo={0.98} accessibilityLabel={`Open ${s.name}'s profile`}>
         <View style={[styles.avatar, { backgroundColor: banned ? colors.textMuted : s.avatarColor ?? colors.primary }]}>
           <Text style={styles.avatarText}>{s.name.charAt(0).toUpperCase()}</Text>
           <AvatarPhoto uri={s.avatarUrl} />
@@ -166,6 +171,7 @@ function AdminSellersScreenInner() {
           <Text style={styles.joined}>Joined {joined(s.createdAt)}</Text>
         </View>
         {!s.isAdmin &&
+          canBan &&
           (busyId === s.id ? (
             <ActivityIndicator color={colors.primary} style={styles.actionSpinner} />
           ) : (

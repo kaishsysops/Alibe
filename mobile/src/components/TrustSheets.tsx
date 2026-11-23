@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Text, TextInput, View } from "react-native";
-import { Flag, Ban, ShieldAlert, PackageX, Tags, MessageCircleWarning, HelpCircle, Star } from "lucide-react-native";
+import { Flag, Ban, ShieldAlert, PackageX, Tags, MessageCircleWarning, HelpCircle, Star, Building2 } from "lucide-react-native";
 import { api, errorMessage, PublicSeller, ReportReason } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
@@ -15,6 +15,7 @@ const REASONS: Array<{ reason: ReportReason; label: string; icon: any }> = [
   { reason: "SCAM", label: "Scam or fraud", icon: ShieldAlert },
   { reason: "PROHIBITED", label: "Prohibited item", icon: PackageX },
   { reason: "WRONG_CATEGORY", label: "Wrong category or misleading", icon: Tags },
+  { reason: "BUSINESS_AS_INDIVIDUAL", label: "A business posting as an individual", icon: Building2 },
   { reason: "OFFENSIVE", label: "Offensive or abusive", icon: MessageCircleWarning },
   { reason: "OTHER", label: "Something else", icon: HelpCircle },
 ];

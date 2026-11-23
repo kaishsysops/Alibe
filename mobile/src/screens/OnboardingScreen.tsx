@@ -4,7 +4,7 @@ import { View, Text, TextInput, ActivityIndicator, KeyboardAvoidingView, Keyboar
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
-import { ShoppingBag, ArrowRight, Check, ShieldCheck, ChevronLeft, Mail, Phone, MapPin, Tag, MessageCircle, BadgePercent, KeyRound, PackageCheck, LucideIcon, Camera, Bell, MessageCircleMore, TrendingDown, Truck, Sparkles } from "lucide-react-native";
+import { ShoppingBag, ArrowRight, Check, ShieldCheck, ChevronLeft, Mail, Phone, MapPin, Tag, MessageCircle, BadgePercent, KeyRound, PackageCheck, LucideIcon, Camera, Bell, MessageCircleMore, TrendingDown, Truck, Sparkles, Search, Map as MapIcon, Heart, BadgeCheck, Store, Star, Rocket, TrendingUp, User as UserIcon } from "lucide-react-native";
 import { api, Atoll, Category, errorMessage, ProfileUpdate, setAuthToken, SignedIn, uploadMedia, User } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import { useToast } from "../components/Toast";
@@ -27,6 +27,7 @@ import { categoryIcons, AllCategoriesIcon } from "../theme/categoryIcons";
 import { ATOLL_GEO, ISLAND_GEO } from "../data/maldives";
 import { AVATAR_COLORS } from "../theme/theme";
 import GoogleButton from "../components/GoogleButton";
+import { navigationRef } from "../navigation/navigationRef";
 
 const useNativeDriver = Platform.OS !== "web";
 
@@ -104,12 +105,17 @@ function Drift({ size, x, y, duration, delay }: { size: number; x: number; y: nu
   );
 }
 
-type Slide = { Icon: LucideIcon; left: LucideIcon; right: LucideIcon; title: string; text: string };
+type Slide = { Icon: LucideIcon; left: LucideIcon; right: LucideIcon; tag: string; title: string; text: string };
 
 const SLIDES: Slide[] = [
-  { Icon: ShoppingBag, left: MapPin, right: Tag, title: "Buy and sell across every atoll", text: "From Malé to Addu, all in one place." },
-  { Icon: MessageCircle, left: BadgePercent, right: Tag, title: "Chat and agree a price", text: "Message sellers and send offers right here in the app." },
-  { Icon: ShieldCheck, left: KeyRound, right: PackageCheck, title: "Stay safe when you buy", text: "A private code confirms your item reached you." },
+  { Icon: ShoppingBag, left: MapPin, right: Tag, tag: "Every island", title: "Buy and sell across every atoll", text: "From Malé to Addu, all in one place." },
+  { Icon: Camera, left: Sparkles, right: Tag, tag: "Sell", title: "Sell in under a minute", text: "Snap a few photos and we suggest the category for you." },
+  { Icon: Search, left: MapPin, right: MapIcon, tag: "Search", title: "Find things near you", text: "Search everything, filter by island and see it on the map." },
+  { Icon: MessageCircle, left: BadgePercent, right: Tag, tag: "Chat", title: "Chat and agree a price", text: "Message sellers and send offers right here in the app." },
+  { Icon: Heart, left: Bell, right: TrendingDown, tag: "Alerts", title: "Save it, get told when it drops", text: "Saved items and searches alert you to price drops and new posts." },
+  { Icon: ShieldCheck, left: KeyRound, right: PackageCheck, tag: "Safety", title: "Stay safe when you buy", text: "A private code confirms your item reached you." },
+  { Icon: BadgeCheck, left: Store, right: Star, tag: "Trust", title: "Verified sellers and stores", text: "Look for the badges: ID-checked sellers, real stores and honest reviews." },
+  { Icon: Rocket, left: Sparkles, right: TrendingUp, tag: "Boost", title: "Get seen with a boost", text: "Put your item at the top of search and the home page." },
 ];
 const SLIDE_MS = 4200;
 
@@ -141,6 +147,9 @@ function SlideView({ slide, index, width, scrollX }: { slide: Slide; index: numb
         </Animated.View>
       </Animated.View>
       <Animated.View style={{ opacity, alignItems: "center", transform: [drift(width * 0.18)] }}>
+        <View style={styles.slideTag}>
+          <Text style={styles.slideTagText}>{slide.tag}</Text>
+        </View>
         <Text style={styles.slideTitle}>{slide.title}</Text>
         <Text style={styles.slideText}>{slide.text}</Text>
       </Animated.View>
@@ -262,7 +271,7 @@ function MethodSwitch({ method, onChange }: { method: Method; onChange: (m: Meth
 
 type Method = "phone" | "email";
 // First-time setup runs name -> photo -> island -> interests -> notify -> ready.
-type Step = "welcome" | "enter" | "code" | "newOrExisting" | "name" | "photo" | "island" | "interests" | "notify" | "ready" | "staff" | "done";
+type Step = "welcome" | "enter" | "code" | "newOrExisting" | "name" | "photo" | "island" | "interests" | "seller" | "notify" | "ready" | "staff" | "done";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const haptic = (run: () => Promise<void>) => {
@@ -332,6 +341,7 @@ export default function OnboardingScreen() {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [interests, setInterests] = useState<string[]>([]);
+  const [sellerKind, setSellerKind] = useState<"INDIVIDUAL" | "STORE">("INDIVIDUAL");
   const [notificationsOn, setNotificationsOn] = useState(false);
   const [nearby, setNearby] = useState<number | null>(null);
   const [greeting, setGreeting] = useState("");
@@ -532,7 +542,7 @@ export default function OnboardingScreen() {
       setCategories(cats.filter((c) => !c.parentId));
       setNotificationsOn(permission === "granted");
       // Steps with nothing to show (offline, already decided) are left out.
-      const steps: Step[] = ["name", "photo", ...(list.length ? (["island"] as Step[]) : []), ...(cats.length ? (["interests"] as Step[]) : []), ...(permission === "undecided" ? (["notify"] as Step[]) : [])];
+      const steps: Step[] = ["name", "photo", ...(list.length ? (["island"] as Step[]) : []), ...(cats.length ? (["interests"] as Step[]) : []), "seller", ...(permission === "undecided" ? (["notify"] as Step[]) : [])];
       setSetupSteps(steps);
       moveTo(steps[1]);
     }
@@ -602,6 +612,14 @@ export default function OnboardingScreen() {
   const [savePhoto, savingPhoto] = useSaveStep(() => ({ avatarColor, avatarUrl }));
   const [saveIsland, savingIsland] = useSaveStep(() => ({ islandId: islandId ?? null }));
   const [saveInterests, savingInterests] = useSaveStep(() => ({ interests }));
+  const [saveSellerKind, savingSellerKind] = useSingleFlight(async () => {
+    try {
+      if (sellerKind === "STORE") await api.setSellerKind("STORE");
+      nextStep();
+    } catch (e) {
+      toast.error(errorMessage(e));
+    }
+  });
   const toggleInterest = (slug: string) => {
     haptic(() => Haptics.selectionAsync());
     setInterests((list) => (list.includes(slug) ? list.filter((s) => s !== slug) : [...list, slug]));
@@ -614,7 +632,9 @@ export default function OnboardingScreen() {
   });
   const startExploring = async () => {
     if (!session) return;
-    await signIn(session.user, session.token);
+    await signIn({ ...session.user, sellerKind }, session.token);
+    // Stores go straight on to the business details.
+    if (sellerKind === "STORE") setTimeout(() => navigationRef.isReady() && (navigationRef as any).navigate("StoreApply"), 450);
   };
   const chosen = islandLabel(atolls, islandId);
   const chosenIsland = findIsland(atolls, islandId);
@@ -688,6 +708,21 @@ export default function OnboardingScreen() {
               <ArrowRight size={20} color={colors.primary} strokeWidth={2.6} />
             </Tap>
           </FadeIn>
+          <FadeIn delay={520}>
+            <Tap style={styles.haveAccount} onPress={() => setStep("enter")} scaleTo={0.97}>
+              <Text style={styles.haveAccountText}>
+                I already have an account · <Text style={{ fontWeight: fontWeight.extrabold }}>Sign in</Text>
+              </Text>
+            </Tap>
+            <View style={styles.trustRow}>
+              {["Free to use", "No passwords", "Made in the Maldives"].map((t, i) => (
+                <React.Fragment key={t}>
+                  {i > 0 && <View style={styles.trustDot} />}
+                  <Text style={styles.trustText}>{t}</Text>
+                </React.Fragment>
+              ))}
+            </View>
+          </FadeIn>
         </View>
       </Animated.View>
 
@@ -697,6 +732,7 @@ export default function OnboardingScreen() {
           pointerEvents={cardUp ? "auto" : "none"}
           style={[styles.card, { paddingBottom: insets.bottom + spacing.lg, transform: [{ translateY: sheet.interpolate({ inputRange: [0, 1], outputRange: [height * 0.8, 0] }) }] }]}
         >
+          <View style={styles.handle} />
           {inSetup && <SetupProgress index={setupIndex} total={setupSteps.length} />}
 
           {(step === "enter" || step === "code" || step === "newOrExisting" || step === "staff" || step === "welcome" || (inSetup && setupIndex > 0)) && (
@@ -984,6 +1020,44 @@ export default function OnboardingScreen() {
             </FadeIn>
           )}
 
+          {step === "seller" && (
+            <FadeIn key="seller">
+              <Text style={styles.cardTitle}>How will you sell?</Text>
+              <Text style={styles.cardText}>Everyone can buy. This only matters when you sell, and you can change it later.</Text>
+              <View style={{ gap: spacing.sm + 2, marginTop: spacing.xs }}>
+                {(
+                  [
+                    ["INDIVIDUAL", UserIcon, "As an individual", "Things you own: clothes, phones, furniture."],
+                    ["STORE", Store, "As a store", "A registered business. Get a store page and the Store badge."],
+                  ] as const
+                ).map(([kind, Icon, title, text], i) => {
+                  const on = sellerKind === kind;
+                  return (
+                    <FadeIn key={kind} delay={i * 70}>
+                      <Tap style={[styles.sellerOption, on && styles.sellerOptionOn]} onPress={() => setSellerKind(kind)} scaleTo={0.97} accessibilityRole="radio" accessibilityState={{ selected: on }}>
+                        <View style={[styles.sellerIcon, on && { backgroundColor: colors.primary }]}>
+                          <Icon size={22} color={on ? "#fff" : colors.primary} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.sellerTitle}>{title}</Text>
+                          <Text style={styles.sellerText}>{text}</Text>
+                        </View>
+                        <View style={[styles.sellerRadio, on && { borderColor: colors.primary, backgroundColor: colors.primary }]}>{on && <Check size={12} color="#fff" strokeWidth={3.4} />}</View>
+                      </Tap>
+                    </FadeIn>
+                  );
+                })}
+              </View>
+              <View style={styles.sellerWarning}>
+                <ShieldCheck size={16} color={colors.gold} />
+                <Text style={styles.sellerWarningText}>Shops must sell as a store. Staff ban businesses posing as individuals.</Text>
+              </View>
+              <Tap style={styles.button} onPress={() => saveSellerKind()} disabled={savingSellerKind} scaleTo={0.97}>
+                {savingSellerKind ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>{sellerKind === "STORE" ? "Continue as a store" : "Continue"}</Text>}
+              </Tap>
+            </FadeIn>
+          )}
+
           {step === "notify" && (
             <FadeIn key="notify">
               <View style={styles.notifyHero}>
@@ -1054,6 +1128,17 @@ export default function OnboardingScreen() {
                       </Text>
                     </View>
                   </View>
+                  {sellerKind === "STORE" && (
+                    <View style={[styles.summaryRow, styles.summaryDivider]}>
+                      <View style={styles.summaryIcon}>
+                        <Store size={18} color={colors.primary} />
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={styles.summaryTitle}>Selling as a store</Text>
+                        <Text style={styles.summaryMeta}>Next: your business details</Text>
+                      </View>
+                    </View>
+                  )}
                   {notificationsOn && (
                     <View style={[styles.summaryRow, styles.summaryDivider]}>
                       <View style={styles.summaryIcon}>
@@ -1093,6 +1178,14 @@ export default function OnboardingScreen() {
 }
 
 const useStyles = makeStyles((colors) => ({
+  sellerOption: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 4, padding: spacing.md, borderRadius: radius.lg, borderWidth: 2, borderColor: colors.border, backgroundColor: colors.background },
+  sellerOptionOn: { borderColor: colors.primary, backgroundColor: colors.primaryTint },
+  sellerIcon: { width: 46, height: 46, borderRadius: 15, backgroundColor: colors.primaryTint, alignItems: "center", justifyContent: "center" },
+  sellerTitle: { fontSize: fontSize.md, fontWeight: fontWeight.extrabold, color: colors.text },
+  sellerText: { fontSize: fontSize.caption, color: colors.textMuted, marginTop: 2, lineHeight: 17 },
+  sellerRadio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  sellerWarning: { flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.sm + 2, borderRadius: radius.md, backgroundColor: `${colors.gold}16`, marginTop: spacing.md },
+  sellerWarningText: { flex: 1, fontSize: fontSize.caption, fontWeight: fontWeight.semibold, color: colors.text, lineHeight: 17 },
   legal: { fontSize: fontSize.caption, color: colors.textMuted, textAlign: "center", marginTop: spacing.sm + 2, lineHeight: 18 },
   legalLink: { color: colors.primary, fontWeight: fontWeight.semibold },
   container: { flex: 1, overflow: "hidden" },
@@ -1113,7 +1206,15 @@ const useStyles = makeStyles((colors) => ({
   startButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, height: 58, borderRadius: radius.pill, backgroundColor: "#fff", shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 5 },
   startText: { fontSize: fontSize.lg, fontWeight: fontWeight.extrabold },
 
-  card: { backgroundColor: colors.card, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: spacing.lg, paddingTop: spacing.md, width: "100%", maxWidth: 520, alignSelf: "center" },
+  card: { backgroundColor: colors.card, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: spacing.lg, paddingTop: spacing.sm, width: "100%", maxWidth: 520, alignSelf: "center", shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 24, shadowOffset: { width: 0, height: -6 }, elevation: 16 },
+  handle: { alignSelf: "center", width: 40, height: 5, borderRadius: 3, backgroundColor: colors.border, marginBottom: spacing.sm },
+  slideTag: { paddingHorizontal: 12, height: 26, borderRadius: 13, backgroundColor: "rgba(255,255,255,0.2)", borderWidth: 1, borderColor: "rgba(255,255,255,0.35)", justifyContent: "center", marginBottom: spacing.sm + 2 },
+  slideTagText: { color: "#fff", fontSize: fontSize.caption, fontWeight: fontWeight.extrabold, letterSpacing: 0.6, textTransform: "uppercase" },
+  haveAccount: { alignItems: "center", paddingVertical: spacing.sm + 4 },
+  haveAccountText: { color: "#fff", fontSize: fontSize.base, fontWeight: fontWeight.semibold },
+  trustRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, flexWrap: "wrap" },
+  trustText: { color: "rgba(255,255,255,0.78)", fontSize: fontSize.caption, fontWeight: fontWeight.semibold },
+  trustDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.6)" },
   back: { width: 40, height: 40, borderRadius: 20, marginLeft: -spacing.sm, marginBottom: spacing.xs, alignItems: "center", justifyContent: "center" },
   cardTitle: { fontSize: fontSize.xxl, fontWeight: fontWeight.extrabold, color: colors.text, marginTop: spacing.xs },
   noBackTop: { marginTop: spacing.md },

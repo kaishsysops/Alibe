@@ -22,8 +22,10 @@ import { ordersRouter } from "./routes/orders.js";
 import { startReminders } from "./reminders.js";
 import { authenticate } from "./auth.js";
 import { shareRouter } from "./routes/share.js";
+import { sellersRouter, storesRouter } from "./routes/sellers.js";
+import { staffRouter } from "./routes/staff.js";
 import { ipCeiling, accountLimits } from "./rateLimit.js";
-import { slipsRouter, moveSlipsOutOfPublicUploads } from "./routes/slips.js";
+import { slipsRouter, idsRouter, moveSlipsOutOfPublicUploads } from "./routes/slips.js";
 
 const app = express();
 // Behind nginx (TRUST_PROXY=1) the visitor's IP comes from X-Forwarded-For.
@@ -85,6 +87,10 @@ app.use("/saved-searches", savedSearchesRouter);
 app.use("/notifications", notificationsRouter);
 app.use("/orders", ordersRouter);
 app.use("/slips", slipsRouter);
+app.use("/ids", idsRouter);
+app.use("/sellers", sellersRouter);
+app.use("/stores", storesRouter);
+app.use("/staff", staffRouter);
 app.use("/share", shareRouter);
 // The logo in emails (email apps need a plain PNG at a public address).
 app.use("/brand", express.static(path.resolve("assets"), { maxAge: "30d" }));

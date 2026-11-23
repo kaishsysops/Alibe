@@ -17,7 +17,7 @@ import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, conte
 import { useResponsive } from "../hooks/useResponsive";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 
-const KIND_LABEL = { BOOST: "Boost", AD: "Ad", BUY_FOR_YOU: "Buy through Alibe" } as const;
+const KIND_LABEL = { BOOST: "Boost", AD: "Ad", BUY_FOR_YOU: "Buy through Alibe", STORE_PLAN: "Store plan", PREMIUM_PLAN: "Premium plan" } as const;
 
 function statusText(p: Purchase): string {
   const texts: Record<PurchaseStatus, string> = {

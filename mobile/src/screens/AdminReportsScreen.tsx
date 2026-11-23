@@ -17,6 +17,7 @@ import { spacing, radius, fontSize, fontWeight, cardShadow, controlHeight, conte
 import { useResponsive } from "../hooks/useResponsive";
 import { timeAgo } from "../utils/time";
 import StaffOnly from "../components/StaffOnly";
+import { useConsole } from "../components/ConsoleContext";
 
 const REASONS: Record<ReportReason, string> = {
   SCAM: "Scam",
@@ -24,11 +25,15 @@ const REASONS: Record<ReportReason, string> = {
   WRONG_CATEGORY: "Wrong category",
   OFFENSIVE: "Offensive",
   OTHER: "Other",
+  BUSINESS_AS_INDIVIDUAL: "Business posing as individual",
 };
 
 function AdminReportsScreenInner() {
   const styles = useStyles();
   const { colors } = useTheme();
+  // Moderators remove listings; only admins ban accounts.
+  const { me } = useConsole();
+  const canBan = me ? me.admin : true;
   const toast = useToast();
   const showAlert = useAppAlert();
   const { isDesktopWeb, gutter } = useResponsive();
@@ -114,9 +119,11 @@ function AdminReportsScreenInner() {
               <Text style={styles.actionText}>Remove</Text>
             </Tap>
           )}
-          <Tap style={[styles.action, { backgroundColor: colors.danger, borderColor: colors.danger }]} onPress={() => confirmBan(item)} scaleTo={0.95}>
-            <Text style={[styles.actionText, { color: "#fff" }]}>Ban</Text>
-          </Tap>
+          {canBan && (
+            <Tap style={[styles.action, { backgroundColor: colors.danger, borderColor: colors.danger }]} onPress={() => confirmBan(item)} scaleTo={0.95}>
+              <Text style={[styles.actionText, { color: "#fff" }]}>Ban</Text>
+            </Tap>
+          )}
         </View>
       </View>
     </FadeIn>

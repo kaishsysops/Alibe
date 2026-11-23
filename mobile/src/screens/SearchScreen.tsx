@@ -5,7 +5,7 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { Search as SearchIcon, X, ChevronLeft, SlidersHorizontal, SearchX, BellPlus, BellRing, Clock, TrendingUp, ArrowUpDown, Star, ChevronRight, Sparkles, LayoutGrid } from "lucide-react-native";
 import { api, Atoll, AttrFilters, AttributeDef, Category, DeliveryOption, errorMessage, Listing, ListingSort, SearchUnderstanding, SellerSearchResult } from "../api/client";
 import { buildCategoryTree, matchCategories } from "../utils/categoryTree";
-import { VerifiedBadge } from "../components/Badges";
+import { VerifiedBadge, SellerBadgeIcon } from "../components/Badges";
 import { useAuth } from "../api/AuthContext";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import CategoryTile from "../components/CategoryTile";
@@ -754,7 +754,7 @@ export default function SearchScreen() {
                 <Text style={styles.sellerName} numberOfLines={1}>
                   {s.name}
                 </Text>
-                {s.verified && <VerifiedBadge size={14} />}
+                <SellerBadgeIcon badge={s.badge} verified={s.verified} size={14} />
               </View>
               {!!s.username && (
                 <Text style={styles.sellerMeta} numberOfLines={1}>

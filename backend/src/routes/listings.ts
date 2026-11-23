@@ -11,6 +11,7 @@ import { boostedListingIds } from "./purchases.js";
 import { cached } from "../cache.js";
 import { categoryIndex, cleanAttributes, descendants, effectiveAttributes } from "../categories.js";
 import { checkListingPhotosLater } from "../photoHash.js";
+import { premiumSellerIds, sellerBadges, standing } from "../sellers.js";
 
 const DEFAULT_LIMIT = 40;
 const MAX_LIMIT = 60;
@@ -61,7 +62,22 @@ const SORTS: Record<string, Prisma.ListingOrderByWithRelationInput[]> = {
 
 // Short-lived shared copies of things every feed request needs.
 // Ids of listings with an active boost (purchases without a listing ignored).
-const boostedIds = () => cached("boosted", 30_000, async () => new Set([...(await boostedListingIds())].filter((id): id is string => !!id)));
+// Boosted listings, plus Premium sellers' items from the last 7 days: both lead
+// newest-first feeds.
+const boostedIds = () =>
+  cached("boosted", 30_000, async () => {
+    const paid = [...(await boostedListingIds())].filter((id): id is string => !!id);
+    const premium = await premiumSellerIds();
+    const recent = premium.length
+      ? await prisma.listing.findMany({
+          where: { sellerId: { in: premium }, status: "ACTIVE", hiddenAt: null, createdAt: { gte: new Date(Date.now() - 7 * 86_400_000) } },
+          select: { id: true },
+          orderBy: { createdAt: "desc" },
+          take: 120,
+        })
+      : [];
+    return new Set([...paid, ...recent.map((l) => l.id)]);
+  });
 const ibayFor = (filters: object, sort?: string) => cached(`ibay:${JSON.stringify(filters)}:${sort ?? ""}`, 60_000, () => mixedIbayListings(filters, sort));
 
 listingsRouter.get("/", async (req, res) => {
@@ -168,7 +184,10 @@ listingsRouter.get("/:id", async (req, res) => {
   if (!listing) return res.status(404).json({ error: "This listing is no longer available." });
   // Hidden listings stay visible to their seller, who can still manage them.
   if (listing.hiddenAt && listing.sellerId !== req.userId) return res.status(404).json({ error: "This listing is no longer available." });
-  res.json(serializeListing(listing, await ratingsFor([listing.sellerId])));
+  // Pending and rejected posts are only visible to their seller.
+  if ((listing.status === "PENDING" || listing.status === "REJECTED") && listing.sellerId !== req.userId) return res.status(404).json({ error: "This listing is no longer available." });
+  const [ratings, badges] = await Promise.all([ratingsFor([listing.sellerId]), sellerBadges([listing.sellerId])]);
+  res.json(serializeListing(listing, ratings, badges));
 });
 
 const prohibitedMessage = (what: string) => `Alibe can't list ${what}. Please remove it to continue.`;
@@ -227,10 +246,19 @@ listingsRouter.post("/", async (req, res) => {
   }
   const block = await listingBlock(parsed.data.sellerId);
   if (block) return res.status(block.status).json({ error: block.error, code: block.code });
+  // Sellers who aren't approved yet: up to 5 items, and each waits for a Post approver.
+  const st = await standing(parsed.data.sellerId);
+  if (!st) return res.status(404).json({ error: "Your account couldn't be found. Please sign in again." });
+  if (st.listingLimit !== null && st.liveCount >= st.listingLimit) {
+    return res.status(429).json({
+      error: `Unverified sellers can have ${st.listingLimit} items up at a time. Get verified (it's free) to post more and skip the review.`,
+      code: "LISTING_LIMIT",
+    });
+  }
   try {
     const attributes = await listingAttributes(parsed.data.categoryId, parsed.data.attributes);
     if (!attributes) return res.status(400).json({ error: "Please pick a category." });
-    const listing = await prisma.listing.create({ data: { ...parsed.data, attributes }, include: listingInclude });
+    const listing = await prisma.listing.create({ data: { ...parsed.data, attributes, status: st.approved ? "ACTIVE" : "PENDING" }, include: listingInclude });
     checkListingPhotosLater(listing.id);
     res.status(201).json(serializeListing(listing));
   } catch (e) {
@@ -242,11 +270,13 @@ listingsRouter.post("/", async (req, res) => {
   }
 });
 
-const statusQuerySchema = z.object({ status: z.enum(["ACTIVE", "RESERVED", "SOLD", "DRAFT"]).optional() });
+const statusQuerySchema = z.object({ status: z.enum(["ACTIVE", "RESERVED", "SOLD", "DRAFT", "PENDING", "REJECTED"]).optional() });
 
 listingsRouter.get("/mine/:sellerId", async (req, res) => {
   const parsed = statusQuerySchema.safeParse(req.query);
   if (!parsed.success) return sendValidationError(res, parsed.error);
+  // Includes drafts and posts under review, so it's the owner's alone.
+  if (req.params.sellerId !== req.userId) return res.status(403).json({ error: "You can only see your own listings here." });
   const listings = await prisma.listing.findMany({
     where: { sellerId: req.params.sellerId, status: parsed.data.status ?? undefined },
     include: listingInclude,
@@ -282,7 +312,17 @@ listingsRouter.patch("/:id", async (req, res) => {
   const categoryId = data.categoryId ?? existing.categoryId;
   const attributes = data.attributes !== undefined || data.categoryId ? await listingAttributes(categoryId, data.attributes ?? existing.attributes) : undefined;
   if (attributes === null) return res.status(400).json({ error: "Please pick a category." });
-  const listing = await prisma.listing.update({ where: { id: req.params.id }, data: { ...data, ...fields, attributes }, include: listingInclude });
+  // Review rules: a seller who isn't approved sends edited posts back to the
+  // queue (so an approved post can't be edited into something else), and
+  // nobody publishes their own pending or rejected post.
+  const st = await standing(existing.sellerId);
+  const reviewable = existing.status === "PENDING" || existing.status === "REJECTED";
+  const contentChanged = ["title", "description", "images", "price", "categoryId"].some((k) => (data as Record<string, unknown>)[k] !== undefined);
+  let review: { status?: "PENDING" | "ACTIVE"; rejectReason?: null } = {};
+  if (st && !st.approved && (contentChanged || reviewable) && existing.status !== "SOLD") review = { status: "PENDING", rejectReason: null };
+  else if (st?.approved && reviewable && contentChanged) review = { status: "ACTIVE", rejectReason: null };
+  if (reviewable && data.status === "ACTIVE" && review.status !== "ACTIVE") delete data.status;
+  const listing = await prisma.listing.update({ where: { id: req.params.id }, data: { ...data, ...fields, attributes, ...review }, include: listingInclude });
   if (alert && listing.status === "ACTIVE" && !listing.hiddenAt) {
     const savers = await prisma.favorite.findMany({ where: { listingId: listing.id }, select: { userId: true } });
     for (const { userId } of savers) {

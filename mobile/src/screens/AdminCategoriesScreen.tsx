@@ -165,7 +165,7 @@ function AdminCategoriesScreenInner() {
             const kids = tree.childrenOf(c.slug).length;
             return (
               <View key={c.id} style={[styles.card, c.hidden && { opacity: 0.55 }]}>
-                <Tap style={styles.row} onPress={() => navigation.push("AdminCategories", { slug: c.slug })} scaleTo={0.99} accessibilityLabel={`Open ${c.name}`}>
+                <Tap style={styles.row} onPress={() => navigation.push(route.name, { slug: c.slug })} scaleTo={0.99} accessibilityLabel={`Open ${c.name}`}>
                   <View style={[styles.icon, { backgroundColor: color + "1F" }]}>
                     <Icon size={18} color={color} strokeWidth={2.2} />
                   </View>

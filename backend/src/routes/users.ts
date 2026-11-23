@@ -6,6 +6,7 @@ import { checkCode, respondToCheck, sendCode } from "../otp.js";
 import { deliveryMethods, sendEmailCode, sendSmsCode } from "../messaging.js";
 import { publicUser, ratingsFor } from "../serializers.js";
 import { deliveredCount, DELIVERIES_TO_VERIFY } from "./orders.js";
+import { sellerBadges } from "../sellers.js";
 import { trustFor } from "../trust.js";
 import { CLOSED_ACCOUNT_ERROR, isBannedContact } from "../moderation.js";
 import { deleteAccount } from "../accounts.js";
@@ -29,12 +30,14 @@ usersRouter.get("/", async (req, res) => {
     orderBy: [{ listings: { _count: "desc" } }, { createdAt: "asc" }],
     take: SELLER_SEARCH_LIMIT,
   });
-  const ratings = await ratingsFor(users.map((u) => u.id));
+  const [ratings, badges] = await Promise.all([ratingsFor(users.map((u) => u.id)), sellerBadges(users.map((u) => u.id))]);
   res.json(
     users.map((u) => ({
       ...publicUser(u),
       activeListingsCount: u._count.listings,
       rating: ratings.get(u.id) ?? { average: 0, count: 0 },
+      badge: badges.get(u.id)?.badge ?? null,
+      store: badges.get(u.id)?.store ?? null,
     })),
   );
 });
@@ -45,8 +48,17 @@ usersRouter.get("/:id", async (req, res) => {
     include: { _count: { select: { listings: { where: { status: "ACTIVE" } } } } },
   });
   if (!user || user.isSystem) return res.status(404).json({ error: "We couldn't find that seller." });
-  const rating = (await ratingsFor([user.id])).get(user.id) ?? { average: 0, count: 0 };
-  res.json({ ...publicUser(user), bio: user.bio, activeListingsCount: user._count.listings, rating, deliveredCount: await deliveredCount(user.id) });
+  const [ratings, badges] = await Promise.all([ratingsFor([user.id]), sellerBadges([user.id])]);
+  const b = badges.get(user.id);
+  res.json({
+    ...publicUser(user),
+    bio: user.bio,
+    activeListingsCount: user._count.listings,
+    rating: ratings.get(user.id) ?? { average: 0, count: 0 },
+    deliveredCount: await deliveredCount(user.id),
+    badge: b?.badge ?? null,
+    store: b?.store ?? null,
+  });
 });
 
 // Public trust summary shown on listings, chats and profiles.

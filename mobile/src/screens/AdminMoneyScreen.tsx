@@ -18,7 +18,7 @@ import { useSingleFlight } from "../hooks/useSingleFlight";
 import { formatPhone } from "../utils/phone";
 import StaffOnly from "../components/StaffOnly";
 
-const KIND_LABEL = { BOOST: "Boost", AD: "Ad", BUY_FOR_YOU: "Buy for you" } as const;
+const KIND_LABEL = { BOOST: "Boost", AD: "Ad", BUY_FOR_YOU: "Buy for you", STORE_PLAN: "Store plan", PREMIUM_PLAN: "Premium plan" } as const;
 const PLANS: Array<keyof PlanPrices> = ["3", "7", "30"];
 
 // Staff only: the bank details and prices customers see, and the queue of
@@ -197,6 +197,34 @@ function AdminMoneyScreenInner() {
                 <TextInput style={[styles.input, { flex: 1 }]} value={String(settings.feePercent)} onChangeText={(v) => setSettings({ ...settings, feePercent: Number(v.replace(/\D/g, "")) || 0 })} keyboardType="number-pad" accessibilityLabel="Fee percent" />
                 <TextInput style={[styles.input, { flex: 1 }]} value={String(settings.feeMinimum)} onChangeText={(v) => setSettings({ ...settings, feeMinimum: Number(v.replace(/\D/g, "")) || 0 })} keyboardType="number-pad" accessibilityLabel="Minimum fee" />
               </View>
+            </View>
+            <Text style={styles.section}>Seller plans (MVR)</Text>
+            <View style={styles.card}>
+              <Text style={styles.meta}>A store with Premium pays both the Store and the Premium price. Individuals pay only Premium.</Text>
+              {(
+                [
+                  ["Store", "storeMonthly", "storeYearly"],
+                  ["Premium", "premiumMonthly", "premiumYearly"],
+                ] as const
+              ).map(([name, monthly, yearly]) => (
+                <View key={name}>
+                  <Text style={styles.label}>{name}: a month, and a year</Text>
+                  <View style={styles.priceRow}>
+                    {[monthly, yearly].map((k) => (
+                      <TextInput
+                        key={k}
+                        style={[styles.input, { flex: 1 }]}
+                        value={String(settings.sellerPlans?.[k] ?? 0)}
+                        onChangeText={(v) => setSettings({ ...settings, sellerPlans: { ...settings.sellerPlans, [k]: Number(v.replace(/\D/g, "")) || 0 } })}
+                        keyboardType="number-pad"
+                        accessibilityLabel={`${name} ${k.endsWith("Yearly") ? "yearly" : "monthly"} price`}
+                      />
+                    ))}
+                  </View>
+                </View>
+              ))}
+              <Text style={styles.label}>Free 7-day boosts each month with Premium</Text>
+              <TextInput style={styles.input} value={String(settings.premiumFreeBoosts ?? 0)} onChangeText={(v) => setSettings({ ...settings, premiumFreeBoosts: Math.min(30, Number(v.replace(/\D/g, "")) || 0) })} keyboardType="number-pad" accessibilityLabel="Free boosts a month" />
             </View>
             <Tap style={styles.button} onPress={() => save()} disabled={saving} scaleTo={0.97}>
               {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Save details and prices</Text>}

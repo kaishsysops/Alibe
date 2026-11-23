@@ -16,7 +16,7 @@ import { timeAgo } from "../utils/time";
 // A disputed order: what the buyer reported, then each side's evidence, then
 // staff's decision. Buyer and seller can add evidence (text and a photo) while
 // it's open; staff see two buttons to settle it.
-export default function DisputePanel({ orderId, staff, onSettled }: { orderId: string; staff?: boolean; onSettled?: () => void }) {
+export default function DisputePanel({ orderId, staff, viewOnly, onSettled }: { orderId: string; staff?: boolean; viewOnly?: boolean; onSettled?: () => void }) {
   const styles = useStyles();
   const { colors } = useTheme();
   const { user } = useAuth();
@@ -119,7 +119,7 @@ export default function DisputePanel({ orderId, staff, onSettled }: { orderId: s
         </View>
       )}
 
-      {open && !staff && (
+      {open && !staff && !viewOnly && (
         <View style={styles.form}>
           <TextInput style={styles.input} value={text} onChangeText={setText} placeholder="What happened? Dates, what you agreed, what arrived..." placeholderTextColor={colors.textMuted} multiline maxLength={1000} />
           {photoUrl ? (
@@ -141,7 +141,7 @@ export default function DisputePanel({ orderId, staff, onSettled }: { orderId: s
         </View>
       )}
 
-      {open && staff && (
+      {open && staff && !viewOnly && (
         <View style={styles.form}>
           <TextInput style={styles.input} value={note} onChangeText={setNote} placeholder="Decision note (both sides see it)" placeholderTextColor={colors.textMuted} multiline maxLength={500} />
           <View style={{ flexDirection: "row", gap: spacing.sm }}>

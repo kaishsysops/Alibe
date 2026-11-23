@@ -11,6 +11,8 @@ import { AppAlertProvider } from "./src/components/AppAlertProvider";
 import { NotificationsProvider } from "./src/api/NotificationsContext";
 import { ActionSheetProvider } from "./src/components/Sheet";
 import RootNavigator from "./src/navigation/RootNavigator";
+import ConsoleApp from "./src/console/ConsoleApp";
+import { SITE } from "./src/site";
 import AnimatedSplash from "./src/components/AnimatedSplash";
 import MaintenanceOverlay from "./src/components/MaintenanceOverlay";
 import { useAuth } from "./src/api/AuthContext";
@@ -21,7 +23,7 @@ function Screens() {
   const [splashLifting, setSplashLifting] = useState(false);
   return (
     <EntranceGate.Provider value={splashLifting}>
-      <RootNavigator />
+      {SITE === "main" ? <RootNavigator /> : <ConsoleApp />}
       <AnimatedSplash ready={!isLoading} onExit={() => setSplashLifting(true)} />
       <MaintenanceOverlay />
     </EntranceGate.Provider>
@@ -39,7 +41,7 @@ function ThemedStatusBar() {
   const { scheme } = useTheme();
   const { user, isLoading } = useAuth();
   // Splash and welcome screens sit on the brand colour: white status bar there.
-  const onBrand = isLoading || !user;
+  const onBrand = SITE === "main" && (isLoading || !user);
   return <StatusBar style={onBrand || scheme === "dark" ? "light" : "dark"} />;
 }
 
