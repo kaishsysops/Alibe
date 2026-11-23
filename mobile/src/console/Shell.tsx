@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { View, Text, ScrollView, Linking, useWindowDimensions } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Menu, X, LogOut, ExternalLink, RefreshCw } from "lucide-react-native";
+import { Menu, X, LogOut, ExternalLink, RefreshCw, KeyRound } from "lucide-react-native";
+import ChangePassword from "./ChangePassword";
 import { useAuth } from "../api/AuthContext";
 import { useConsole } from "../components/ConsoleContext";
 import AlibeMark from "../components/AlibeMark";
@@ -101,6 +102,7 @@ function Sidebar({ section, onNavigate, hideBrand }: { section: SectionKey; onNa
   const navigation = useNavigation<any>();
   const { user, signOut } = useAuth();
   const { me } = useConsole();
+  const [changing, setChanging] = useState(false);
   if (!me) return null;
   const items = visibleSections(me, SITE);
   const other = SITE === "admin" ? siteUrl("portal") : me.admin ? siteUrl("admin") : null;
@@ -151,10 +153,12 @@ function Sidebar({ section, onNavigate, hideBrand }: { section: SectionKey; onNa
               {user?.name}
             </Text>
             <Text style={styles.accountRole} numberOfLines={1}>
+              {user?.username ? `@${user.username} · ` : ""}
               {accessLabel(me)}
             </Text>
           </View>
         </View>
+        <ChangePassword visible={changing} onClose={() => setChanging(false)} />
         <View style={styles.accountLinks}>
           {siteUrl("main") && (
             <Tap style={styles.smallLink} onPress={() => Linking.openURL(siteUrl("main")!)} scaleTo={0.96}>
@@ -168,6 +172,10 @@ function Sidebar({ section, onNavigate, hideBrand }: { section: SectionKey; onNa
               <Text style={styles.smallLinkText}>{SITE === "admin" ? "Portal" : "Admin site"}</Text>
             </Tap>
           )}
+          <Tap style={styles.smallLink} onPress={() => setChanging(true)} scaleTo={0.96}>
+            <KeyRound size={13} color={colors.textMuted} />
+            <Text style={styles.smallLinkText}>Password</Text>
+          </Tap>
           <Tap style={styles.smallLink} onPress={signOut} scaleTo={0.96} accessibilityLabel="Sign out">
             <LogOut size={13} color={colors.textMuted} />
             <Text style={styles.smallLinkText}>Sign out</Text>

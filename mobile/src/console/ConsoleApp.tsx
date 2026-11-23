@@ -10,7 +10,8 @@ import AlibeMark from "../components/AlibeMark";
 import Tap from "../components/Tap";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, cardShadow } from "../theme/theme";
-import { SITE, siteUrl } from "../site";
+import { SITE, siteUrl, takeInviteToken } from "../site";
+import InviteSetup from "./InviteSetup";
 import Shell from "./Shell";
 import StaffSignIn from "./StaffSignIn";
 import OverviewScreen from "./OverviewScreen";
@@ -60,6 +61,8 @@ export default function ConsoleApp() {
   const { colors } = useTheme();
   const [me, setMe] = useState<StaffMe | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "denied" | "error">("loading");
+  // Opened from a one-time sign-in link: set the password first.
+  const [inviteToken, setInviteToken] = useState(takeInviteToken);
 
   const refresh = useCallback(async () => {
     try {
@@ -94,6 +97,7 @@ export default function ConsoleApp() {
   );
 
   if (isLoading) return <View style={{ flex: 1, backgroundColor: colors.background }} />;
+  if (inviteToken) return <InviteSetup token={inviteToken} onDone={() => setInviteToken(null)} />;
   if (!user) return <StaffSignIn />;
   if (state === "loading") {
     return (
@@ -139,7 +143,7 @@ function NoAccess({ error, retry, portalInstead }: { error: boolean; retry: () =
             ? "Check your connection and try again."
             : portalInstead
               ? "Your roles are on the staff portal. Admin is for admins only."
-              : `${user?.email ?? "This account"} isn't Alibe staff. If you should be, ask an admin to add you with a role.`}
+              : "This login doesn't have staff access any more. Ask an admin."}
         </Text>
         <View style={styles.actions}>
           {error && (

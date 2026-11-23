@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { prisma } from "../db.js";
 import { safeRouter } from "../http.js";
-import { accessOf, can, requireRole } from "../roles.js";
+import { accessFor, can, requireRole } from "../roles.js";
 import { listingInclude, serializeListings } from "../serializers.js";
 import { deleteIdPhotos, signedIdUrl } from "./slips.js";
 import { notifyUser } from "../push.js";
@@ -15,7 +15,7 @@ export const staffRouter = safeRouter();
 // Who's asking and what's waiting: the portal home and its sidebar counts.
 // Only the queues this person can work on are counted.
 staffRouter.get("/me", async (req, res) => {
-  const a = await accessOf(req.userId);
+  const a = await accessFor(req);
   if (!a.admin && !a.roles.length) return res.status(403).json({ error: "Your account doesn't have staff access." });
   const count = async (roles: Parameters<typeof can>[1], q: () => Promise<number>) => (can(a, roles) ? q() : null);
   const [applications, posts, reports, disputes] = await Promise.all([

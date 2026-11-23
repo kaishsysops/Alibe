@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../db.js";
 import { safeRouter, normalizeEmail } from "../http.js";
-import { envStaffEmails, saveStaffInvites, staffInvites } from "../staff.js";
+import { createStaffInvite } from "../staffInvites.js";
 import { notifyUser } from "../push.js";
 import { SHOWCASE_KEY, isShowcaseOn } from "./ibay.js";
 import { MONEY_KEY, moneySettings } from "../money.js";
@@ -347,44 +347,65 @@ adminRouter.get("/disputes", async (_req, res) => {
 });
 
 // ---- staff and roles -----------------------------------------------------------
-// Admins add admins and give portal roles. Adding an email that has an account
-// applies at once; otherwise it waits as an invite until that email signs in.
+// Admins create staff logins (username + password) and choose their access:
+// admin, or any mix of portal roles. Staff use these on admin.alibe.online /
+// portal.alibe.online; nothing on the marketplace gives staff access.
 
 const roleList = z.array(z.enum(["SELLER_APPROVER", "POST_APPROVER", "MODERATOR", "SUPPORT"])).max(4);
-const staffSelect = { id: true, name: true, email: true, username: true, avatarColor: true, avatarUrl: true, isAdmin: true, staffRoles: true } as const;
+const staffSelect = {
+  id: true,
+  name: true,
+  email: true,
+  username: true,
+  avatarColor: true,
+  avatarUrl: true,
+  isAdmin: true,
+  staffRoles: true,
+  adminCredential: { select: { lockedUntil: true } },
+  staffInvites: { select: { expiresAt: true }, orderBy: { expiresAt: "desc" }, take: 1 },
+} as const;
+const serializeStaff = ({ adminCredential, staffInvites, ...s }: Prisma.UserGetPayload<{ select: typeof staffSelect }>) => ({
+  ...s,
+  hasLogin: !!adminCredential,
+  locked: !!adminCredential?.lockedUntil && adminCredential.lockedUntil > new Date(),
+  // A sign-in link that hasn't been used yet (and when it runs out).
+  inviteExpiresAt: staffInvites[0] && staffInvites[0].expiresAt > new Date() ? staffInvites[0].expiresAt : null,
+});
+const usernameField = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9._-]{3,30}$/, "Usernames are 3 to 30 letters, numbers, dots, dashes or underscores.");
+const firstIssue = (e: z.ZodError) => e.issues[0]?.message ?? "Please check the details.";
 
 adminRouter.get("/staff", async (_req, res) => {
-  const fromEnv = envStaffEmails();
-  const [staff, invites] = await Promise.all([
-    prisma.user.findMany({
-      where: { isSystem: false, OR: [{ isAdmin: true }, { staffRoles: { isEmpty: false } }] },
-      select: staffSelect,
-      orderBy: [{ isAdmin: "desc" }, { name: "asc" }],
-    }),
-    staffInvites(),
-  ]);
-  res.json({
-    // fixed: an admin listed in the server's STAFF_EMAILS (can't be removed here).
-    staff: staff.map((s) => ({ ...s, fixed: s.isAdmin && !!s.email && fromEnv.includes(s.email.toLowerCase()) })),
-    invites,
+  const staff = await prisma.user.findMany({
+    where: { isSystem: false, OR: [{ isAdmin: true }, { staffRoles: { isEmpty: false } }] },
+    select: staffSelect,
+    orderBy: [{ isAdmin: "desc" }, { name: "asc" }],
   });
+  res.json({ staff: staff.map(serializeStaff) });
 });
 
-const staffAddSchema = z.object({ email: z.string().transform(normalizeEmail).pipe(z.string().email()), admin: z.boolean().default(false), roles: roleList.default([]) });
+const staffAddSchema = z.object({
+  name: z.string().trim().min(2, "Enter their name.").max(60),
+  username: usernameField,
+  admin: z.boolean().default(false),
+  roles: roleList.default([]),
+});
 
+// A new staff login. It's its own account, separate from anyone's marketplace one.
 adminRouter.post("/staff", async (req, res) => {
   const parsed = staffAddSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Please enter a valid email address." });
-  const { email, admin, roles } = parsed.data;
+  if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed.error) });
+  const { name, username, admin, roles } = parsed.data;
   if (!admin && !roles.length) return res.status(400).json({ error: "Choose admin or at least one role." });
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (user?.bannedAt) return res.status(400).json({ error: "That account is banned. Unban it first." });
-  if (user) {
-    await prisma.user.update({ where: { id: user.id }, data: { isAdmin: user.isAdmin || admin, staffRoles: [...new Set([...user.staffRoles, ...roles])] } });
-    return res.json({ added: "now", name: user.name });
-  }
-  await saveStaffInvites([...(await staffInvites()).filter((i) => i.email !== email), { email, admin, roles }]);
-  res.json({ added: "invite" });
+  if (await prisma.user.findUnique({ where: { username } })) return res.status(409).json({ error: "That username is taken. Pick another." });
+  const created = await prisma.user.create({ data: { name, username, isAdmin: admin, staffRoles: admin ? [] : roles } });
+  // No password yet: they choose it through a one-time sign-in link.
+  const invite = await createStaffInvite(created.id, req.userId);
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: created.id }, select: staffSelect });
+  res.status(201).json({ member: serializeStaff(user), invite: { token: invite.token, expiresAt: invite.expiresAt, site: admin ? "admin" : "portal" } });
 });
 
 const staffEditSchema = z.object({ admin: z.boolean(), roles: roleList });
@@ -396,34 +417,51 @@ adminRouter.patch("/staff/:id", async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id: req.params.id } });
   if (!user) return res.status(404).json({ error: "We couldn't find that account." });
   const { admin, roles } = parsed.data;
+  if (!admin && !roles.length) return res.status(400).json({ error: "Choose admin or at least one role, or remove them instead." });
   if (user.isAdmin && !admin) {
-    if (user.email && envStaffEmails().includes(user.email.toLowerCase())) return res.status(400).json({ error: "This admin is set on the server (STAFF_EMAILS). Remove it there." });
     if (req.params.id === req.userId) return res.status(400).json({ error: "You can't remove your own admin access. Ask another admin." });
     const others = await prisma.user.count({ where: { isAdmin: true, isSystem: false, id: { not: user.id } } });
     if (others === 0) return res.status(400).json({ error: "Alibe needs at least one admin." });
   }
-  const updated = await prisma.user.update({ where: { id: user.id }, data: { isAdmin: admin, staffRoles: roles }, select: staffSelect });
-  res.json(updated);
+  const updated = await prisma.user.update({ where: { id: user.id }, data: { isAdmin: admin, staffRoles: admin ? [] : roles }, select: staffSelect });
+  res.json(serializeStaff(updated));
 });
 
-adminRouter.delete("/staff/invites/:email", async (req, res) => {
-  const email = normalizeEmail(String(req.params.email));
-  await saveStaffInvites((await staffInvites()).filter((i) => i.email !== email));
-  res.json({ ok: true });
+const inviteSchema = z.object({ username: usernameField.optional() });
+
+// A new one-time sign-in link: for someone who hasn't set a password yet, or
+// who forgot theirs (their current password keeps working until it's used).
+adminRouter.post("/staff/:id/invite", async (req, res) => {
+  const parsed = inviteSchema.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: firstIssue(parsed.error) });
+  const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+  if (!user || (!user.isAdmin && !user.staffRoles.length)) return res.status(404).json({ error: "That person isn't staff." });
+  if (user.bannedAt) return res.status(400).json({ error: "That account is banned." });
+  let username = user.username;
+  if (!username) {
+    username = parsed.data.username ?? null;
+    if (!username) return res.status(400).json({ error: "Choose a username for them." });
+    if (await prisma.user.findUnique({ where: { username } })) return res.status(409).json({ error: "That username is taken. Pick another." });
+    await prisma.user.update({ where: { id: user.id }, data: { username } });
+  }
+  const invite = await createStaffInvite(user.id, req.userId);
+  res.json({ token: invite.token, expiresAt: invite.expiresAt, site: user.isAdmin ? "admin" : "portal", username });
 });
 
-// Takes away all staff access (admin and roles).
+// Takes away all staff access: admin, roles, the login and its sessions.
 adminRouter.delete("/staff/:id", async (req, res) => {
   if (req.params.id === req.userId) return res.status(400).json({ error: "You can't remove yourself. Ask another admin." });
   const user = await prisma.user.findUnique({ where: { id: req.params.id } });
   if (!user || (!user.isAdmin && !user.staffRoles.length)) return res.status(404).json({ error: "That person isn't staff." });
-  if (user.isAdmin && user.email && envStaffEmails().includes(user.email.toLowerCase())) {
-    return res.status(400).json({ error: "This admin is set on the server (STAFF_EMAILS). Remove it there." });
-  }
   if (user.isAdmin && (await prisma.user.count({ where: { isAdmin: true, isSystem: false, id: { not: user.id } } })) === 0) {
     return res.status(400).json({ error: "Alibe needs at least one admin." });
   }
-  await prisma.user.update({ where: { id: user.id }, data: { isAdmin: false, staffRoles: [] } });
+  await prisma.$transaction([
+    prisma.user.update({ where: { id: user.id }, data: { isAdmin: false, staffRoles: [] } }),
+    prisma.adminCredential.deleteMany({ where: { userId: user.id } }),
+    prisma.staffInvite.deleteMany({ where: { userId: user.id } }),
+    prisma.session.deleteMany({ where: { userId: user.id, staff: true } }),
+  ]);
   res.json({ ok: true });
 });
 

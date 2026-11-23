@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { z } from "zod";
 import { Prisma, Order } from "@prisma/client";
-import { accessOf, can } from "../roles.js";
+import { accessFor, can } from "../roles.js";
 import { prisma } from "../db.js";
 import { safeRouter, sendValidationError } from "../http.js";
 import { publicUser, listingInclude, serializeListing } from "../serializers.js";
@@ -284,7 +284,6 @@ ordersRouter.post("/:id/cancel", async (req, res) => {
 
 // ---- disputes: both sides add evidence, staff decide ------------------------
 
-const isAdmin = async (userId?: string) => !!userId && !!(await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } }))?.isAdmin;
 
 // The dispute so far, for the buyer, the seller and staff.
 ordersRouter.get("/:id/dispute", async (req, res) => {
@@ -295,7 +294,7 @@ ordersRouter.get("/:id/dispute", async (req, res) => {
   if (!order) return res.status(404).json({ error: "This order no longer exists." });
   const party = req.userId === order.buyerId || req.userId === order.sellerId;
   // Support and moderators can read disputes; only admins settle them.
-  if (!party && !can(await accessOf(req.userId), ["SUPPORT", "MODERATOR"])) return res.status(403).json({ error: "You can't see this dispute." });
+  if (!party && !can(await accessFor(req), ["SUPPORT", "MODERATOR"])) return res.status(403).json({ error: "You can't see this dispute." });
   res.json({
     status: order.status,
     problem: order.problem,
@@ -327,7 +326,7 @@ ordersRouter.post("/:id/evidence", async (req, res) => {
 const resolveSchema = z.object({ outcome: z.enum(["DELIVERED", "CANCELLED"]), note: z.string().trim().min(3).max(500) });
 
 ordersRouter.post("/:id/resolve", async (req, res) => {
-  if (!(await isAdmin(req.userId))) return res.status(403).json({ error: "Only staff can settle a dispute." });
+  if (!(await accessFor(req)).admin) return res.status(403).json({ error: "Only admins can settle a dispute." });
   const parsed = resolveSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Choose an outcome and add a short note for both sides." });
   const order = await prisma.order.findUnique({ where: { id: req.params.id }, include: { listing: { select: { title: true } } } });

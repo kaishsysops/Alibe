@@ -150,14 +150,12 @@ them off the server now and then. Restore with
 **Staff commands** run in one API replica through `./scripts/admin.sh`:
 
 ```bash
-ADMIN_PASSWORD='...' ./scripts/admin.sh set-admin kaish
-STAFF_CODE=12345678  ./scripts/admin.sh set-staff-code
+ADMIN_PASSWORD='...' ./scripts/admin.sh set-admin kaish   # admin login / new password
 ./scripts/admin.sh import-ibay        # then: ./scripts/admin.sh ibay-log
 ./scripts/admin.sh psql               # database shell
 ./scripts/admin.sh logs               # API logs
 ```
 
-Staff sign-in: type the 8-digit staff code into the email field.
 
 ### Admin and staff portal
 
@@ -173,13 +171,17 @@ the certificate):
   - *Moderator*: reports, removing listings (no bans, no money).
   - *Support*: looks up sellers and disputes, changes nothing.
 
-Staff sign in with their normal Alibe account (email code or Google); the
-account's role decides what they see. Admins add people in Admin > Staff and
-roles (by email: if they haven't signed up yet, the role applies at their first
-sign-in). For Google sign-in on these sites, add `https://admin.alibe.online`
-and `https://portal.alibe.online` to the OAuth client's authorised JavaScript
-origins in Google Cloud. On a dev machine, open the app with `?site=admin` or
-`?site=portal`.
+Staff sign in with a **username and password** made for them; there is no
+email code or Google on these sites, and a marketplace sign-in never gives
+staff access (only sessions from the staff sign-in reach staff APIs, and they
+end after a quiet week). Admins create logins in Admin > Staff and roles, set
+new passwords there (which signs that person out elsewhere and clears a
+lockout) and remove access. Staff change their own password from the sidebar.
+Five wrong passwords lock a login for 15 minutes.
+
+The first deploy asks for the first admin's username and password. Later, or
+if every admin is locked out: `ADMIN_PASSWORD='...' ./scripts/admin.sh set-admin <username>`.
+On a dev machine, open the app with `?site=admin` or `?site=portal`.
 
 ### Sellers
 

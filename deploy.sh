@@ -130,7 +130,7 @@ env_del() { { grep -vE "^$1=" .env || true; } > .env.tmp && mv .env.tmp .env; }
 
 # Settings from earlier versions that no longer exist (test mode, demo data,
 # the server's IP): removed so .env only holds what's used.
-for old in SHOW_CODES_IN_APP SEED_DEMO RATE_LIMITS LAN_IP; do env_del "$old"; done
+for old in SHOW_CODES_IN_APP SEED_DEMO RATE_LIMITS LAN_IP STAFF_EMAILS; do env_del "$old"; done
 
 [ -n "$(env_get DOMAINS)" ] || env_set DOMAINS "alibe.online, www.alibe.online, beta.alibe.online"
 # "Continue with Google" (public OAuth client id; set GOOGLE_CLIENT_ID= to turn it off).
@@ -151,16 +151,6 @@ fi
 # Signs staff links to payment slips; shared by every API replica.
 [ -n "$(env_get SLIP_LINK_SECRET)" ] || env_set SLIP_LINK_SECRET "$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
 [ -n "$(env_get MAIL_FROM)" ] || env_set MAIL_FROM "Alibe <no-reply@$first_domain>"
-# The first staff account: that email gets staff access when it signs in. More
-# staff are added in the app (Profile > Staff).
-if [ -z "$(env_get STAFF_EMAILS)" ] && [ -t 0 ]; then
-  printf '  %s👤%s Email for the first staff account (Enter to skip): ' "$ORANGE" "$R"
-  read -r staff_email || staff_email=""
-  if [ -n "$staff_email" ]; then
-    env_set STAFF_EMAILS "$staff_email"
-    info "Staff: $staff_email (sign in with it to get staff access)"
-  fi
-fi
 chmod 600 .env
 
 # ---- sign-in emails ----
@@ -254,6 +244,24 @@ step "Switching to the new web app" $C up -d --no-deps --remove-orphans web back
 step "Checking the app reaches the API" wait_for http://localhost:8081/api/health
 https_apply
 
+# The admin site needs at least one admin login (username + password). If there
+# isn't one yet, make it now; more staff are added on the admin site.
+admin_logins=$($C exec -T postgres psql -U alibe -d alibe -tAc 'SELECT count(*) FROM "AdminCredential" c JOIN "User" u ON u.id = c."userId" WHERE u."isAdmin" AND u."bannedAt" IS NULL' 2>/dev/null | tr -d '[:space:]' || true)
+if [ "${admin_logins:-0}" = 0 ] && [ -t 0 ]; then
+  echo
+  printf '  %s👤%s No admin login yet. Create one for admin.%s\n' "$ORANGE" "$R" "$root_domain"
+  printf '     Username: '; read -r admin_user || admin_user=""
+  if [ -n "$admin_user" ]; then
+    while :; do
+      printf '     Password (10+ characters, hidden): '; read -rs admin_pw; echo
+      [ ${#admin_pw} -ge 10 ] && break
+      printf '     %sToo short.%s\n' "$RED" "$R"
+    done
+    ADMIN_PASSWORD="$admin_pw" ./scripts/admin.sh set-admin "$admin_user" >/dev/null && info "Admin login created: $admin_user (sign in at https://admin.$root_domain)"
+    unset admin_pw
+  fi
+fi
+
 # ---------- summary --------------------------------------------------------
 echo
 $C ps --format '{{.Name}}\t{{.Status}}' | while IFS=$'\t' read -r name status; do
@@ -266,6 +274,8 @@ cat <<EOF
   ${ORANGE}${B}│${R}  ${GREEN}${B}Alibe is live${R}  ${GREY}($APP_VERSION)${R}
   ${ORANGE}${B}│${R}
 $(for d in ${domains//,/ }; do printf '  %s│%s  App      %shttps://%s%s\n' "${ORANGE}${B}" "$R" "$CYAN" "$d" "$R"; done)
+  ${ORANGE}${B}│${R}  Admin    ${CYAN}https://admin.$root_domain${R}
+  ${ORANGE}${B}│${R}  Portal   ${CYAN}https://portal.$root_domain${R}
   ${ORANGE}${B}│${R}  Status   ${CYAN}https://$first_domain/status${R}
   ${ORANGE}${B}│${R}  API      ${GREY}$replicas replicas, load balanced${R}
   ${ORANGE}${B}│${R}  Backups  ${GREY}daily into ./backups ($dumps so far)${R}

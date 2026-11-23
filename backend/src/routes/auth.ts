@@ -6,9 +6,8 @@ import { createSession, deleteSession } from "../auth.js";
 import { checkCode, respondToCheck, sendCode } from "../otp.js";
 import { deliveryMethods, sendEmailCode, sendSmsCode } from "../messaging.js";
 import { CLOSED_ACCOUNT_ERROR, isBannedContact } from "../moderation.js";
-import { DECOY_HASH, verifyPassword } from "../password.js";
-import { isStaffCode } from "../staffEntry.js";
-import { promoteIfStaff } from "../staff.js";
+import { DECOY_HASH, hashPassword, verifyPassword } from "../password.js";
+import { findStaffInvite } from "../staffInvites.js";
 import crypto from "node:crypto";
 import { googleClientIds, verifyGoogleToken } from "../google.js";
 
@@ -59,9 +58,9 @@ async function linkContact(userId: string, token: string | undefined) {
 // New accounts start with this name until the welcome flow asks for a real one.
 const DEFAULT_NAME = "New Seller";
 
-const signedIn = async (signedInUser: Prisma.UserGetPayload<object>) => {
-  // Staff emails (STAFF_EMAILS, or added in Profile > Staff) get staff access here.
-  const user = await promoteIfStaff(signedInUser);
+// Marketplace sign-in. Staff access never comes from here: the admin and
+// portal sites use their own username + password sign-in (/auth/staff).
+const signedIn = async (user: Prisma.UserGetPayload<object>) => {
   return { token: await createSession(user.id), user, needsName: user.name === DEFAULT_NAME };
 };
 
@@ -73,7 +72,6 @@ authRouter.post("/otp/request", async (req, res) => {
     return res.status(400).json({ error: "Please enter a valid phone number, e.g. +960 7771234." });
   }
   const { phone } = parsed.data;
-  if (await isStaffCode(phone)) return res.json({ staffEntry: true });
   if (!deliveryMethods().phone) return res.status(403).json({ error: "Phone sign-in isn't available yet. Please sign in with your email." });
   if (await isBannedContact(phone)) return res.status(403).json({ error: CLOSED_ACCOUNT_ERROR });
   await sendCode(res, `signin:phone:${phone}`, (code) => sendSmsCode(phone, code));
@@ -141,10 +139,6 @@ authRouter.post("/google", async (req, res) => {
 const emailRequestSchema = z.object({ email: z.string().transform(normalizeEmail).pipe(z.string().email()) });
 
 authRouter.post("/email/request", async (req, res) => {
-  // Staff sign-in also opens from the email field (for when phone sign-in is
-  // switched off): the secret number typed in place of an address.
-  const raw = String(req.body?.email ?? "").trim();
-  if (/^\d{8}$/.test(raw) && (await isStaffCode(raw))) return res.json({ staffEntry: true });
   const parsed = emailRequestSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: "Please enter a valid email address." });
   const { email } = parsed.data;
@@ -189,20 +183,21 @@ authRouter.post("/create", async (req, res) => {
   res.json(await signedIn(user));
 });
 
-// Staff sign in with a username and password. Customers never do: accounts only
-// get a credential from prisma/set-admin.ts.
-const staffSchema = z.object({ entryCode: z.string().max(20), username: z.string().trim().toLowerCase().max(40), password: z.string().max(200) });
+// Staff sign in to admin.alibe.online / portal.alibe.online with a username
+// and password an admin gave them. Only these sessions reach staff APIs.
+const staffSchema = z.object({ username: z.string().trim().toLowerCase().max(40), password: z.string().max(200) });
 const MAX_PASSWORD_FAILURES = 5;
 const LOCK_MS = 15 * 60_000;
+const WRONG = "That username or password isn't right.";
 
 authRouter.post("/staff", async (req, res) => {
   const parsed = staffSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Please enter your username and password." });
-  const { entryCode, username, password } = parsed.data;
-  // Without the staff number a guess isn't even tried, so it can't lock anyone out.
-  if (!(await isStaffCode(entryCode))) return res.status(401).json({ error: "That username or password isn't right." });
+  if (!parsed.success || !parsed.data.username || !parsed.data.password) return res.status(400).json({ error: "Please enter your username and password." });
+  const { username, password } = parsed.data;
   const user = await prisma.user.findUnique({ where: { username }, include: { adminCredential: true } });
-  const credential = user?.isAdmin && !user.bannedAt ? user.adminCredential : null;
+  const isStaff = !!user && !user.bannedAt && (user.isAdmin || user.staffRoles.length > 0);
+  const credential = isStaff ? user!.adminCredential : null;
+  // Always hash something, so a wrong username takes as long as a wrong password.
   const correct = await verifyPassword(password, credential?.passwordHash ?? DECOY_HASH);
 
   if (credential?.lockedUntil && credential.lockedUntil > new Date()) {
@@ -217,11 +212,61 @@ authRouter.post("/staff", async (req, res) => {
         data: { failures: locked ? 0 : failures, lockedUntil: locked ? new Date(Date.now() + LOCK_MS) : null },
       });
     }
-    return res.status(401).json({ error: "That username or password isn't right." });
+    return res.status(401).json({ error: WRONG });
   }
   await prisma.adminCredential.update({ where: { userId: credential.userId }, data: { failures: 0, lockedUntil: null } });
   const { adminCredential: _hidden, ...safeUser } = user!;
-  res.json({ token: await createSession(safeUser.id), user: safeUser, needsName: false });
+  res.json({ token: await createSession(safeUser.id, true), user: safeUser, needsName: false });
+});
+
+export const STAFF_PASSWORD_MIN = 10;
+
+// One-time sign-in link: who it's for (the page greets them by name).
+authRouter.get("/staff/invite/:token", async (req, res) => {
+  const invite = await findStaffInvite(req.params.token);
+  if (!invite) return res.status(410).json({ error: "This sign-in link has expired or was already used. Ask an admin for a new one." });
+  res.json({ name: invite.user.name, username: invite.user.username, site: invite.user.isAdmin ? "admin" : "portal", expiresAt: invite.expiresAt });
+});
+
+const acceptSchema = z.object({ token: z.string().max(200), password: z.string().min(STAFF_PASSWORD_MIN).max(200) });
+
+// They choose their password; the link is used up and they're signed in.
+// Any other staff sign-ins of theirs end (this doubles as a password reset).
+authRouter.post("/staff/invite", async (req, res) => {
+  const parsed = acceptSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: `Choose a password with at least ${STAFF_PASSWORD_MIN} characters.` });
+  const invite = await findStaffInvite(parsed.data.token);
+  if (!invite) return res.status(410).json({ error: "This sign-in link has expired or was already used. Ask an admin for a new one." });
+  const passwordHash = await hashPassword(parsed.data.password);
+  // Deleting the invite first makes a double submit fail instead of signing in twice.
+  const used = await prisma.staffInvite.deleteMany({ where: { tokenHash: invite.tokenHash } });
+  if (!used.count) return res.status(410).json({ error: "This sign-in link was already used." });
+  await prisma.$transaction([
+    prisma.adminCredential.upsert({
+      where: { userId: invite.userId },
+      update: { passwordHash, failures: 0, lockedUntil: null },
+      create: { userId: invite.userId, passwordHash },
+    }),
+    prisma.staffInvite.deleteMany({ where: { userId: invite.userId } }),
+    prisma.session.deleteMany({ where: { userId: invite.userId, staff: true } }),
+  ]);
+  const { user } = invite;
+  res.json({ token: await createSession(user.id, true), user, needsName: false });
+});
+const changePasswordSchema = z.object({ current: z.string().max(200), next: z.string().min(STAFF_PASSWORD_MIN).max(200) });
+
+// Staff change their own password (signed in on the staff sites). Other staff
+// sessions of theirs are signed out.
+authRouter.post("/staff/password", async (req, res) => {
+  if (!req.userId || !req.staffSession) return res.status(403).json({ error: "Sign in on the staff site first." });
+  const parsed = changePasswordSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: `The new password needs at least ${STAFF_PASSWORD_MIN} characters.` });
+  const credential = await prisma.adminCredential.findUnique({ where: { userId: req.userId } });
+  if (!credential || !(await verifyPassword(parsed.data.current, credential.passwordHash))) return res.status(400).json({ error: "Your current password isn't right." });
+  await prisma.adminCredential.update({ where: { userId: req.userId }, data: { passwordHash: await hashPassword(parsed.data.next), failures: 0, lockedUntil: null } });
+  const token = (req.headers.authorization ?? "").replace(/^Bearer /, "");
+  await prisma.session.deleteMany({ where: { userId: req.userId, staff: true, NOT: { tokenHash: crypto.createHash("sha256").update(token).digest("hex") } } });
+  res.status(204).send();
 });
 
 // Signs this device out: its token stops working immediately, and its push

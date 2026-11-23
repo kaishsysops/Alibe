@@ -1,63 +1,38 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, TextInput, ActivityIndicator, Platform } from "react-native";
+import React, { useRef, useState } from "react";
+import { View, Text, TextInput, ActivityIndicator } from "react-native";
+import { Eye, EyeOff, Lock, User as UserIcon } from "lucide-react-native";
 import { api, errorMessage } from "../api/client";
 import { useAuth } from "../api/AuthContext";
 import { useToast } from "../components/Toast";
 import AlibeMark from "../components/AlibeMark";
-import GoogleButton from "../components/GoogleButton";
 import Tap from "../components/Tap";
 import { useSingleFlight } from "../hooks/useSingleFlight";
 import { makeStyles, useTheme } from "../theme/ThemeContext";
 import { spacing, radius, fontSize, fontWeight, controlHeight, cardShadow } from "../theme/theme";
 import { SITE } from "../site";
 
-// Sign-in for admin.alibe.online and portal.alibe.online: the same Alibe
-// account (emailed code or Google), but nothing here creates accounts. Access
-// then depends on the person's admin flag or portal roles.
+// Sign-in for admin.alibe.online and portal.alibe.online: the username and
+// password an admin created for you. Marketplace accounts (email, Google)
+// don't work here.
 export default function StaffSignIn() {
   const styles = useStyles();
   const { colors } = useTheme();
   const { signIn } = useAuth();
   const toast = useToast();
-  const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
-  const [sent, setSent] = useState<string | null>(null);
-  const [devCode, setDevCode] = useState<string | null>(null);
-  const [googleClientId, setGoogleClientId] = useState<string | null>(null);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [show, setShow] = useState(false);
+  const passwordRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const ready = username.trim().length > 0 && password.length > 0;
 
-  useEffect(() => {
-    api.authMethods().then((m) => setGoogleClientId(m.googleClientId ?? null)).catch(() => {});
-  }, []);
-
-  const [send, sending] = useSingleFlight(async () => {
-    const address = email.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(address)) return toast.error("Enter your work email address.");
+  const [submit, busy] = useSingleFlight(async () => {
+    if (!ready) return;
     try {
-      const res = await api.requestEmailCode(address);
-      setSent(address);
-      setDevCode("devCode" in res && res.devCode ? res.devCode : null);
-    } catch (e) {
-      toast.error(errorMessage(e));
-    }
-  });
-
-  const [verify, verifying] = useSingleFlight(async () => {
-    if (!sent || code.length < 6) return;
-    try {
-      const res = await api.verifyEmailCode(sent, code);
-      if ("newContact" in res) return toast.error("No Alibe account uses this email. Ask an admin to add you as staff.");
+      const res = await api.staffSignIn(username.trim().toLowerCase(), password);
+      setPassword("");
       await signIn(res.user, res.token);
     } catch (e) {
-      toast.error(errorMessage(e));
-      setCode("");
-    }
-  });
-
-  const [google, signingInWithGoogle] = useSingleFlight(async (credential: string) => {
-    try {
-      const res = await api.googleSignIn(credential);
-      await signIn(res.user, res.token);
-    } catch (e) {
+      setPassword("");
       toast.error(errorMessage(e));
     }
   });
@@ -68,66 +43,63 @@ export default function StaffSignIn() {
         <View style={styles.brand}>
           <AlibeMark size={34} color={colors.primary} />
           <Text style={styles.brandText}>Alibe</Text>
-          <View style={styles.pill}>
-            <Text style={styles.pillText}>{SITE === "admin" ? "Admin" : "Staff portal"}</Text>
+          <View style={[styles.pill, SITE === "admin" && { backgroundColor: colors.text }]}>
+            <Text style={[styles.pillText, SITE === "admin" && { color: colors.background }]}>{SITE === "admin" ? "Admin" : "Staff portal"}</Text>
           </View>
         </View>
-        <Text style={styles.title}>{sent ? "Check your email" : "Sign in"}</Text>
-        <Text style={styles.lead}>{sent ? `We sent a 6-digit code to ${sent}.` : SITE === "admin" ? "For Alibe admins." : "For Alibe staff with a portal role."}</Text>
+        <Text style={styles.title}>Sign in</Text>
+        <Text style={styles.lead}>Use the username and password your admin gave you.</Text>
 
-        {!sent ? (
-          <>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-              onSubmitEditing={() => send()}
-              accessibilityLabel="Email"
-            />
-            <Tap style={styles.button} onPress={() => send()} disabled={sending} scaleTo={0.97}>
-              {sending ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Email me a code</Text>}
-            </Tap>
-            {googleClientId && Platform.OS === "web" && (
-              <>
-                <View style={styles.orRow}>
-                  <View style={styles.orLine} />
-                  <Text style={styles.orText}>or</Text>
-                  <View style={styles.orLine} />
-                </View>
-                {signingInWithGoogle ? <ActivityIndicator color={colors.primary} /> : <GoogleButton clientId={googleClientId} onCredential={(c) => google(c)} />}
-              </>
-            )}
-          </>
-        ) : (
-          <>
-            {devCode && <Text style={styles.devCode}>Code (development): {devCode}</Text>}
-            <Text style={styles.label}>Code</Text>
-            <TextInput
-              style={[styles.input, styles.codeInput]}
-              value={code}
-              onChangeText={(t) => setCode(t.replace(/\D/g, "").slice(0, 6))}
-              placeholder="123456"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="number-pad"
-              autoComplete="one-time-code"
-              onSubmitEditing={() => verify()}
-              accessibilityLabel="Code"
-              autoFocus
-            />
-            <Tap style={[styles.button, code.length < 6 && { opacity: 0.5 }]} onPress={() => verify()} disabled={verifying || code.length < 6} scaleTo={0.97}>
-              {verifying ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign in</Text>}
-            </Tap>
-            <Tap style={styles.link} onPress={() => (setSent(null), setCode(""))} scaleTo={0.97}>
-              <Text style={styles.linkText}>Use a different email</Text>
-            </Tap>
-          </>
-        )}
+        <Text style={styles.label}>Username</Text>
+        <View style={styles.field}>
+          <UserIcon size={18} color={colors.textMuted} />
+          <TextInput
+            style={styles.input}
+            value={username}
+            onChangeText={setUsername}
+            placeholder="username"
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="username"
+            textContentType="username"
+            returnKeyType="next"
+            onSubmitEditing={() => passwordRef.current?.focus()}
+            accessibilityLabel="Username"
+            maxLength={40}
+            autoFocus
+          />
+        </View>
+
+        <Text style={[styles.label, { marginTop: spacing.md }]}>Password</Text>
+        <View style={styles.field}>
+          <Lock size={18} color={colors.textMuted} />
+          <TextInput
+            ref={passwordRef}
+            style={styles.input}
+            value={password}
+            onChangeText={setPassword}
+            placeholder="••••••••••"
+            placeholderTextColor={colors.textMuted}
+            secureTextEntry={!show}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="current-password"
+            textContentType="password"
+            returnKeyType="go"
+            onSubmitEditing={() => submit()}
+            accessibilityLabel="Password"
+            maxLength={200}
+          />
+          <Tap onPress={() => setShow((v) => !v)} hitSlop={10} scaleTo={0.9} accessibilityLabel={show ? "Hide password" : "Show password"}>
+            {show ? <EyeOff size={18} color={colors.textMuted} /> : <Eye size={18} color={colors.textMuted} />}
+          </Tap>
+        </View>
+
+        <Tap style={[styles.button, !ready && { opacity: 0.5 }]} onPress={() => submit()} disabled={busy || !ready} scaleTo={0.97}>
+          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign in</Text>}
+        </Tap>
+        <Text style={styles.help}>Forgot your password? Ask an admin to set a new one. After 5 wrong tries the login locks for 15 minutes.</Text>
       </View>
     </View>
   );
@@ -143,14 +115,9 @@ const useStyles = makeStyles((colors) => ({
   title: { fontSize: fontSize.xxl, fontWeight: fontWeight.extrabold, color: colors.text },
   lead: { fontSize: fontSize.base, color: colors.textMuted, marginTop: 4, marginBottom: spacing.lg },
   label: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.text, marginBottom: 6 },
-  input: { height: controlHeight.input, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, fontSize: fontSize.md, color: colors.text, backgroundColor: colors.background, outlineStyle: "none" as any },
-  codeInput: { fontSize: 22, letterSpacing: 6, fontWeight: fontWeight.bold, textAlign: "center" },
-  button: { height: controlHeight.primary, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", marginTop: spacing.md },
+  field: { flexDirection: "row", alignItems: "center", gap: spacing.sm, height: controlHeight.input, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border, paddingHorizontal: spacing.md, backgroundColor: colors.background },
+  input: { flex: 1, height: "100%", fontSize: fontSize.md, color: colors.text, outlineStyle: "none" as any },
+  button: { height: controlHeight.primary, borderRadius: radius.pill, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", marginTop: spacing.lg },
   buttonText: { color: "#fff", fontWeight: fontWeight.bold, fontSize: fontSize.md },
-  orRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginVertical: spacing.md },
-  orLine: { flex: 1, height: 1, backgroundColor: colors.border },
-  orText: { fontSize: fontSize.sm, color: colors.textMuted },
-  link: { alignItems: "center", paddingVertical: spacing.md },
-  linkText: { fontSize: fontSize.sm, fontWeight: fontWeight.bold, color: colors.primary },
-  devCode: { fontSize: fontSize.sm, color: colors.textMuted, marginBottom: spacing.sm },
+  help: { fontSize: fontSize.caption, color: colors.textMuted, textAlign: "center", marginTop: spacing.md, lineHeight: 17 },
 }));

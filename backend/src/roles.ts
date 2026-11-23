@@ -12,6 +12,13 @@ export const PORTAL_ROLES: StaffRole[] = ["SELLER_APPROVER", "POST_APPROVER", "M
 
 export type Access = { admin: boolean; roles: StaffRole[] };
 
+// Staff access only counts on a staff session (username + password on the
+// admin/portal sites). The same person signed in to the marketplace with
+// email or Google is just a customer there.
+export function accessFor(req: Request) {
+  return accessOf(req.staffSession ? req.userId : undefined);
+}
+
 export async function accessOf(userId?: string): Promise<Access> {
   if (!userId) return { admin: false, roles: [] };
   const u = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true, staffRoles: true, bannedAt: true } });
@@ -27,7 +34,7 @@ const forbidden = (res: Response) => res.status(403).json({ error: "Your account
 export function requireRole(...roles: StaffRole[]) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const a = await accessOf(req.userId);
+      const a = await accessFor(req);
       if (!can(a, roles)) return forbidden(res);
       res.locals.access = a;
       next();
@@ -49,7 +56,7 @@ const SHARED: Array<[method: string, path: RegExp, roles: StaffRole[]]> = [
 
 export async function adminGate(req: Request, res: Response, next: NextFunction) {
   try {
-    const a = await accessOf(req.userId);
+    const a = await accessFor(req);
     const shared = SHARED.find(([m, re]) => m === req.method && re.test(req.path));
     if (!can(a, shared ? shared[2] : [])) return forbidden(res);
     res.locals.access = a;

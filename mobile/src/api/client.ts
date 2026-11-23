@@ -367,8 +367,9 @@ export type DispatchDetails = { method: DeliveryOption; boatName?: string; boatD
 export type DisputeEvidence = { id: string; text: string; photoUrl: string | null; createdAt: string; by: { id: string; name: string }; role: "BUYER" | "SELLER" | "STAFF" };
 export type DisputeInfo = { status: OrderStatus; problem: string | null; outcome: "DELIVERED" | "CANCELLED" | null; note: string | null; resolvedAt: string | null; evidence: DisputeEvidence[] };
 export type StaffRole = "SELLER_APPROVER" | "POST_APPROVER" | "MODERATOR" | "SUPPORT";
-export type StaffMember = { id: string; name: string; email: string | null; username: string | null; avatarColor: string | null; avatarUrl: string | null; isAdmin: boolean; staffRoles: StaffRole[]; fixed: boolean };
-export type StaffInvite = { email: string; admin: boolean; roles: StaffRole[] };
+export type StaffMember = { id: string; name: string; email: string | null; username: string | null; avatarColor: string | null; avatarUrl: string | null; isAdmin: boolean; staffRoles: StaffRole[]; hasLogin: boolean; locked: boolean; inviteExpiresAt: string | null };
+// A one-time sign-in link's token (the link itself is built for the right site).
+export type StaffInviteLink = { token: string; expiresAt: string; site: "admin" | "portal" };
 // What the signed-in staff member can do, and what's waiting (null = not theirs).
 export type StaffMe = { admin: boolean; roles: StaffRole[]; counts: { applications: number | null; posts: number | null; reports: number | null; disputes: number | null } };
 export type SellerApplicationItem = {
@@ -601,14 +602,17 @@ export const api = {
   updateListingStatus: (id: string, sellerId: string, status: Listing["status"]) =>
     request<Listing>(`/listings/${id}`, { method: "PATCH", body: JSON.stringify({ status, sellerId }) }),
   deleteListing: (id: string, sellerId: string) => request<void>(`/listings/${id}?sellerId=${encodeURIComponent(sellerId)}`, { method: "DELETE" }),
-  requestOtp: (phone: string) => request<CodeRequest & { staffEntry?: boolean }>("/auth/otp/request", { method: "POST", body: JSON.stringify({ phone }) }),
+  requestOtp: (phone: string) => request<CodeRequest>("/auth/otp/request", { method: "POST", body: JSON.stringify({ phone }) }),
   verifyOtp: (phone: string, code: string, themeColor?: string, linkToken?: string) =>
     request<VerifyResult>("/auth/otp/verify", {
       method: "POST",
       body: JSON.stringify({ phone, code, themeColor, linkToken }),
     }),
-  staffSignIn: (entryCode: string, username: string, password: string) =>
-    request<SignedIn>("/auth/staff", { method: "POST", body: JSON.stringify({ entryCode, username, password }) }),
+  // Admin / portal sites: the username + password an admin gave them.
+  staffSignIn: (username: string, password: string) => request<SignedIn>("/auth/staff", { method: "POST", body: JSON.stringify({ username, password }) }),
+  staffInviteInfo: (token: string) => request<{ name: string; username: string | null; site: "admin" | "portal"; expiresAt: string }>(`/auth/staff/invite/${encodeURIComponent(token)}`),
+  acceptStaffInvite: (token: string, password: string) => request<SignedIn>("/auth/staff/invite", { method: "POST", body: JSON.stringify({ token, password }) }),
+  changeStaffPassword: (current: string, next: string) => request<void>("/auth/staff/password", { method: "POST", body: JSON.stringify({ current, next }) }),
   requestEmailCode: (email: string) => request<CodeRequest>("/auth/email/request", { method: "POST", body: JSON.stringify({ email }) }),
   verifyEmailCode: (email: string, code: string, themeColor?: string, linkToken?: string) =>
     request<VerifyResult>("/auth/email/verify", {
@@ -680,8 +684,10 @@ export const api = {
   addDisputeEvidence: (id: string, userId: string, text: string, photoUrl?: string) =>
     request<{ ok: true }>(`/orders/${id}/evidence`, { method: "POST", body: JSON.stringify({ userId, text, photoUrl }) }),
   resolveDispute: (id: string, outcome: "DELIVERED" | "CANCELLED", note: string) => request<void>(`/orders/${id}/resolve`, { method: "POST", body: JSON.stringify({ outcome, note }) }),
-  adminStaff: () => request<{ staff: StaffMember[]; invites: StaffInvite[] }>("/admin/staff"),
-  addStaff: (email: string, admin: boolean, roles: StaffRole[]) => request<{ added: "now" | "invite"; name?: string }>("/admin/staff", { method: "POST", body: JSON.stringify({ email, admin, roles }) }),
+  adminStaff: () => request<{ staff: StaffMember[] }>("/admin/staff"),
+  addStaff: (body: { name: string; username: string; admin: boolean; roles: StaffRole[] }) =>
+    request<{ member: StaffMember; invite: StaffInviteLink }>("/admin/staff", { method: "POST", body: JSON.stringify(body) }),
+  newStaffInvite: (id: string, username?: string) => request<StaffInviteLink & { username: string }>(`/admin/staff/${id}/invite`, { method: "POST", body: JSON.stringify({ username }) }),
   updateStaff: (id: string, admin: boolean, roles: StaffRole[]) => request<StaffMember>(`/admin/staff/${id}`, { method: "PATCH", body: JSON.stringify({ admin, roles }) }),
   // ---- portal ----
   staffMe: () => request<StaffMe>("/staff/me"),
@@ -697,7 +703,6 @@ export const api = {
     request<{ ok: true; slug: string }>("/sellers/apply/store", { method: "POST", body: JSON.stringify(body) }),
   storePage: (slug: string) => request<StorePage>(`/stores/${encodeURIComponent(slug)}`),
   removeStaff: (id: string) => request<void>(`/admin/staff/${id}`, { method: "DELETE" }),
-  cancelStaffInvite: (email: string) => request<void>(`/admin/staff/invites/${encodeURIComponent(email)}`, { method: "DELETE" }),
   adminDisputes: () => request<AdminDispute[]>("/admin/disputes"),
   dispatchOrder: (id: string, userId: string, details: DispatchDetails) =>
     request<Order>(`/orders/${id}/dispatch`, { method: "POST", body: JSON.stringify({ userId, ...details }) }),

@@ -86,6 +86,7 @@ model User {
   // Not a person (the IBAY catalogue owner): no way to sign in, no public profile.
   isSystem               Boolean        @default(false)
   ibayItems              IbayItem[]
+  staffInvites   StaffInvite[]
   adminCredential        AdminCredential?
   purchases              Purchase[]
   // Expo push tokens, one per signed-in device.
@@ -420,6 +421,19 @@ model SavedSearch {
 
 // Password sign-in for staff only (see prisma/set-admin.ts). Separate from User
 // because user rows are sent to the app, and a password hash must never be.
+// A one-time sign-in link for a staff login: opening it lets them choose a
+// password once. Made by admins (new staff, or "forgot my password").
+model StaffInvite {
+  tokenHash   String   @id
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdById String?
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
 model AdminCredential {
   userId       String    @id
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -564,6 +578,8 @@ model Session {
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt  DateTime @default(now())
   lastUsedAt DateTime @default(now())
+  // Made by the staff sign-in (admin/portal sites); only these reach staff APIs.
+  staff      Boolean  @default(false)
 
   @@index([userId])
 }

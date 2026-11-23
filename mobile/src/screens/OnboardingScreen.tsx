@@ -271,7 +271,7 @@ function MethodSwitch({ method, onChange }: { method: Method; onChange: (m: Meth
 
 type Method = "phone" | "email";
 // First-time setup runs name -> photo -> island -> interests -> notify -> ready.
-type Step = "welcome" | "enter" | "code" | "newOrExisting" | "name" | "photo" | "island" | "interests" | "seller" | "notify" | "ready" | "staff" | "done";
+type Step = "welcome" | "enter" | "code" | "newOrExisting" | "name" | "photo" | "island" | "interests" | "seller" | "notify" | "ready" | "done";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const haptic = (run: () => Promise<void>) => {
@@ -345,21 +345,16 @@ export default function OnboardingScreen() {
   const [notificationsOn, setNotificationsOn] = useState(false);
   const [nearby, setNearby] = useState<number | null>(null);
   const [greeting, setGreeting] = useState("");
-  const [staffEntryCode, setStaffEntryCode] = useState("");
-  const [staffUsername, setStaffUsername] = useState("");
-  const [staffPassword, setStaffPassword] = useState("");
   const [focused, setFocused] = useState(false);
   const [shakeStyle, shake] = useShake();
   const entryRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const codeRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const nameRef = useRef<React.ComponentRef<typeof TextInput>>(null);
-  const staffRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const sheet = useRef(new Animated.Value(0)).current;
 
   const isPhone = method === "phone";
   const destination = isPhone ? toE164(phone) : email.trim().toLowerCase();
-  // An 8-digit number in the email field is the staff entry code.
-  const entryValid = isPhone ? /^\+[0-9]{7,15}$/.test(destination) && phone.replace(/\D/g, "").length >= 7 : isValidEmail(email) || /^\d{8}$/.test(email.trim());
+  const entryValid = isPhone ? /^\+[0-9]{7,15}$/.test(destination) && phone.replace(/\D/g, "").length >= 7 : isValidEmail(email);
 
   // Only offer what the server can deliver: without an SMS gateway, email only.
   const [methods, setMethods] = useState({ email: true, phone: false });
@@ -418,13 +413,6 @@ export default function OnboardingScreen() {
     }
     try {
       const res = isPhone ? await api.requestOtp(destination) : await api.requestEmailCode(destination);
-      if ("staffEntry" in res && res.staffEntry) {
-        setStaffEntryCode(destination);
-        setPhone("");
-        moveTo("staff");
-        setTimeout(() => staffRef.current?.focus(), 300);
-        return;
-      }
       setRetryIn(res.retryIn);
       if (res.devCode) setDevCode({ destination, code: res.devCode });
       setCode("");
@@ -640,28 +628,9 @@ export default function OnboardingScreen() {
   const chosenIsland = findIsland(atolls, islandId);
   const chosenPin = chosenIsland ? ISLAND_GEO[`${chosenIsland.atoll.code}/${chosenIsland.island.name}`] ?? ATOLL_GEO[chosenIsland.atoll.code] ?? null : null;
 
-  const staffReady = !!staffUsername.trim() && !!staffPassword;
-  const [staffSignIn, signingInStaff] = useSingleFlight(async () => {
-    if (!staffReady) return;
-    try {
-      const { user, token } = await api.staffSignIn(staffEntryCode, staffUsername, staffPassword);
-      setStaffPassword("");
-      await finish(user, token, user.name.split(" ")[0], false);
-    } catch (e) {
-      haptic(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error));
-      shake();
-      toast.error(errorMessage(e));
-    }
-  });
-
   const back = () => {
     if (inSetup && setupIndex > 0) {
       moveTo(setupSteps[setupIndex - 1]);
-    } else if (step === "staff") {
-      setStaffPassword("");
-      setStaffEntryCode("");
-      moveTo("enter");
-      setTimeout(() => entryRef.current?.focus(), 300);
     } else if (step === "newOrExisting") {
       setNewContact(undefined);
       moveTo("enter");
@@ -735,7 +704,7 @@ export default function OnboardingScreen() {
           <View style={styles.handle} />
           {inSetup && <SetupProgress index={setupIndex} total={setupSteps.length} />}
 
-          {(step === "enter" || step === "code" || step === "newOrExisting" || step === "staff" || step === "welcome" || (inSetup && setupIndex > 0)) && (
+          {(step === "enter" || step === "code" || step === "newOrExisting" || step === "welcome" || (inSetup && setupIndex > 0)) && (
             <Tap style={styles.back} onPress={back} hitSlop={10} scaleTo={0.88} accessibilityLabel="Go back">
               <ChevronLeft size={22} color={colors.text} strokeWidth={2.4} />
             </Tap>
@@ -828,52 +797,6 @@ export default function OnboardingScreen() {
               </View>
               {signingInWithGoogle ? <ActivityIndicator color={colors.primary} style={{ height: 44 }} /> : <GoogleButton clientId={googleClientId} onCredential={(c) => googleSignIn(c)} />}
             </View>
-          )}
-
-          {step === "staff" && (
-            <FadeIn key="staff">
-              <Text style={styles.cardTitle}>Staff sign in</Text>
-              <Text style={styles.cardText}>For Alibe staff only.</Text>
-              <Animated.View style={shakeStyle}>
-                <View style={styles.field}>
-                  <TextInput
-                    ref={staffRef}
-                    style={styles.input}
-                    value={staffUsername}
-                    onChangeText={setStaffUsername}
-                    textContentType="username"
-                    autoComplete="username"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    placeholder="Username"
-                    placeholderTextColor={colors.textMuted}
-                    accessibilityLabel="Username"
-                    maxLength={40}
-                  />
-                </View>
-                <View style={[styles.field, { marginTop: spacing.sm + 4 }]}>
-                  <TextInput
-                    style={styles.input}
-                    value={staffPassword}
-                    onChangeText={setStaffPassword}
-                    secureTextEntry
-                    textContentType="password"
-                    autoComplete="current-password"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    placeholder="Password"
-                    placeholderTextColor={colors.textMuted}
-                    returnKeyType="done"
-                    onSubmitEditing={() => staffSignIn()}
-                    accessibilityLabel="Password"
-                    maxLength={200}
-                  />
-                </View>
-              </Animated.View>
-              <Tap style={[styles.button, !staffReady && styles.buttonDisabled]} onPress={() => staffSignIn()} disabled={signingInStaff || !staffReady} scaleTo={0.97}>
-                {signingInStaff ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign in</Text>}
-              </Tap>
-            </FadeIn>
           )}
 
           {step === "code" && (

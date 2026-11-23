@@ -10,7 +10,7 @@ Built 2026-11-02: email sign-in, real one-time codes, new onboarding, report que
 Built 2026-11-23: admin.alibe.online and portal.alibe.online with roles (admin, seller approver, post approver, moderator, support; admins add staff by email), seller types (individual / store), optional ID verification with private photos deleted after review, post review for unverified sellers (5-item limit), Store and Premium plans (monthly/yearly, free Premium boosts), badges on cards/profiles/details, store pages (/store/:slug), "business posing as individual" report reason, plan renewal reminders. UI pass on Boost, Notifications, Saved items, My listings, Orders, Advertise, onboarding (feature carousel, seller step). Back button on Terms/Privacy.
 
 - [ ] DNS: re-add the `www` A record (deploys skip names without DNS until it's back).
-- [ ] Google Cloud: add the admin and portal origins to the OAuth client.
+- Staff sites use username + password logins made by admins (no Google or email codes there).
 
 ### Push notifications
 - [ ] Push no longer works in Expo Go (SDK 53+): needs a development build. Run `npx eas init` (free Expo account) so the app gets a project id; real lock-screen push then works automatically (token registration + server sending are built).
@@ -52,7 +52,7 @@ Built 2026-11-23: admin.alibe.online and portal.alibe.online with roles (admin, 
 ## Staff accounts
 - [ ] Change the `kaish` password before hosting anywhere public: `ADMIN_PASSWORD='...' ./scripts/admin.sh set-admin kaish`
 
-- Staff sign-in opens by typing the secret number into the phone field. Change it with `STAFF_CODE=<8 digits> ./scripts/admin.sh set-staff-code`
+- Staff sign in on admin./portal. with username + password logins (the old staff number in the phone field is gone).
 
 ## iBay catalogue
 - [ ] Get iBay's agreement or legal advice before hosting the public showcase. Only the robots.txt rules were followed so far. Admin > iBay items has the on/off switch; a new database starts with it off.

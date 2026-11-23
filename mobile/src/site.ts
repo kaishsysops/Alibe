@@ -45,3 +45,25 @@ export function openOnMarketplace(path: string) {
   const base = siteUrl("main") ?? `${window.location.origin}`;
   window.open(`${base}/${path.replace(/^\//, "")}`, "_blank", "noopener");
 }
+
+// A one-time staff sign-in link, on the site it's for.
+export function staffInviteUrl(site: "admin" | "portal", token: string) {
+  const base = siteUrl(site);
+  if (base) return `${base}/?invite=${token}`;
+  // Dev machine: same address, with the site picked by ?site=.
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  return `${origin}/?site=${site}&invite=${token}`;
+}
+
+// The invite token in this page's address, if any (read once, then removed
+// from the address bar so it isn't left in history or shared by accident).
+export function takeInviteToken(): string | null {
+  if (Platform.OS !== "web" || typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get("invite");
+  if (!token) return null;
+  params.delete("invite");
+  const rest = params.toString();
+  window.history.replaceState(null, "", window.location.pathname + (rest ? `?${rest}` : ""));
+  return token;
+}
