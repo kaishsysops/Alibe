@@ -18,8 +18,10 @@ if [ "$1" = "migrate" ] || [ "${MIGRATE_ON_START:-true}" = "true" ]; then
   if [ "$state" = "legacy" ]; then
     echo "Existing database without migration history: catching up and marking baseline."
     npx prisma db push --skip-generate
-    npx prisma migrate resolve --applied 0_init
+    npx prisma migrate resolve --applied 00_init
   fi
+  # Old migration names (0_init..9_...) are renamed to 00_init..09_... in the history.
+  node scripts/rename-migrations.mjs
   npx prisma migrate deploy
   # Categories, atolls and islands (no demo data).
   npx tsx prisma/seed.ts
