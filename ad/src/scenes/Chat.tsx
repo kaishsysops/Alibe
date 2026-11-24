@@ -3,6 +3,7 @@ import { Interactive, interpolate, useCurrentFrame, useVideoConfig } from "remot
 import { Gamepad2, Tag, Check } from "lucide-react";
 import { Phone } from "../parts/Phone";
 import { C, clamp, easeOut, fontFamily } from "../theme";
+import { useStage } from "../parts/stage";
 
 // Ask, offer, agreed: a conversation in Alibe chat.
 const Bubble: React.FC<{ mine?: boolean; at: number; children: React.ReactNode }> = ({ mine, at, children }) => {
@@ -36,17 +37,14 @@ const Bubble: React.FC<{ mine?: boolean; at: number; children: React.ReactNode }
 const ChatInner: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const stage = useStage();
   const accepted = 3.2 * fps;
   return (
     <>
       <Interactive.Div
         name="Headline"
         style={{
-          position: "absolute",
-          top: 150,
-          left: 0,
-          right: 0,
-          textAlign: "center",
+          ...stage.headline,
           fontFamily,
           fontSize: 104,
           fontWeight: 800,
@@ -57,7 +55,7 @@ const ChatInner: React.FC = () => {
       >
         Chat. Offer. Deal.
       </Interactive.Div>
-      <div style={{ position: "absolute", left: (1080 - 640) / 2, top: 400 }}>
+      <div style={stage.phone}>
         <Phone>
           <div style={{ padding: "100px 30px 22px", display: "flex", alignItems: "center", gap: 18, borderBottom: `2px solid ${C.line}`, background: C.card, fontFamily }}>
             <div style={{ width: 76, height: 76, borderRadius: 22, background: "#F1ECFF", display: "flex", alignItems: "center", justifyContent: "center" }}>

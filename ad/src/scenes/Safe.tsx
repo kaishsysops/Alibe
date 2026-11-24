@@ -8,11 +8,12 @@ const DIGITS = ["4", "8", "2", "7"];
 
 const SafeInner: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
+  const wide = width > height;
   const done = 2.1 * fps;
   return (
     <>
-      <div style={{ display: "flex", gap: 26, marginTop: -80 }}>
+      <div style={{ display: "flex", gap: 26, marginTop: wide ? 40 : -80 }}>
         {DIGITS.map((d, i) => {
           const at = (0.5 + i * 0.3) * fps;
           return (
@@ -57,7 +58,7 @@ const SafeInner: React.FC = () => {
         name="Headline"
         style={{
           position: "absolute",
-          bottom: 360,
+          ...(wide ? { top: 90 } : { bottom: 360 }),
           left: 0,
           right: 0,
           textAlign: "center",
@@ -75,7 +76,7 @@ const SafeInner: React.FC = () => {
         name="Subline"
         style={{
           position: "absolute",
-          bottom: 220,
+          bottom: wide ? 90 : 220,
           left: 110,
           right: 110,
           textAlign: "center",

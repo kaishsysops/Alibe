@@ -3,6 +3,7 @@ import { Interactive, interpolate, useCurrentFrame, useVideoConfig } from "remot
 import { Smartphone, Sofa, Gamepad2, Ship, Bike, Camera, MapPin, LucideIcon } from "lucide-react";
 import { AppTop, Phone } from "../parts/Phone";
 import { C, clamp, easeOut, fontFamily } from "../theme";
+import { useStage } from "../parts/stage";
 
 // The app's Home: the search types "iphone" and listings fill in.
 const ITEMS: Array<{ title: string; price: string; place: string; Icon: LucideIcon; tint: string }> = [
@@ -47,6 +48,7 @@ const Card: React.FC<{ i: number; frame: number; fps: number }> = ({ i, frame, f
 const FindInner: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const stage = useStage();
   const query = "iphone";
   const typed = query.slice(0, Math.max(0, Math.floor((frame - 0.7 * fps) / (0.09 * fps))));
   return (
@@ -54,11 +56,7 @@ const FindInner: React.FC = () => {
       <Interactive.Div
         name="Headline"
         style={{
-          position: "absolute",
-          top: 150,
-          left: 0,
-          right: 0,
-          textAlign: "center",
+          ...stage.headline,
           fontFamily,
           fontSize: 104,
           fontWeight: 800,
@@ -72,9 +70,7 @@ const FindInner: React.FC = () => {
       <Interactive.Div
         name="Phone"
         style={{
-          position: "absolute",
-          left: (1080 - 640) / 2,
-          top: 400,
+          ...stage.phone,
           translate: interpolate(frame, [0, 1.1 * fps], ["0px 420px", "0px 0px"], { ...clamp, easing: easeOut }),
         }}
       >

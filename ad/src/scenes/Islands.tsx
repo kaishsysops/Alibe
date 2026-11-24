@@ -6,6 +6,7 @@ import { C, clamp, easeOut, fontFamily } from "../theme";
 const IslandsInner: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width, height } = useVideoConfig();
+  const wide = width > height;
   return (
     <>
       <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
@@ -22,7 +23,7 @@ const IslandsInner: React.FC = () => {
       </div>
       {/* Soft shade so the words read on the water. */}
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.55) 100%)" }} />
-      <div style={{ position: "absolute", left: 90, right: 90, bottom: 220 }}>
+      <div style={{ position: "absolute", left: wide ? 200 : 90, right: 90, bottom: wide ? 130 : 220 }}>
         <Interactive.Div
           name="Headline"
           style={{
@@ -54,7 +55,7 @@ const IslandsInner: React.FC = () => {
           Buy and sell across every atoll.
         </Interactive.Div>
       </div>
-      <div style={{ position: "absolute", top: 120, left: 90, fontFamily, fontSize: 40, fontWeight: 800, color: "#fff", letterSpacing: -0.5, opacity: 0.9 }}>
+      <div style={{ position: "absolute", top: wide ? 80 : 120, left: wide ? 200 : 90, fontFamily, fontSize: 40, fontWeight: 800, color: "#fff", letterSpacing: -0.5, opacity: 0.9 }}>
         Alibe
         <span style={{ color: C.orange }}>.</span>
       </div>

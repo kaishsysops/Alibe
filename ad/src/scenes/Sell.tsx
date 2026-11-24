@@ -3,11 +3,13 @@ import { Interactive, interpolate, useCurrentFrame, useVideoConfig } from "remot
 import { Guitar, Check } from "lucide-react";
 import { Phone } from "../parts/Phone";
 import { C, clamp, easeOut, fontFamily } from "../theme";
+import { useStage } from "../parts/stage";
 
 // Snap a photo, the listing fills in, it's live.
 const SellInner: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+  const stage = useStage();
   const snap = 1.3 * fps;
   const title = "Acoustic guitar";
   const typed = title.slice(0, Math.max(0, Math.floor((frame - snap - 0.4 * fps) / (0.045 * fps))));
@@ -17,11 +19,7 @@ const SellInner: React.FC = () => {
       <Interactive.Div
         name="Headline"
         style={{
-          position: "absolute",
-          top: 150,
-          left: 0,
-          right: 0,
-          textAlign: "center",
+          ...stage.headline,
           fontFamily,
           fontSize: 104,
           fontWeight: 800,
@@ -32,7 +30,7 @@ const SellInner: React.FC = () => {
       >
         Sell in a minute.
       </Interactive.Div>
-      <div style={{ position: "absolute", left: (1080 - 640) / 2, top: 400 }}>
+      <div style={stage.phone}>
         <Phone>
           {/* The camera: the item, framed. */}
           <div style={{ position: "absolute", inset: 0, background: "#1C1A18", display: "flex", alignItems: "center", justifyContent: "center", opacity: interpolate(frame, [snap + 0.3 * fps, snap + 0.6 * fps], [1, 0], clamp) }}>

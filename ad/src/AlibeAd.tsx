@@ -48,3 +48,43 @@ export const AlibeAd: React.FC = () => {
     </TransitionSeries>
   );
 };
+
+// 15-second cut: the islands, find, sell, end card (16.5s of scenes, three 0.5s fades).
+export const AlibeAd15: React.FC = () => {
+  const { fps } = useVideoConfig();
+  return (
+    <TransitionSeries>
+      <TransitionSeries.Sequence name="From Malé to Addu" durationInFrames={3.5 * fps}>
+        <Islands style={{ backgroundColor: "#0B3C49" }} />
+      </TransitionSeries.Sequence>
+      <TransitionSeries.Transition presentation={fade()} timing={linearTiming({ durationInFrames: 0.5 * fps })} />
+      <TransitionSeries.Sequence name="Find it near you" durationInFrames={4.5 * fps}>
+        <Find style={{ backgroundColor: C.paper }} />
+      </TransitionSeries.Sequence>
+      <TransitionSeries.Transition presentation={fade()} timing={linearTiming({ durationInFrames: 0.5 * fps })} />
+      <TransitionSeries.Sequence name="Sell in a minute" durationInFrames={4.5 * fps}>
+        <Sell style={{ backgroundColor: C.paper }} />
+      </TransitionSeries.Sequence>
+      <TransitionSeries.Transition presentation={fade()} timing={linearTiming({ durationInFrames: 0.5 * fps })} />
+      <TransitionSeries.Sequence name="Alibe" durationInFrames={4 * fps}>
+        <EndCard style={{ backgroundColor: C.orange, flexDirection: "column", justifyContent: "center", alignItems: "center" }} />
+      </TransitionSeries.Sequence>
+    </TransitionSeries>
+  );
+};
+
+// 6-second bumper: the islands, then the end card.
+export const AlibeAd6: React.FC = () => {
+  const { fps } = useVideoConfig();
+  return (
+    <TransitionSeries>
+      <TransitionSeries.Sequence name="From Malé to Addu" durationInFrames={2.5 * fps}>
+        <Islands style={{ backgroundColor: "#0B3C49" }} />
+      </TransitionSeries.Sequence>
+      <TransitionSeries.Transition presentation={fade()} timing={linearTiming({ durationInFrames: 0.5 * fps })} />
+      <TransitionSeries.Sequence name="Alibe" durationInFrames={4 * fps}>
+        <EndCard style={{ backgroundColor: C.orange, flexDirection: "column", justifyContent: "center", alignItems: "center" }} />
+      </TransitionSeries.Sequence>
+    </TransitionSeries>
+  );
+};

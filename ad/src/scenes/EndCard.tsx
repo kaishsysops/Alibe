@@ -6,14 +6,15 @@ import { clamp, easeOut, fontFamily } from "../theme";
 // Orange, the mark draws itself, the name, the address.
 const EndCardInner: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
+  const wide = width > height;
   const draw = interpolate(frame, [0.1 * fps, 1.3 * fps], [0, 1], { ...clamp, easing: easeOut });
   return (
     <>
       <div
         style={{
-          width: 300,
-          height: 300,
+          width: wide ? 220 : 300,
+          height: wide ? 220 : 300,
           borderRadius: 80,
           background: "#fff",
           display: "flex",
@@ -24,7 +25,7 @@ const EndCardInner: React.FC = () => {
           opacity: interpolate(frame, [0, 0.3 * fps], [0, 1], clamp),
         }}
       >
-        <AlibeMark size={220} color="#FF6A00" draw={draw} />
+        <AlibeMark size={wide ? 160 : 220} color="#FF6A00" draw={draw} />
       </div>
       <Interactive.Div
         name="Wordmark"
@@ -58,7 +59,7 @@ const EndCardInner: React.FC = () => {
         name="Address"
         style={{
           position: "absolute",
-          bottom: 200,
+          bottom: wide ? 90 : 200,
           paddingLeft: 56,
           paddingRight: 56,
           height: 110,
