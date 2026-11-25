@@ -15,6 +15,7 @@ import { adminGate, Access } from "../roles.js";
 import { activatePurchase } from "../purchaseActivation.js";
 import { loadPromotions, promotionsSchema, savePromotions, todayMv } from "../promotions.js";
 import { bmlStatus, setSimulation } from "../bml.js";
+import { cardOnCancelled } from "../orderCard.js";
 
 // Feeds are cached for up to a minute; staff changes show at once on the
 // server that handled them (other replicas catch up within the minute).
@@ -97,6 +98,8 @@ const settingsSchema = z.object({
   adPrices: planPrices,
   sellerPlans: z.object({ storeMonthly: money, storeYearly: money, premiumMonthly: money, premiumYearly: money }),
   premiumFreeBoosts: z.coerce.number().int().min(0).max(31),
+  cardFeePercent: z.coerce.number().min(0).max(20).default(3),
+  cardHoldDays: z.coerce.number().int().min(0).max(30).default(3),
 });
 
 adminRouter.get("/money", async (_req, res) => {
@@ -106,7 +109,9 @@ adminRouter.get("/money", async (_req, res) => {
     orderBy: { updatedAt: "desc" },
   });
   // Slips are private: staff get links that work for an hour.
-  res.json({ settings: await moneySettings(), purchases: purchases.map((p) => ({ ...p, slipUrl: signedSlipUrl(p.slipUrl) })), cardPayments: await bmlStatus() });
+  // Card sales needing staff: refunds, and payouts whose hold has passed.
+  const cardSalesWaiting = await prisma.cardPayment.count({ where: { OR: [{ status: "REFUND_DUE" }, { status: "PAYOUT_DUE", payoutDueAt: { lte: new Date() } }] } });
+  res.json({ settings: await moneySettings(), purchases: purchases.map((p) => ({ ...p, slipUrl: signedSlipUrl(p.slipUrl) })), cardPayments: await bmlStatus(), cardSalesWaiting });
 });
 
 adminRouter.put("/money/settings", async (req, res) => {
@@ -231,9 +236,13 @@ async function banUser(userId: string): Promise<{ status: number; message: strin
     prisma.order.updateMany({ where: { id: { in: stranded.map((o) => o.id) } }, data: { status: "CANCELLED" } }),
     prisma.report.updateMany({ where: { resolvedAt: null, OR: [{ reportedUserId: userId }, { listing: { sellerId: userId } }] }, data: { resolvedAt: now } }),
   ]);
+  // Card payments on those orders go back to the buyer.
+  const refunded = new Set<string>();
+  for (const o of stranded) if (await prisma.$transaction((tx) => cardOnCancelled(tx, o.id, "The order was cancelled: the other account was closed."))) refunded.add(o.id);
   for (const o of stranded) {
     const other = o.sellerId === userId ? o.buyerId : o.sellerId;
-    notifyUser(other, "Your order was cancelled", "The other person's account was closed for breaking Alibe's rules. Please don't send them any money.", { type: "order", orderId: o.id });
+    const text = refunded.has(o.id) && other === o.buyerId ? "The seller's account was closed for breaking Alibe's rules. Alibe will refund your card payment." : "The other person's account was closed for breaking Alibe's rules. Please don't send them any money.";
+    notifyUser(other, "Your order was cancelled", text, { type: "order", orderId: o.id });
   }
   return null;
 }
@@ -464,6 +473,76 @@ adminRouter.delete("/staff/:id", async (req, res) => {
 adminRouter.post("/card-test-mode", async (req, res) => {
   await setSimulation(req.body?.on === true);
   res.json(await bmlStatus());
+});
+
+// ---- card sales: payouts to sellers and refunds to buyers (src/orderCard.ts) ----
+// Admins only. Money from card-paid orders sits in Alibe's BML account; staff
+// send it on by bank transfer and record the transfer's reference here.
+
+adminRouter.get("/card-sales", async (_req, res) => {
+  const payments = await prisma.cardPayment.findMany({
+    where: { OR: [{ status: { in: ["HELD", "PAYOUT_DUE", "REFUND_DUE"] } }, { status: { in: ["PAID_OUT", "REFUNDED"] }, settledAt: { gt: new Date(Date.now() - 30 * 86_400_000) } }] },
+    include: { order: { select: { id: true, status: true, listing: { select: { title: true } } } } },
+    orderBy: { updatedAt: "desc" },
+    take: 300,
+  });
+  const ids = [...new Set(payments.flatMap((p) => [p.buyerId, p.sellerId]))];
+  const [people, accounts] = await Promise.all([
+    prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, phone: true, email: true } }),
+    prisma.payoutAccount.findMany({ where: { userId: { in: [...new Set(payments.map((p) => p.sellerId))] } } }),
+  ]);
+  const person = new Map(people.map((u) => [u.id, u]));
+  const account = new Map(accounts.map((a) => [a.userId, a]));
+  const RECENT_CHANGE_MS = 7 * 86_400_000;
+  res.json(
+    payments.map((p) => {
+      const acc = account.get(p.sellerId);
+      return {
+        id: p.id,
+        status: p.status,
+        amount: p.amount,
+        fee: p.fee,
+        payout: p.amount - p.fee,
+        reference: p.reference,
+        test: p.test,
+        paidAt: p.paidAt,
+        payoutDueAt: p.payoutDueAt,
+        refundReason: p.refundReason,
+        settledAt: p.settledAt,
+        settleNote: p.settleNote,
+        order: { id: p.order.id, status: p.order.status, title: p.order.listing.title },
+        buyer: person.get(p.buyerId) ?? null,
+        seller: person.get(p.sellerId) ?? null,
+        // Where to send the payout. A recent change is flagged: check with the
+        // seller (by phone) before paying to a new account.
+        payoutAccount: acc ? { bankName: acc.bankName, accountName: acc.accountName, accountNumber: acc.accountNumber, changedAt: acc.detailsChangedAt, changedRecently: Date.now() - acc.detailsChangedAt.getTime() < RECENT_CHANGE_MS } : null,
+      };
+    })
+  );
+});
+
+const settleSchema = z.object({ note: z.string().trim().min(3).max(200) });
+
+// Staff sent the seller their money (after the hold) or refunded the buyer.
+adminRouter.post("/card-sales/:id/:action(paid-out|refunded)", async (req, res) => {
+  const parsed = settleSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Add the bank transfer reference (or a short note)." });
+  const payment = await prisma.cardPayment.findUnique({ where: { id: req.params.id }, include: { order: { select: { conversationId: true, listing: { select: { title: true } } } } } });
+  if (!payment) return res.status(404).json({ error: "We couldn't find that card payment." });
+  const payout = req.params.action === "paid-out";
+  if (payout && payment.payoutDueAt && payment.payoutDueAt > new Date()) {
+    return res.status(409).json({ error: `This sale is still in its hold period. It can be paid out from ${payment.payoutDueAt.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Indian/Maldives" })}.` });
+  }
+  const { count } = await prisma.cardPayment.updateMany({
+    where: { id: payment.id, status: payout ? "PAYOUT_DUE" : "REFUND_DUE" },
+    data: { status: payout ? "PAID_OUT" : "REFUNDED", settledAt: new Date(), settledBy: req.userId, settleNote: parsed.data.note },
+  });
+  if (!count) return res.status(409).json({ error: payout ? "This sale isn't waiting for a payout." : "This payment isn't waiting for a refund." });
+  const data = { type: "order", orderId: payment.orderId, conversationId: payment.order.conversationId };
+  const mvr = (n: number) => `MVR ${n.toLocaleString("en-US")}`;
+  if (payout) notifyUser(payment.sellerId, "You've been paid", `${mvr(payment.amount - payment.fee)} for ${payment.order.listing.title} is on its way to your bank account.`, data);
+  else notifyUser(payment.buyerId, "Card payment refunded", `${mvr(payment.amount)} for ${payment.order.listing.title} has been refunded to your card. Banks can take a few days to show it.`, data);
+  res.status(204).send();
 });
 
 // ---- promotions: banners, events, discounts, season, staff notices ----------

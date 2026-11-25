@@ -116,6 +116,8 @@ model User {
   applications           SellerApplication[] @relation("Applicant")
   decidedApplications    SellerApplication[] @relation("Decider")
   disputeEvidence        DisputeEvidence[]
+  // Where Alibe pays out card sales (kept apart so no user lookup can expose it).
+  payoutAccount  PayoutAccount?
 }
 
 enum Condition {
@@ -319,6 +321,8 @@ model Order {
   seller         User           @relation("OrdersSold", fields: [sellerId], references: [id])
   offerId        String?        @unique
   offer          Offer?         @relation(fields: [offerId], references: [id])
+  // Card payments for this order (Premium sellers and stores), held by Alibe until delivery.
+  cardPayments   CardPayment[]
   amount         Int
   status         OrderStatus    @default(AWAITING_DISPATCH)
   deliveryMethod DeliveryOption?
@@ -713,4 +717,64 @@ model SellerApplication {
 
   @@index([status, createdAt])
   @@index([userId])
+}
+
+// ---- Card payments for item sales ---------------------------------------------
+// Premium sellers and stores can let buyers pay by card. The money goes to
+// Alibe's BML account and is held until the buyer's handover code confirms
+// delivery; then staff pay the seller (minus Alibe's card fee) after a short
+// hold, or refund the buyer if the order is cancelled. See src/orderCard.ts.
+
+enum CardPaymentStatus {
+  PENDING     // checkout opened, not paid
+  FAILED      // declined, cancelled or never finished
+  HELD        // paid: Alibe holds it until delivery
+  PAYOUT_DUE  // delivered: pay the seller (from payoutDueAt)
+  PAID_OUT    // staff paid the seller
+  REFUND_DUE  // order cancelled, or paid twice: refund the buyer
+  REFUNDED    // staff refunded the buyer
+}
+
+model CardPayment {
+  id          String            @id @default(cuid())
+  orderId     String
+  order       Order             @relation(fields: [orderId], references: [id])
+  buyerId     String
+  sellerId    String
+  // What the buyer pays (MVR), and Alibe's card fee kept from the payout.
+  amount      Int
+  fee         Int
+  // Sent to BML as the transaction's local id.
+  reference   String            @unique
+  // BML's transaction id (SIM-... in test mode).
+  gatewayRef  String?           @unique
+  test        Boolean           @default(false)
+  status      CardPaymentStatus @default(PENDING)
+  paidAt      DateTime?
+  // Earliest payout: delivery plus the hold days.
+  payoutDueAt DateTime?
+  // Why it's owed back (cancelled, paid twice...).
+  refundReason String?
+  // Staff paying out or refunding: when, who, and their bank reference.
+  settledAt   DateTime?
+  settledBy   String?
+  settleNote  String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([orderId, status])
+  @@index([status])
+}
+
+// A seller's card payment switch and the bank account their card sales are paid to.
+model PayoutAccount {
+  userId          String   @id
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cardPaymentsOn  Boolean  @default(false)
+  bankName        String
+  accountName     String
+  accountNumber   String
+  // Last change to the bank details: staff double-check before paying out soon after.
+  detailsChangedAt DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

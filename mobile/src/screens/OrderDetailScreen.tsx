@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Linking, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Animated, Linking, Platform, RefreshControl, ScrollView, Text, TextInput, View } from "react-native";
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -16,6 +16,9 @@ import {
   AlertTriangle,
   XCircle,
   ImagePlus,
+  CreditCard,
+  ShieldCheck,
+  RotateCcw,
 } from "lucide-react-native";
 import { api, DeliveryOption, DispatchDetails, errorMessage, mediaUrl, newClientId, Order, uploadMedia } from "../api/client";
 import { Image } from "expo-image";
@@ -116,6 +119,25 @@ export default function OrderDetailScreen() {
     }
   }, [user, orderId, updateOrder]);
 
+  // Back from the card payment page (?paid=...): ask the server to check it.
+  const toast = useToast();
+  const paidParam: string | undefined = route.params?.paid;
+  useEffect(() => {
+    if (!paidParam || !user || !orderId) return;
+    api
+      .checkOrderCard(orderId)
+      .then((o) => {
+        updateOrder(o);
+        const st = o.card?.status;
+        if (st === "HELD" || st === "PAYOUT_DUE" || st === "PAID_OUT") toast.success("Paid by card. Alibe holds the money until you have the item.");
+        else if (st === "REFUND_DUE") toast.info("This payment wasn't needed, so Alibe will refund it.");
+        else toast.info("We haven't had the card payment confirmed yet. If you paid, it'll show here shortly.");
+      })
+      .catch((e) => toast.error(errorMessage(e)));
+    navigation.setParams({ paid: undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paidParam, user, orderId]);
+
   // Refresh on focus and every 15s while open, so each side sees the other's
   // step (sent, code shared, delivered) without pulling.
   useFocusEffect(
@@ -162,6 +184,13 @@ export default function OrderDetailScreen() {
         <Steps order={order} />
       </FadeIn>
 
+      {/* How it's paid (and whether a card payment is held) before what to do next. */}
+      {(order.status === "AWAITING_DISPATCH" || order.status === "DISPATCHED" || !!order.card?.status) && (
+        <FadeIn delay={105}>
+          <PaymentCard order={order} onChange={updateOrder} />
+        </FadeIn>
+      )}
+
       <FadeIn key={order.status} delay={140} style={{ gap: spacing.md }}>
         <NextStep order={order} onChange={updateOrder} onReport={() => setProblemOpen(true)} onReview={() => setReviewOpen(true)} />
       </FadeIn>
@@ -172,11 +201,6 @@ export default function OrderDetailScreen() {
         </FadeIn>
       )}
 
-      {(order.status === "AWAITING_DISPATCH" || order.status === "DISPATCHED") && (
-        <FadeIn delay={210}>
-          <PaymentCard order={order} />
-        </FadeIn>
-      )}
 
       <FadeIn delay={260}>
       <Tap style={styles.chatButton} onPress={() => navigation.navigate("ChatThread", { id: order.conversationId })} scaleTo={0.97}>
@@ -824,10 +848,65 @@ function EnterCodeCard({ order, onChange }: { order: Order; onChange: (o: Order)
   );
 }
 
-function PaymentCard({ order }: { order: Order }) {
+const PAID_STATES = ["HELD", "PAYOUT_DUE", "PAID_OUT"];
+const shortDate = (iso: string) => new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+
+// How this order gets paid: directly to the seller (cash or transfer), or by
+// card through Alibe (Premium sellers and stores), which holds the money
+// until the buyer's handover code confirms delivery.
+function PaymentCard({ order, onChange: _onChange }: { order: Order; onChange: (o: Order) => void }) {
   const styles = useStyles();
   const { colors } = useTheme();
+  const navigation = useNavigation<any>();
+  const toast = useToast();
+  const [paying, setPaying] = useState(false);
   const seller = order.role === "SELLER";
+  const card = order.card;
+  const test = card?.test ? " (test payment, no real money)" : "";
+
+  // Paid by card: who holds it, and when the seller gets it.
+  if (card?.status && PAID_STATES.includes(card.status)) {
+    const text = seller
+      ? card.status === "PAID_OUT"
+        ? `Paid by card. Alibe has sent you ${formatMvr(card.payout ?? 0)}${test}.`
+        : card.status === "PAYOUT_DUE"
+        ? `Paid by card. You'll get ${formatMvr(card.payout ?? 0)} (after Alibe's ${formatMvr(card.fee ?? 0)} card fee)${card.payoutDueAt ? ` from ${shortDate(card.payoutDueAt)}` : " soon"}${test}.`
+        : `${order.buyer.name} paid ${formatMvr(card.amount)} by card${test}. Alibe holds it until they give you their handover code, then pays you ${formatMvr(card.payout ?? 0)} (after the ${formatMvr(card.fee ?? 0)} card fee). Send the item as usual.`
+      : card.status === "HELD"
+      ? `You paid ${formatMvr(card.amount)} by card${test}. Alibe holds it and only pays ${order.seller.name} once you give them your handover code. Don't pay them again.`
+      : `You paid ${formatMvr(card.amount)} by card${test}. All done.`;
+    return (
+      <View style={{ gap: spacing.sm }}>
+        <View style={[styles.payment, { backgroundColor: `${colors.success}14` }]}>
+          <ShieldCheck size={20} color={colors.success} />
+          <Text style={styles.paymentText}>{text}</Text>
+        </View>
+        {card.extraRefund && (
+          <View style={styles.payment}>
+            <RotateCcw size={20} color={colors.textMuted} />
+            <Text style={styles.paymentText}>You paid twice by mistake. Alibe will refund the extra payment to your card.</Text>
+          </View>
+        )}
+      </View>
+    );
+  }
+  // Paid by card, then cancelled: the buyer gets it back.
+  if (card?.status === "REFUND_DUE" || card?.status === "REFUNDED") {
+    const done = card.status === "REFUNDED";
+    const text = seller
+      ? `The buyer's card payment of ${formatMvr(card.amount)} ${done ? "was refunded" : "is being refunded by Alibe"}.`
+      : done
+      ? `Your card payment of ${formatMvr(card.amount)} was refunded. Banks can take a few days to show it.`
+      : `Alibe will refund your card payment of ${formatMvr(card.amount)}${card.refundReason ? ` (${card.refundReason.replace(/\.$/, "").toLowerCase()})` : ""}.`;
+    return (
+      <View style={styles.payment}>
+        <RotateCcw size={20} color={colors.textMuted} />
+        <Text style={styles.paymentText}>{text}</Text>
+      </View>
+    );
+  }
+  if (order.status !== "AWAITING_DISPATCH" && order.status !== "DISPATCHED") return null;
+
   const bank = order.paymentMethod === "BANK_TRANSFER";
   const how = order.paymentMethod ? (bank ? "bank transfer" : "cash") : null;
   const text = seller
@@ -838,6 +917,38 @@ function PaymentCard({ order }: { order: Order }) {
     ? `Pay ${order.seller.name} ${formatMvr(order.amount)} by ${how}.${bank ? " Ask for their account details in the chat." : ""}`
     : `Agree with ${order.seller.name} in the chat how to pay ${formatMvr(order.amount)}.`;
   const Icon = bank ? Landmark : Banknote;
+
+  const payByCard = async () => {
+    setPaying(true);
+    try {
+      const { url } = await api.payOrderByCard(order.id);
+      // Test mode's checkout is a page of this app; BML's is outside it.
+      const local = url.match(/\/pay\/bml\/([\w-]+)$/);
+      if (local) navigation.navigate("TestCheckout", { id: local[1] });
+      else if (Platform.OS === "web" && typeof window !== "undefined") window.location.href = url;
+      else await Linking.openURL(url);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  if (!seller && card?.available) {
+    return (
+      <View style={[styles.card, { gap: spacing.sm }]}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+          <CreditCard size={20} color={colors.primary} />
+          <Text style={styles.payTitle}>Pay by card, safely</Text>
+        </View>
+        <Text style={styles.payBody}>
+          Alibe holds your money and only pays {order.seller.name} after you give them your handover code. If the order is cancelled, you get it back.
+        </Text>
+        <BigButton label={`Pay ${formatMvr(order.amount)} by card${card.test ? " (test)" : ""}`} onPress={payByCard} busy={paying} />
+        <Text style={styles.payOr}>Or: {text.charAt(0).toLowerCase() + text.slice(1)}</Text>
+      </View>
+    );
+  }
   return (
     <View style={styles.payment}>
       <Icon size={20} color={colors.textMuted} />
@@ -981,6 +1092,9 @@ const useStyles = makeStyles((colors) => ({
 
   payment: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 4, padding: spacing.md, borderRadius: radius.lg, backgroundColor: colors.primaryTint },
   paymentText: { flex: 1, fontSize: fontSize.base, color: colors.text, lineHeight: fontSize.base * 1.4 },
+  payBody: { fontSize: fontSize.base, color: colors.text, lineHeight: fontSize.base * 1.4 },
+  payTitle: { fontSize: fontSize.lg, fontWeight: fontWeight.bold, color: colors.text },
+  payOr: { fontSize: fontSize.sm, color: colors.textMuted, lineHeight: fontSize.sm * 1.4, textAlign: "center" },
 
   chatButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, height: controlHeight.secondary, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.primary },
   chatButtonText: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.primary },

@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Image, KeyboardAvoidingView, Linking, Platform, ScrollView, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { CheckCircle2, AlertTriangle, Landmark, Tag, Inbox, Clock, Play, ExternalLink, Receipt, Save, CreditCard } from "lucide-react-native";
+import CardSalesPanel from "../components/CardSalesPanel";
 import { api, CardStatus, errorMessage, mediaUrl, MoneySettings, PlanPrices, Purchase, SellerPlanPrices } from "../api/client";
 import { useToast } from "../components/Toast";
 import { useAppAlert } from "../components/AppAlertProvider";
@@ -22,7 +23,7 @@ import MediaViewer from "../components/MediaViewer";
 
 const KIND_LABEL = { BOOST: "Boost", AD: "Ad", BUY_FOR_YOU: "Buy for you", STORE_PLAN: "Store plan", PREMIUM_PLAN: "Premium plan" } as const;
 const PLANS: Array<keyof PlanPrices> = ["3", "7", "30"];
-type Tab = "QUEUE" | "BANK" | "PRICES";
+type Tab = "QUEUE" | "CARD" | "BANK" | "PRICES";
 type Filter = "NEEDS" | "WAITING" | "RUNNING" | "ALL";
 const needsYou = (p: Purchase) => p.status === "SUBMITTED" || p.status === "REQUESTED" || (p.status === "ACTIVE" && p.kind === "BUY_FOR_YOU");
 const num = (v: string) => Number(v.replace(/\D/g, "")) || 0;
@@ -46,6 +47,7 @@ function AdminMoneyScreenInner() {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [rejecting, setRejecting] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("QUEUE");
+  const [cardWaiting, setCardWaiting] = useState(0);
   const [filter, setFilter] = useState<Filter>("NEEDS");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [card, setCard] = useState<CardStatus | null>(null);
@@ -71,6 +73,7 @@ function AdminMoneyScreenInner() {
         .then((res) => {
           setSettings(res.settings);
           setCard(res.cardPayments ?? null);
+          setCardWaiting(res.cardSalesWaiting ?? 0);
           setPurchases(res.purchases);
           setLoadError(null);
         })
@@ -304,6 +307,7 @@ function AdminMoneyScreenInner() {
 
   const tabs: Array<[Tab, string, typeof Inbox, number | null]> = [
     ["QUEUE", "To check", Inbox, counts.NEEDS],
+    ["CARD", "Card sales", CreditCard, cardWaiting || null],
     ["BANK", "Bank details", Landmark, null],
     ["PRICES", "Prices", Tag, null],
   ];
@@ -444,6 +448,8 @@ function AdminMoneyScreenInner() {
             </View>
           )}
 
+          {tab === "CARD" && <CardSalesPanel onChange={load} />}
+
           {tab === "PRICES" && (
             <View style={{ gap: spacing.md }}>
               <View style={[styles.twoCol, !twoColumns && { flexDirection: "column" }]}>
@@ -456,6 +462,10 @@ function AdminMoneyScreenInner() {
                 priceCell("Premium, a month", settings.sellerPlans.premiumMonthly, setSellerPlan("premiumMonthly")),
                 priceCell("Premium, a year", settings.sellerPlans.premiumYearly, setSellerPlan("premiumYearly")),
                 priceCell("Free boosts a month", settings.premiumFreeBoosts, (v) => setSettings({ ...settings, premiumFreeBoosts: Math.min(30, v) }), "boosts"),
+              ])}
+              {priceGroup("Card payments for items", "Premium sellers and stores. Alibe keeps the fee from the seller's payout, and pays out this many days after delivery (time for chargebacks).", [
+                priceCell("Card fee", settings.cardFeePercent ?? 3, (v) => setSettings({ ...settings, cardFeePercent: Math.min(20, v) }), "%"),
+                priceCell("Hold before payout", settings.cardHoldDays ?? 3, (v) => setSettings({ ...settings, cardHoldDays: Math.min(30, v) }), "days"),
               ])}
               {priceGroup("Buy through Alibe (iBay items)", "Added to the seller's price. Customers only see the total.", [
                 priceCell("Markup", settings.feePercent, (v) => setSettings({ ...settings, feePercent: Math.min(100, v) }), "%"),

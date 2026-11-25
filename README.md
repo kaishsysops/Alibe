@@ -226,6 +226,43 @@ then back to Payments, where it starts exactly as a real card payment would.
 No money moves; those purchases are marked TEST in Admin > Payments. Turn it
 off when you're done (it also switches itself off after 24 hours).
 
+### Card payments for items (Premium sellers and stores)
+
+The rule: sellers with **Premium** or a **live Store plan** can take card
+payments for their items. They switch it on in Profile > Seller account and add
+the bank account to be paid to. Buyers then see "Card payment available" on the
+item and **Pay by card** on the order. Paying the seller directly (cash or
+transfer) still works as before.
+
+How the money moves (`backend/src/orderCard.ts`):
+
+- The buyer pays **Alibe** by card (BML Connect). Alibe **holds** it.
+- Delivered (the buyer's handover code, or staff settling a dispute for the
+  seller): the payout is due after the hold days (default 3, for chargebacks).
+  Admins pay the seller by bank transfer, minus the card fee (default 3%), in
+  Admin > Payments > **Card sales**, recording the transfer reference.
+- Cancelled (by the seller, a ban, or a dispute settled for the buyer): the
+  buyer is refunded. A second payment for the same order is refunded too.
+- If the seller's plan ends, new card payments stop; ones already made carry on.
+
+Security:
+
+- The amount always comes from the order on the server.
+- Only the order's buyer can pay.
+- A payment counts only after the server checks the transaction at BML itself
+  (amount, currency and reference must match).
+- The order row is locked while a payment settles, so two payments can't both
+  count.
+- Payout bank details live in their own table, which public endpoints never
+  read. The seller sees only the last 4 digits.
+- Changing the payout bank account alerts the seller by push and email. Admins
+  see a warning for 7 days.
+- Payout and refund actions are admin-only.
+- In **test mode**, card payments for items are only offered to Alibe staff
+  accounts. Real buyers never pay a seller with pretend money.
+
+The card fee and hold days are set in Admin > Payments > Prices.
+
 ### Plans, grace period and reminders
 
 Store and Premium plans keep working for 5 days after their end date. Sellers

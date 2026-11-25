@@ -45,6 +45,9 @@ services:
     volumes:
       - ./backend/src:/app/src
       - ./backend/prisma:/app/prisma
+      # The startup steps (migrations) come from disk too, so they always match prisma/.
+      - ./backend/scripts:/app/scripts
+      - ./backend/docker-entrypoint.sh:/app/docker-entrypoint.sh
       - ./backend/assets:/app/assets
       - alibe-uploads:/app/uploads
       - alibe-private:/app/private

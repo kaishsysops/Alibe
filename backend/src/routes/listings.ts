@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { prisma } from "../db.js";
+import { buyerCanPayByCard, sellerCardState } from "../orderCard.js";
 import { safeRouter, sendValidationError } from "../http.js";
 import { listingInclude, serializeListing, serializeListings, ratingsFor } from "../serializers.js";
 import { listingFiltersSchema, listingWhere, hiddenSellerIds } from "../filters.js";
@@ -203,7 +204,9 @@ listingsRouter.get("/:id", async (req, res) => {
   const [ratings, badges] = await Promise.all([ratingsFor([listing.sellerId]), sellerBadges([listing.sellerId])]);
   // Count views by other people (shown to Premium sellers).
   if (req.userId !== listing.sellerId) prisma.listing.updateMany({ where: { id: listing.id }, data: { views: { increment: 1 } } }).catch(() => {});
-  res.json(serializeListing(listing, ratings, badges));
+  // Card payments (Premium sellers and stores): buyers see they can pay by card.
+  const card = await sellerCardState(listing.sellerId);
+  res.json({ ...serializeListing(listing, ratings, badges), acceptsCard: card.accepts && (await buyerCanPayByCard(req.userId)) });
 });
 
 // Premium: move a live listing back to the top of "newest", once a day per item.

@@ -261,6 +261,8 @@ export type Listing = {
   boosted?: boolean;
   // Answers to the category's questions (brand, year, bedrooms...).
   attributes?: ListingAttributes;
+  // Item page only: the seller takes card payments (held by Alibe until delivery).
+  acceptsCard?: boolean;
 };
 export type PaymentMethod = "CASH" | "BANK_TRANSFER";
 export type User = {
@@ -372,6 +374,60 @@ export type Order = {
   cargoReceiptUrl?: string | null;
   disputeOutcome?: "DELIVERED" | "CANCELLED" | null;
   disputeNote?: string | null;
+  // Card payment (Premium sellers and stores; Alibe holds it until delivery).
+  card?: OrderCard;
+};
+export type CardPaymentStatus = "PENDING" | "FAILED" | "HELD" | "PAYOUT_DUE" | "PAID_OUT" | "REFUND_DUE" | "REFUNDED";
+export type OrderCard = {
+  // The buyer can pay this order by card now.
+  available: boolean;
+  status: CardPaymentStatus | null;
+  amount: number;
+  test: boolean;
+  paidAt: string | null;
+  refundReason: string | null;
+  // Seller only.
+  fee?: number;
+  payout?: number;
+  payoutDueAt?: string | null;
+  // Buyer: an extra (second) payment that's being refunded.
+  extraRefund?: boolean;
+};
+// A seller's card payment settings (Seller account).
+export type SellerCardSettings = {
+  eligible: boolean;
+  on: boolean;
+  payoutReady: boolean;
+  siteReady: boolean;
+  accepts: boolean;
+  mode: CardMode;
+  feePercent: number;
+  holdDays: number;
+  // The account number comes back masked (last 4 digits).
+  account: { bankName: string; accountName: string; accountNumber: string; changedAt: string } | null;
+  held: { count: number; payout: number };
+  payoutDue: { count: number; payout: number };
+  paidOut: { count: number; payout: number };
+};
+export type PayoutAccountInput = { bankName: string; accountName: string; accountNumber: string };
+// Admin: a card sale to pay out or a payment to refund.
+export type CardSale = {
+  id: string;
+  status: CardPaymentStatus;
+  amount: number;
+  fee: number;
+  payout: number;
+  reference: string;
+  test: boolean;
+  paidAt: string | null;
+  payoutDueAt: string | null;
+  refundReason: string | null;
+  settledAt: string | null;
+  settleNote: string | null;
+  order: { id: string; status: OrderStatus; title: string };
+  buyer: { id: string; name: string; phone: string | null; email: string | null } | null;
+  seller: { id: string; name: string; phone: string | null; email: string | null } | null;
+  payoutAccount: { bankName: string; accountName: string; accountNumber: string; changedAt: string; changedRecently: boolean } | null;
 };
 export type DispatchDetails = { method: DeliveryOption; boatName?: string; boatDeparture?: string; cargoReference?: string; courierName?: string; pickupNote?: string; cargoReceiptUrl?: string };
 export type DisputeEvidence = { id: string; text: string; photoUrl: string | null; createdAt: string; by: { id: string; name: string }; role: "BUYER" | "SELLER" | "STAFF" };
@@ -553,7 +609,7 @@ export type PlanPrices = { "3": number; "7": number; "30": number };
 export type CardMode = "live" | "simulated" | "off";
 export type CardStatus = { enabled: boolean; mode: CardMode; liveMode: "sandbox" | "production"; simulatedUntil: string | null; tested: boolean };
 export type SellerPlanPrices = { storeMonthly: number; storeYearly: number; premiumMonthly: number; premiumYearly: number };
-export type MoneySettings = { bankName: string; accountName: string; accountNumber: string; feePercent: number; feeMinimum: number; boostPrices: PlanPrices; adPrices: PlanPrices; sellerPlans: SellerPlanPrices; premiumFreeBoosts: number };
+export type MoneySettings = { bankName: string; accountName: string; accountNumber: string; feePercent: number; feeMinimum: number; boostPrices: PlanPrices; adPrices: PlanPrices; sellerPlans: SellerPlanPrices; premiumFreeBoosts: number; cardFeePercent: number; cardHoldDays: number };
 export type MoneyConfig = Pick<MoneySettings, "boostPrices" | "adPrices" | "sellerPlans" | "premiumFreeBoosts"> & { ready: boolean };
 export type BankDetails = Pick<MoneySettings, "bankName" | "accountName" | "accountNumber">;
 export type RunningAd = { id: string; adTitle: string; adImage: string; adUrl: string | null; listingId: string | null };
@@ -686,7 +742,7 @@ export const api = {
   moneyConfig: () => request<MoneyConfig>("/purchases/config"),
   myPurchases: () => request<{ purchases: Purchase[]; bank: BankDetails; cardPayments?: boolean; cardMode?: CardMode }>("/purchases/mine"),
   // The test checkout that stands in for BML's page in test mode.
-  testCheckout: (tx: string) => request<{ id: string; amount: number; currency: string; reference: string; state: string; what: string; returnTo: string }>(`/purchases/test-checkout/${encodeURIComponent(tx)}`),
+  testCheckout: (tx: string) => request<{ id: string; amount: number; currency: string; reference: string; state: string; what: string; payee?: string; returnTo: string }>(`/purchases/test-checkout/${encodeURIComponent(tx)}`),
   finishTestCheckout: (tx: string, approve: boolean) => request<{ state: string; returnTo: string }>(`/purchases/test-checkout/${encodeURIComponent(tx)}`, { method: "POST", body: JSON.stringify({ approve }) }),
   setCardTestMode: (on: boolean) => request<CardStatus>("/admin/card-test-mode", { method: "POST", body: JSON.stringify({ on }) }),
   // Card payments (BML Connect): only when the server has it switched on.
@@ -697,7 +753,7 @@ export const api = {
   cancelPurchase: (id: string) => request<void>(`/purchases/${id}/cancel`, { method: "POST", body: "{}" }),
   ads: () => request<RunningAd[]>("/ads"),
   adClicked: (id: string) => request<void>(`/ads/${id}/click`, { method: "POST", body: "{}" }),
-  adminMoney: () => request<{ settings: MoneySettings; purchases: Purchase[]; cardPayments?: CardStatus }>("/admin/money"),
+  adminMoney: () => request<{ settings: MoneySettings; purchases: Purchase[]; cardPayments?: CardStatus; cardSalesWaiting?: number }>("/admin/money"),
   saveMoneySettings: (settings: MoneySettings) => request<MoneySettings>("/admin/money/settings", { method: "PUT", body: JSON.stringify(settings) }),
   purchaseAction: (id: string, body: { action: "QUOTE"; amount: number } | { action: "APPROVE" } | { action: "COMPLETE" } | { action: "REJECT"; note: string }) =>
     request<void>(`/admin/purchases/${id}`, { method: "POST", body: JSON.stringify(body) }),
@@ -748,6 +804,13 @@ export const api = {
   decidePost: (id: string, approve: boolean, reason?: string) => request<void>(`/staff/posts/${id}/decide`, { method: "POST", body: JSON.stringify({ approve, reason }) }),
   // ---- seller account ----
   sellerMe: () => request<SellerMe>("/sellers/me"),
+  // Card payments for item sales (Premium sellers and stores).
+  sellerCardPayments: () => request<SellerCardSettings>("/sellers/card-payments"),
+  saveSellerCardPayments: (on: boolean, account?: PayoutAccountInput) => request<{ ok: true }>("/sellers/card-payments", { method: "PUT", body: JSON.stringify({ on, account }) }),
+  payOrderByCard: (orderId: string) => request<{ url: string }>(`/orders/${orderId}/pay-card`, { method: "POST" }),
+  checkOrderCard: (orderId: string) => request<Order>(`/orders/${orderId}/check-card`, { method: "POST" }),
+  cardSales: () => request<CardSale[]>("/admin/card-sales"),
+  settleCardSale: (id: string, action: "paid-out" | "refunded", note: string) => request<void>(`/admin/card-sales/${id}/${action}`, { method: "POST", body: JSON.stringify({ note }) }),
   setSellerKind: (kind: "INDIVIDUAL" | "STORE") => request<{ kind: string }>("/sellers/kind", { method: "POST", body: JSON.stringify({ kind }) }),
   applyVerify: (body: IdPhotos) => request<{ id: string }>("/sellers/apply/verify", { method: "POST", body: JSON.stringify(body) }),
   applyStore: (body: { name: string; logoUrl?: string; registrationNumber: string } & Partial<IdPhotos>) =>

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../db.js";
 import { bmlPaid, cardMode, createBmlTransaction, finishSimTransaction, getBmlTransaction, getSimTransaction, SIM_PREFIX } from "../bml.js";
 import { activatePurchase } from "../purchaseActivation.js";
+import { cardPaymentForGateway, settleOrderCardPayment } from "../orderCard.js";
 import { applyDiscount, discountFor } from "../promotions.js";
 import { safeRouter } from "../http.js";
 import { prohibitedReason } from "../moderation.js";
@@ -247,7 +248,20 @@ export async function bmlWebhook(body: unknown) {
   const id = String(b.transactionId ?? b.id ?? (b.transaction as Record<string, unknown> | undefined)?.id ?? "");
   if (!id || (await cardMode()) === "off") return;
   const purchase = await prisma.purchase.findUnique({ where: { gatewayRef: id }, select: { id: true } });
-  if (purchase) await settleCardPayment(purchase.id).catch((e) => console.error("[bml] webhook", e));
+  if (purchase) return void (await settleCardPayment(purchase.id).catch((e) => console.error("[bml] webhook", e)));
+  // A card payment for an item (src/orderCard.ts).
+  const payment = await cardPaymentForGateway(id);
+  if (payment) await settleOrderCardPayment(payment.id).catch((e) => console.error("[card] webhook", e));
+}
+
+// What a test transaction is paying for, and who may pay it: a purchase from
+// Alibe, or an item from a seller (the order's buyer).
+async function testCheckoutTarget(txId: string) {
+  const purchase = await prisma.purchase.findUnique({ where: { gatewayRef: txId }, select: { id: true, userId: true, adTitle: true, itemTitle: true } });
+  if (purchase) return { payerId: purchase.userId, what: purchase.itemTitle ?? purchase.adTitle ?? "Alibe purchase", payee: "Alibe", returnTo: `/purchases?paid=${purchase.id}` };
+  const payment = await prisma.cardPayment.findUnique({ where: { gatewayRef: txId }, include: { order: { select: { id: true, listing: { select: { title: true } } } } } });
+  if (payment) return { payerId: payment.buyerId, what: `${payment.order.listing.title} · held by Alibe until delivery`, payee: "Alibe", returnTo: `/order/${payment.orderId}?paid=${payment.id}` };
+  return null;
 }
 
 // ---- the test checkout (simulated mode; stands in for BML's payment page) ----
@@ -255,9 +269,9 @@ export async function bmlWebhook(body: unknown) {
 // What the checkout page shows. Only the buyer can open it.
 purchasesRouter.get("/test-checkout/:tx", async (req, res) => {
   const tx = await getSimTransaction(req.params.tx);
-  const purchase = tx ? await prisma.purchase.findUnique({ where: { id: tx.purchaseId }, select: { userId: true, kind: true, adTitle: true, itemTitle: true } }) : null;
-  if (!tx || !purchase || purchase.userId !== req.userId) return res.status(404).json({ error: "This payment link isn't valid." });
-  res.json({ id: tx.id, amount: (tx.amount ?? 0) / 100, currency: tx.currency, reference: tx.localId, state: tx.state, what: purchase.itemTitle ?? purchase.adTitle ?? "Alibe purchase", returnTo: `/purchases?paid=${tx.purchaseId}` });
+  const target = tx ? await testCheckoutTarget(tx.id) : null;
+  if (!tx || !target || target.payerId !== req.userId) return res.status(404).json({ error: "This payment link isn't valid." });
+  res.json({ id: tx.id, amount: (tx.amount ?? 0) / 100, currency: tx.currency, reference: tx.localId, state: tx.state, what: target.what, payee: target.payee, returnTo: target.returnTo });
 });
 
 // Pay or decline on the test checkout. Then, like BML, it notifies us; the
@@ -265,12 +279,13 @@ purchasesRouter.get("/test-checkout/:tx", async (req, res) => {
 purchasesRouter.post("/test-checkout/:tx", async (req, res) => {
   const approve = req.body?.approve === true;
   const tx = await getSimTransaction(req.params.tx);
-  const purchase = tx ? await prisma.purchase.findUnique({ where: { id: tx.purchaseId }, select: { userId: true } }) : null;
-  if (!tx || !purchase || purchase.userId !== req.userId) return res.status(404).json({ error: "This payment link isn't valid." });
+  const target = tx ? await testCheckoutTarget(tx.id) : null;
+  if (!tx || !target || target.payerId !== req.userId) return res.status(404).json({ error: "This payment link isn't valid." });
   if ((await cardMode()) !== "simulated") return res.status(409).json({ error: "Test card payments have been switched off." });
   const done = await finishSimTransaction(tx.id, approve);
-  if (done?.state === "CONFIRMED") await bmlWebhook({ transactionId: tx.id });
-  res.json({ state: done?.state, returnTo: `/purchases?paid=${tx.purchaseId}` });
+  // Like BML: it notifies us either way (paid, or declined).
+  if (done) await bmlWebhook({ transactionId: tx.id });
+  res.json({ state: done?.state, returnTo: target.returnTo });
 });
 
 purchasesRouter.post("/:id/cancel", async (req, res) => {

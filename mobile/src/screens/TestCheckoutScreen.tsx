@@ -76,7 +76,7 @@ export default function TestCheckoutScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.muted}>Pay to</Text>
-              <Text style={styles.merchantName}>Alibe</Text>
+              <Text style={styles.merchantName}>{tx.payee ?? "Alibe"}</Text>
             </View>
             <View style={{ alignItems: "flex-end" }}>
               <Text style={styles.muted}>Amount</Text>

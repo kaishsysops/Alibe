@@ -6,6 +6,7 @@ import { prisma } from "../db.js";
 import { safeRouter, sendValidationError } from "../http.js";
 import { publicUser, listingInclude, serializeListing } from "../serializers.js";
 import { notifyUser } from "../push.js";
+import { CardError, cardOnCancelled, cardOnDelivered, cardView, settleOrderCardPayment, startOrderCardPayment } from "../orderCard.js";
 
 export const ordersRouter = safeRouter();
 
@@ -30,14 +31,15 @@ export async function createOrder(
   return { order, created: true };
 }
 
-const orderInclude = { listing: { include: listingInclude }, buyer: true, seller: true } as const;
+const orderInclude = { listing: { include: listingInclude }, buyer: true, seller: true, cardPayments: { orderBy: { createdAt: "desc" } } } as const;
 type FullOrder = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
 
 // The handover code is the buyer's proof of delivery, so only the buyer ever
 // receives it.
-function serializeOrder(o: FullOrder, viewerId: string) {
+async function serializeOrder(o: FullOrder, viewerId: string) {
+  const { cardPayments: _payments, ...rest } = o;
   return {
-    ...o,
+    ...rest,
     handoverCode: viewerId === o.buyerId ? o.handoverCode : null,
     listing: serializeListing(o.listing),
     buyer: publicUser(o.buyer),
@@ -45,6 +47,9 @@ function serializeOrder(o: FullOrder, viewerId: string) {
     // How the seller wants to be paid, so the buyer knows what to bring.
     paymentMethod: o.seller.paymentMethod,
     role: viewerId === o.sellerId ? "SELLER" : "BUYER",
+    // Card payment (Premium sellers and stores): whether the buyer can pay by
+    // card, and where a card payment stands (src/orderCard.ts).
+    card: await cardView(o, viewerId),
   };
 }
 
@@ -65,7 +70,7 @@ ordersRouter.get("/mine/:userId", async (req, res) => {
     include: orderInclude,
     orderBy: { updatedAt: "desc" },
   });
-  res.json(orders.map((o) => serializeOrder(o, userId)));
+  res.json(await Promise.all(orders.map((o) => serializeOrder(o, userId))));
 });
 
 ordersRouter.get("/:id", async (req, res) => {
@@ -73,7 +78,7 @@ ordersRouter.get("/:id", async (req, res) => {
   const order = await prisma.order.findUnique({ where: { id: req.params.id }, include: orderInclude });
   if (!order) return res.status(404).json({ error: "This order no longer exists." });
   if (userId !== order.buyerId && userId !== order.sellerId) return res.status(403).json({ error: "You're not part of this order." });
-  res.json(serializeOrder(order, userId));
+  res.json(await serializeOrder(order, userId));
 });
 
 // Seller sells directly to the buyer in a chat (no offer), at the asking
@@ -89,7 +94,7 @@ ordersRouter.post("/", async (req, res) => {
   if (conversation.listing.status !== "ACTIVE") {
     const existing = await prisma.order.findFirst({ where: { listingId: conversation.listingId, conversationId: conversation.id, status: { not: "CANCELLED" } }, include: orderInclude });
     // Double tap: the order this seller just created comes back unchanged.
-    if (existing) return res.status(200).json(serializeOrder(existing, parsed.data.sellerId));
+    if (existing) return res.status(200).json(await serializeOrder(existing, parsed.data.sellerId));
     return res.status(409).json({ error: "This item is already reserved or sold." });
   }
   const amount = parsed.data.amount ?? conversation.listing.price;
@@ -100,7 +105,7 @@ ordersRouter.post("/", async (req, res) => {
   });
   notifyUser(order.buyerId, "Your order is confirmed", `${conversation.listing.title} for ${formatMvr(amount)}`, { type: "order", orderId: order.id, conversationId: order.conversationId });
   const full = await prisma.order.findUniqueOrThrow({ where: { id: order.id }, include: orderInclude });
-  res.status(201).json(serializeOrder(full, parsed.data.sellerId));
+  res.status(201).json(await serializeOrder(full, parsed.data.sellerId));
 });
 
 // The seller ships the item. Ferry shipments must name the boat and its
@@ -150,7 +155,7 @@ ordersRouter.post("/:id/dispatch", async (req, res) => {
   });
   const current = await prisma.order.findUniqueOrThrow({ where: { id: order.id }, include: orderInclude });
   if (!updated) {
-    if (current.status === "DISPATCHED") return res.json(serializeOrder(current, userId));
+    if (current.status === "DISPATCHED") return res.json(await serializeOrder(current, userId));
     return res.status(409).json({ error: "This order can't be sent any more." });
   }
   notifyUser(
@@ -159,7 +164,7 @@ ordersRouter.post("/:id/dispatch", async (req, res) => {
     order.listing.title,
     { type: "order", orderId: order.id, conversationId: order.conversationId }
   );
-  res.json(serializeOrder(current, userId));
+  res.json(await serializeOrder(current, userId));
 });
 
 // Delivery verification. The buyer holds the code and only releases it once
@@ -178,7 +183,7 @@ ordersRouter.post("/:id/confirm", async (req, res) => {
   if (userId !== order.sellerId) return res.status(403).json({ error: "The seller confirms delivery by entering the buyer's code." });
   if (order.status === "DELIVERED") {
     const current = await prisma.order.findUniqueOrThrow({ where: { id: order.id }, include: orderInclude });
-    return res.json({ order: serializeOrder(current, userId), becameVerified: false });
+    return res.json({ order: await serializeOrder(current, userId), becameVerified: false });
   }
   if (order.status !== "DISPATCHED") {
     return res.status(409).json({ error: order.status === "AWAITING_DISPATCH" ? "Mark the item as sent or ready for pickup first." : "This order can't be confirmed any more." });
@@ -202,19 +207,20 @@ ordersRouter.post("/:id/confirm", async (req, res) => {
     });
     if (!changed.count) return false;
     await tx.listing.update({ where: { id: order.listingId }, data: { status: "SOLD" } });
+    await cardOnDelivered(tx, order.id);
     await systemMessage(tx, order, userId, "Delivered and verified with the buyer's handover code.");
     return true;
   });
 
   const current = await prisma.order.findUniqueOrThrow({ where: { id: order.id }, include: orderInclude });
-  if (!delivered) return res.json({ order: serializeOrder(current, userId), becameVerified: false });
+  if (!delivered) return res.json({ order: await serializeOrder(current, userId), becameVerified: false });
 
   // "Verified" now means an approved ID check (seller applications), so
   // deliveries no longer earn it; the count still shows on profiles.
   const count = await deliveredCount(order.sellerId);
   const becameVerified = false;
   notifyUser(order.buyerId, "Delivery complete", `${order.listing.title} is marked as delivered.`, { type: "order", orderId: order.id, conversationId: order.conversationId });
-  res.json({ order: serializeOrder(current, userId), becameVerified, delivered: count });
+  res.json({ order: await serializeOrder(current, userId), becameVerified, delivered: count });
 });
 
 // Buyer replaces their code (after a lockout, or if they think it leaked).
@@ -226,7 +232,7 @@ ordersRouter.post("/:id/new-code", async (req, res) => {
   if (!["AWAITING_DISPATCH", "DISPATCHED"].includes(order.status)) return res.status(409).json({ error: "This order is already closed." });
   await prisma.order.update({ where: { id: order.id }, data: { handoverCode: newHandoverCode(), codeAttempts: 0 } });
   const current = await prisma.order.findUniqueOrThrow({ where: { id: order.id }, include: orderInclude });
-  res.json(serializeOrder(current, userId));
+  res.json(await serializeOrder(current, userId));
 });
 
 // Remote deliveries (ferry/courier): once the buyer has the item, they can
@@ -258,7 +264,7 @@ ordersRouter.post("/:id/problem", async (req, res) => {
   const current = await prisma.order.findUniqueOrThrow({ where: { id: order.id }, include: orderInclude });
   if (!changed && current.status !== "DISPUTED") return res.status(409).json({ error: "This order is already closed." });
   if (changed) notifyUser(order.sellerId, "A buyer reported a delivery problem", order.listing.title, { type: "order", orderId: order.id, conversationId: order.conversationId });
-  res.json(serializeOrder(current, parsed.data.userId));
+  res.json(await serializeOrder(current, parsed.data.userId));
 });
 
 const cancelSchema = z.object({ userId: z.string() });
@@ -273,13 +279,41 @@ ordersRouter.post("/:id/cancel", async (req, res) => {
     const c = await tx.order.updateMany({ where: { id: order.id, status: "AWAITING_DISPATCH" }, data: { status: "CANCELLED" } });
     if (!c.count) return false;
     await tx.listing.update({ where: { id: order.listingId }, data: { status: "ACTIVE" } });
-    await systemMessage(tx, order, order.sellerId, "Cancelled this order. The item is available again.");
-    return true;
+    const refund = await cardOnCancelled(tx, order.id, "The seller cancelled the order.");
+    await systemMessage(tx, order, order.sellerId, `Cancelled this order. The item is available again.${refund ? " Alibe will refund the buyer's card payment." : ""}`);
+    return refund ? "REFUND" : true;
   });
   const current = await prisma.order.findUniqueOrThrow({ where: { id: order.id }, include: orderInclude });
   if (!changed && current.status !== "CANCELLED") return res.status(409).json({ error: "Orders can only be cancelled before the item is sent." });
-  if (changed) notifyUser(order.buyerId, "Order cancelled", order.listing.title, { type: "order", orderId: order.id, conversationId: order.conversationId });
-  res.json(serializeOrder(current, parsed.data.userId));
+  if (changed) notifyUser(order.buyerId, "Order cancelled", changed === "REFUND" ? `${order.listing.title}: Alibe will refund your card payment.` : order.listing.title, { type: "order", orderId: order.id, conversationId: order.conversationId });
+  res.json(await serializeOrder(current, parsed.data.userId));
+});
+
+// ---- card payments (Premium sellers and stores; src/orderCard.ts) -------------
+
+// The buyer starts paying by card: returns the card payment page to open.
+ordersRouter.post("/:id/pay-card", async (req, res) => {
+  if (!req.userId) return res.status(401).json({ error: "Please sign in again." });
+  try {
+    res.json(await startOrderCardPayment(req.params.id, req.userId));
+  } catch (e) {
+    if (e instanceof CardError) return res.status(e.status).json({ error: e.message });
+    throw e;
+  }
+});
+
+// Back from the card page: check with BML and return the order as it is now.
+ordersRouter.post("/:id/check-card", async (req, res) => {
+  const order = await prisma.order.findUnique({ where: { id: req.params.id }, include: { cardPayments: { where: { status: "PENDING" } } } });
+  if (!order || order.buyerId !== req.userId) return res.status(404).json({ error: "We couldn't find that order." });
+  try {
+    for (const p of order.cardPayments) await settleOrderCardPayment(p.id);
+  } catch (e) {
+    console.error("[card] check", e);
+    return res.status(502).json({ error: "We couldn't check the card payment yet. Pull down to refresh in a minute." });
+  }
+  const full = await prisma.order.findUniqueOrThrow({ where: { id: order.id }, include: orderInclude });
+  res.json(await serializeOrder(full, req.userId!));
 });
 
 // ---- disputes: both sides add evidence, staff decide ------------------------
@@ -339,7 +373,15 @@ ordersRouter.post("/:id/resolve", async (req, res) => {
       data: { status: outcome, disputeOutcome: outcome, disputeNote: note, disputeResolvedAt: now, ...(outcome === "DELIVERED" ? { deliveredAt: now, verifiedBy: "STAFF" } : {}) },
     });
     if (!c.count) return false;
-    const text = outcome === "DELIVERED" ? `Alibe staff closed the dispute: the sale stands. ${note}` : `Alibe staff closed the dispute: the order is cancelled and the buyer should get their money back. ${note}`;
+    let refund = false;
+    if (outcome === "DELIVERED") await cardOnDelivered(tx, order.id);
+    else refund = await cardOnCancelled(tx, order.id, "Staff settled the dispute for the buyer.");
+    const text =
+      outcome === "DELIVERED"
+        ? `Alibe staff closed the dispute: the sale stands. ${note}`
+        : refund
+        ? `Alibe staff closed the dispute: the order is cancelled and Alibe will refund the card payment. ${note}`
+        : `Alibe staff closed the dispute: the order is cancelled and the buyer should get their money back. ${note}`;
     await systemMessage(tx, order, order.sellerId, text);
     return true;
   });

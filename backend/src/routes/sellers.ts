@@ -5,6 +5,10 @@ import { moneySettings } from "../money.js";
 import { serializeListings, listingInclude, publicUser, ratingsFor } from "../serializers.js";
 import { sellerBadges, standing, uniqueStoreSlug } from "../sellers.js";
 import { makeIdPrivate } from "./slips.js";
+import { sellerCardState } from "../orderCard.js";
+import { cardMode } from "../bml.js";
+import { notifyUser } from "../push.js";
+import { sendNoticeEmail } from "../messaging.js";
 
 // A seller's own side: their standing, choosing individual or store, the ID
 // check, and the store application. Plus public store pages.
@@ -34,6 +38,83 @@ sellersRouter.get("/me", async (req, res) => {
     prices: m.sellerPlans,
     premiumFreeBoosts: m.premiumFreeBoosts,
   });
+});
+
+// ---- card payments for item sales (Premium sellers and stores; src/orderCard.ts) ----
+
+const maskAccount = (n: string) => `•••• ${n.slice(-4)}`;
+
+// The seller's card switch, payout account (masked) and their card sales so far.
+sellersRouter.get("/card-payments", async (req, res) => {
+  if (!req.userId) return res.status(401).json({ error: "Please sign in again." });
+  const [state, account, m, mode, sums] = await Promise.all([
+    sellerCardState(req.userId),
+    prisma.payoutAccount.findUnique({ where: { userId: req.userId } }),
+    moneySettings(),
+    cardMode(),
+    prisma.cardPayment.groupBy({ by: ["status"], where: { sellerId: req.userId, status: { in: ["HELD", "PAYOUT_DUE", "PAID_OUT"] } }, _sum: { amount: true, fee: true }, _count: true }),
+  ]);
+  const total = (status: string) => {
+    const r = sums.find((x) => x.status === status);
+    return { count: r?._count ?? 0, payout: (r?._sum.amount ?? 0) - (r?._sum.fee ?? 0) };
+  };
+  res.json({
+    ...state,
+    mode,
+    feePercent: m.cardFeePercent,
+    holdDays: m.cardHoldDays,
+    account: account ? { bankName: account.bankName, accountName: account.accountName, accountNumber: maskAccount(account.accountNumber), changedAt: account.detailsChangedAt } : null,
+    held: total("HELD"),
+    payoutDue: total("PAYOUT_DUE"),
+    paidOut: total("PAID_OUT"),
+  });
+});
+
+const cardSettingsSchema = z.object({
+  on: z.boolean(),
+  // Only when adding or changing the payout account (always the full details).
+  account: z
+    .object({
+      bankName: z.string().trim().min(2).max(60),
+      accountName: z.string().trim().min(2).max(80),
+      accountNumber: z.string().trim().transform((v) => v.replace(/[\s-]/g, "")).pipe(z.string().regex(/^\d{6,20}$/)),
+    })
+    .optional(),
+});
+
+sellersRouter.put("/card-payments", async (req, res) => {
+  if (!req.userId) return res.status(401).json({ error: "Please sign in again." });
+  const parsed = cardSettingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const field = String(parsed.error.issues[0]?.path.at(-1) ?? "");
+    return res.status(400).json({ error: field === "accountNumber" ? "Enter the account number: digits only, as on your bank card or statement." : field === "accountName" ? "Enter the name on the bank account." : "Choose your bank." });
+  }
+  const { on, account } = parsed.data;
+  const [state, existing] = await Promise.all([sellerCardState(req.userId), prisma.payoutAccount.findUnique({ where: { userId: req.userId } })]);
+  if (on && !state.eligible) return res.status(403).json({ error: "Card payments come with Premium or a Store plan.", code: "NEEDS_PLAN" });
+  if (on && !existing && !account) return res.status(400).json({ error: "Add the bank account you want to be paid to first." });
+
+  const changed = !!account && !!existing && (account.accountNumber !== existing.accountNumber || account.accountName !== existing.accountName || account.bankName !== existing.bankName);
+  const now = new Date();
+  if (account) {
+    await prisma.payoutAccount.upsert({
+      where: { userId: req.userId },
+      create: { userId: req.userId, cardPaymentsOn: on, ...account, detailsChangedAt: now },
+      update: { cardPaymentsOn: on, ...account, ...(changed ? { detailsChangedAt: now } : {}) },
+    });
+  } else if (existing) {
+    await prisma.payoutAccount.update({ where: { userId: req.userId }, data: { cardPaymentsOn: on } });
+  }
+  // A new payout account is what someone in a stolen account would change:
+  // tell the owner everywhere, so they can stop it.
+  if (changed) {
+    const title = "Your payout bank account was changed";
+    const body = `Card sales will now be paid to ${account!.bankName} ${maskAccount(account!.accountNumber)}. If this wasn't you, contact help@alibe.online right away.`;
+    notifyUser(req.userId, title, body, { type: "seller-account" });
+    const u = await prisma.user.findUnique({ where: { id: req.userId }, select: { email: true } });
+    void sendNoticeEmail(u?.email, title, body);
+  }
+  res.json({ ok: true });
 });
 
 // Picked during sign-up, changeable later. Stores still need an approved

@@ -15,6 +15,10 @@ export type MoneySettings = {
   sellerPlans: { storeMonthly: number; storeYearly: number; premiumMonthly: number; premiumYearly: number };
   // Free 7-day boosts a Premium seller gets each month.
   premiumFreeBoosts: number;
+  // Card payments for item sales (src/orderCard.ts): Alibe's fee, kept from the
+  // seller's payout, and the days a delivered sale is held before paying out.
+  cardFeePercent: number;
+  cardHoldDays: number;
 };
 
 // Starting prices until staff set their own. No bank details by default: without
@@ -29,6 +33,8 @@ const DEFAULTS: MoneySettings = {
   adPrices: { "3": 150, "7": 300, "30": 1000 },
   sellerPlans: { storeMonthly: 500, storeYearly: 5000, premiumMonthly: 300, premiumYearly: 3000 },
   premiumFreeBoosts: 4,
+  cardFeePercent: 3,
+  cardHoldDays: 3,
 };
 
 export async function moneySettings(): Promise<MoneySettings> {

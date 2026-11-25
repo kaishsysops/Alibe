@@ -26,7 +26,8 @@ export const HELP_TOPICS: HelpTopic[] = [
     Icon: ShoppingBag,
     items: [
       { q: "How do I buy something?", a: "Open the item and tap Message to ask the seller, or Make an offer. When the seller accepts, an order is created and you agree how it gets to you: pickup, delivery or ferry." },
-      { q: "How do I pay?", a: "You pay the seller directly, the way you both agree (cash on pickup, bank transfer). Alibe never holds money between buyers and sellers." },
+      { q: "How do I pay?", a: "Usually you pay the seller directly, the way you both agree (cash on pickup, bank transfer). Some Premium sellers and stores also take cards: then you'll see Pay by card on your order, and Alibe holds the money until you have the item." },
+      { q: "Can I pay by card?", a: "Yes, when the seller is a Premium seller or store that takes cards (the item page says 'Card payment available'). Tap Pay by card on your order. Alibe holds your money and only pays the seller after you give them your handover code. If the order is cancelled, Alibe refunds your card. If you pay twice by mistake, the extra payment is refunded." },
       { q: "What's the handover code?", a: "Every order gives you a private 4-digit code. Give it to the seller only once the item is in your hands; they enter it to finish the order. It proves you received it." },
       { q: "Can I save things or searches?", a: "Tap the heart to save an item; we'll tell you if its price drops. In Browse, save a search to hear about new matches." },
       { q: "What is 'Buy through Alibe'?", a: "For items marked From iBay: Alibe checks the seller still has it, you pay Alibe the total shown, and we buy and deliver it for you." },
@@ -52,7 +53,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     blurb: "Avoid scams",
     Icon: ShieldCheck,
     items: [
-      { q: "The golden rules", a: "Never pay in full before you have the item. Give your handover code only when it's in your hands. Keep the conversation in Alibe chat. Be careful with links and requests to pay first, gift cards or crypto: we flag these in chats." },
+      { q: "The golden rules", a: "Never pay in full before you have the item (paying by card through Alibe is the exception: Alibe holds it until you have the item). Give your handover code only when it's in your hands. Keep the conversation in Alibe chat. Be careful with links and requests to pay first, gift cards or crypto: we flag these in chats." },
       { q: "How do I report someone?", a: "On a listing or profile, or inside a chat, tap Report and choose a reason. Listings reported by several people are hidden until our team looks." },
       { q: "How do I block someone?", a: "In the chat, tap the menu > Block. They can't message you, and you can unblock in Profile > Blocked people." },
       { q: "What do the badges mean?", a: "Blue tick: the seller's ID was checked. Store: a registered business with a store page. Gold crown: Premium seller. Trust labels on profiles show deliveries, reviews and how long they've been on Alibe." },
@@ -67,6 +68,8 @@ export const HELP_TOPICS: HelpTopic[] = [
       { q: "Where are my orders?", a: "Profile > My orders, split into Buying and Selling. Anything waiting on you is at the top." },
       { q: "I'm the seller. What do I do?", a: "Deliver the item yourself (pickup, courier or ferry; for ferry, add the boat and time). When the buyer has it, ask for their handover code and enter it to finish." },
       { q: "Something went wrong", a: "Open the order and tap Report a problem. Add what happened, with photos. Our team reads both sides and decides." },
+      { q: "I paid by card. When does the seller get it?", a: "Alibe holds it until you give the seller your handover code, then pays them a few days later (time to sort out any problem with the card payment). Until then, don't give your code to anyone and don't pay the seller again." },
+      { q: "How do card refunds work?", a: "If a card-paid order is cancelled (by the seller, or by our team after a problem), Alibe refunds the full amount to your card. Banks can take a few days to show it." },
     ],
   },
   {
@@ -89,6 +92,7 @@ export const HELP_TOPICS: HelpTopic[] = [
       { q: "What does Premium include?", a: "Free 7-day boosts every month, your 3 newest items shown near the top for a week, a daily 'bump to top' for any item, views and saves for every listing, 12 photos per item, no monthly post limit, and a gold badge. Monthly or yearly, in Profile > Seller account. If a plan runs out you keep everything for 5 more days, so there's time to renew." },
       { q: "What does a Store plan include?", a: "A store page with your logo at alibe.online/store/your-name, the Store badge, a place above individual sellers and no post limit. Register your store first (business name, logo, registration number and the owner's ID); once it's approved, choose a plan." },
       { q: "Can a store have Premium?", a: "Yes: a store pays for the Store plan and Premium on top." },
+      { q: "Can I take card payments?", a: "Yes, with Premium or a Store plan. Turn it on in Profile > Seller account and add the bank account to be paid to. Buyers pay Alibe by card and Alibe holds it; once they give you their handover code, Alibe pays you a few days later, minus a small card fee. If the order is cancelled, the buyer is refunded. If your plan ends, new card payments stop until you renew." },
     ],
   },
   {
@@ -129,6 +133,7 @@ export const HELP_TOPICS: HelpTopic[] = [
 const FAQ_PICKS: Array<[HelpTopicKey, string]> = [
   ["buying", "How do I buy something?"],
   ["buying", "How do I pay?"],
+  ["buying", "Can I pay by card?"],
   ["buying", "What's the handover code?"],
   ["selling", "How do I list an item?"],
   ["selling", "Does my post go live straight away?"],
@@ -137,6 +142,7 @@ const FAQ_PICKS: Array<[HelpTopicKey, string]> = [
   ["verify", "Do I have to verify?"],
   ["boosts", "What's a boost?"],
   ["premium", "What does Premium include?"],
+  ["premium", "Can I take card payments?"],
   ["selling", "I sell for a business. What should I do?"],
   ["orders", "Something went wrong"],
 ];

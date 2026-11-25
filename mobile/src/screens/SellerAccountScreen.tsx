@@ -17,6 +17,7 @@ import { useResponsive } from "../hooks/useResponsive";
 import FirstTimeTip from "../components/FirstTimeTip";
 import { SiteBanners } from "../components/Seasonal";
 import { discounted, useDiscount } from "../api/SiteContext";
+import CardPaymentsSettings from "../components/CardPaymentsSettings";
 
 type Period = "MONTHLY" | "YEARLY";
 const date = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "");
@@ -250,6 +251,9 @@ export default function SellerAccountScreen() {
           </Tap>
         )}
 
+        {/* Card payments for item sales (Premium sellers and stores). */}
+        <CardPaymentsSettings />
+
         {/* Plans */}
         <View
           style={styles.plansHead}
@@ -283,7 +287,7 @@ export default function SellerAccountScreen() {
             offer={storeDiscount?.label}
             per={per}
             save={yearly ? saving(me.prices.storeMonthly, me.prices.storeYearly) : 0}
-            perks={["Your own store page with your logo", "Store badge on every item", "Shown above individual sellers"]}
+            perks={["Your own store page with your logo", "Store badge on every item", "Shown above individual sellers", "Take card payments (Alibe holds them until delivery)"]}
             activeUntil={me.storeLive ? date(me.storeEndsAt) : null}
             graceUntil={me.storeGraceUntil ? date(me.storeGraceUntil) : null}
             locked={!storeApproved ? "Needs an approved store" : null}
@@ -300,7 +304,7 @@ export default function SellerAccountScreen() {
           offer={premiumDiscount?.label}
           per={per}
           save={yearly ? saving(me.prices.premiumMonthly, me.prices.premiumYearly) : 0}
-          perks={[`${me.premiumFreeBoosts} free 7-day boosts every month`, "Your 3 newest items shown near the top for a week", "Bump any item to the top, once a day", "Views and saves for every item", "12 photos per item, no monthly post limit", "Gold Premium badge"]}
+          perks={[`${me.premiumFreeBoosts} free 7-day boosts every month`, "Your 3 newest items shown near the top for a week", "Bump any item to the top, once a day", "Views and saves for every item", "12 photos per item, no monthly post limit", "Take card payments (Alibe holds them until delivery)", "Gold Premium badge"]}
           activeUntil={me.premium ? date(me.premiumEndsAt) : null}
           graceUntil={me.premiumGraceUntil ? date(me.premiumGraceUntil) : null}
           locked={!me.approved ? (isStore ? "Needs an approved store" : "Get verified first") : null}
@@ -322,6 +326,7 @@ export default function SellerAccountScreen() {
             ["3", "Getting verified is free and optional: send photos of both sides of your ID card, and it also unlocks boosts and the blue tick."],
             ["4", "Up to 30 new posts a month. Premium and Store plans have no limit."],
             ["5", "Businesses must sell as a store (a paid plan). Staff ban shops posing as individuals."],
+            ["6", "Premium sellers and stores can take card payments. Alibe holds the buyer's money until they give you their handover code, then pays you after a few days, minus a small card fee. Cancelled orders are refunded to the buyer."],
           ].map(([n, text]) => (
             <View key={n} style={styles.rule}>
               <View style={styles.ruleNum}>

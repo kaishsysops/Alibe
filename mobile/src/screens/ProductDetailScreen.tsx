@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Image, ScrollView, ActivityIndicator, NativeSyntheticEvent, NativeScrollEvent, useWindowDimensions, Animated, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { MapPin, MessageCircle, Heart, CheckCircle2, RotateCcw, PackageSearch, ChevronRight, ChevronLeft, Clock, Tag, Share2, MoreHorizontal, Pencil, Truck, Ship, Hand, Flag, Ban, ShieldCheck, Rocket } from "lucide-react-native";
+import { MapPin, MessageCircle, Heart, CheckCircle2, RotateCcw, PackageSearch, ChevronRight, ChevronLeft, Clock, Tag, Share2, MoreHorizontal, Pencil, Truck, Ship, Hand, Flag, Ban, ShieldCheck, Rocket, CreditCard } from "lucide-react-native";
 import { api, Category, errorMessage, Listing, newClientId, DeliveryOption } from "../api/client";
 import { buildCategoryTree } from "../utils/categoryTree";
 import { VerifiedBadge, SellerBadgeIcon } from "../components/Badges";
@@ -327,6 +327,12 @@ export default function ProductDetailScreen() {
           <Text style={styles.metaText}>{timeAgo(listing.createdAt, true)}</Text>
         </View>
       </View>
+      {listing.acceptsCard && available && (
+        <View style={styles.cardNote}>
+          <CreditCard size={16} color={colors.success} />
+          <Text style={styles.cardNoteText}>Card payment available. Alibe holds your money until you have the item.</Text>
+        </View>
+      )}
     </>
   );
 
@@ -565,6 +571,8 @@ const useStyles = makeStyles((colors) => ({
   },
   body: { paddingTop: spacing.lg },
   priceRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  cardNote: { flexDirection: "row", alignItems: "center", gap: spacing.sm, alignSelf: "flex-start", marginTop: spacing.sm, paddingHorizontal: spacing.sm + 4, paddingVertical: spacing.xs + 2, borderRadius: radius.pill, backgroundColor: `${colors.success}14` },
+  cardNoteText: { flexShrink: 1, fontSize: fontSize.sm, fontWeight: fontWeight.semibold, color: colors.success },
   boostRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm + 2, padding: spacing.md, marginTop: spacing.md, borderRadius: radius.lg, backgroundColor: colors.primaryTint },
   boostTitle: { fontSize: fontSize.md, fontWeight: fontWeight.bold, color: colors.text },
   boostText: { fontSize: fontSize.caption, color: colors.textMuted, marginTop: 1 },
